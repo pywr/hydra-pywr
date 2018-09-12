@@ -50,7 +50,7 @@
         }
     },
     "recorders": {
-        "__demand1__:simulated_flow": {
+        "__demand1__:some_recorder": {
             "type": "numpyarraynoderecorder",
             "node": "demand1"
         }

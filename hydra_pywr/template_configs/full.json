@@ -1,0 +1,8 @@
+{
+  "name": "Full",
+  "nodes": {
+    "blacklist": [
+      "Blender"
+    ]
+  }
+}

@@ -95,7 +95,13 @@ class PywrHydraImporter(BasePywrHydra):
         """ Return a dictionary of the data required for adding a network to Hydra. """
 
         # Get the network type
-        network_template_type = self._get_template_type_by_name('pywr', 'NETWORK')
+        for template_type in self.template['templatetypes']:
+            if template_type['resource_type'] == 'NETWORK':
+                network_template_type = template_type
+                break
+        else:
+            raise ValueError('No NETWORK resource type found in template.')
+
         network_template_type_id = network_template_type['id']
 
         # TODO add tables and scenarios.

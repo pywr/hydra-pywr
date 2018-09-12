@@ -1,0 +1,15 @@
+{
+  "name": "Hydropower",
+  "nodes": {
+    "whitelist": [
+      "LinearStorageReleaseControl",
+      "Turbine",
+      "Reservoir",
+      "Catchment",
+      "MonthlyCatchment",
+      "Link",
+      "Input",
+      "Output"
+    ]
+  }
+}
