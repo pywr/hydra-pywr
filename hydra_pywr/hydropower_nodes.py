@@ -1,7 +1,7 @@
 from pywr.nodes import Link, Storage, Output, Input, AggregatedNode
 from pywr.parameters.control_curves import ControlCurveInterpolatedParameter
 from pywr.parameters._thresholds import ParameterThresholdParameter
-from pywr.parameters import InterpolatedVolumeParameter, ConstantParameter, Parameter
+from pywr.parameters import InterpolatedVolumeParameter, ConstantParameter, Parameter, MonthlyProfileParameter
 from pywr.parameters._hydropower import HydropowerTargetParameter
 from pywr.recorders import HydropowerRecorder
 from pywr.schema import NodeSchema, fields
@@ -148,7 +148,7 @@ class MonthlyOutput(Output):
 
     def __init__(self, model, name, **kwargs):
         flow_values = kwargs.pop('max_flow')
-        flow_param = MonthlyArrayIndexedParameter(model, flow_values)
+        flow_param = MonthlyProfileParameter(model, flow_values)
         super().__init__(model, name, **kwargs)
         self.max_flow = flow_param
 
