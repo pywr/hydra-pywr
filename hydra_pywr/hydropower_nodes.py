@@ -1,4 +1,4 @@
-from pywr.nodes import Link, Storage
+from pywr.nodes import Link, Storage, Output
 from pywr.parameters.control_curves import ControlCurveInterpolatedParameter
 from pywr.parameters._thresholds import ParameterThresholdParameter
 from pywr.parameters import InterpolatedVolumeParameter, ConstantParameter, Parameter
@@ -138,3 +138,16 @@ class MonthlyCatchment(Catchment):
         flow_values = kwargs.pop('flow')
         flow_param = MonthlyArrayIndexedParameter(model, flow_values)
         super().__init__(model, name, flow=flow_param, **kwargs)
+
+
+class MonthlyOutput(Output):
+    class Schema(NodeSchema):
+        min_flow = fields.ParameterReferenceField(allow_none=True)
+        cost = fields.ParameterReferenceField(allow_none=True)
+        max_flow = marshmallow.fields.List(marshmallow.fields.Number)
+
+    def __init__(self, model, name, **kwargs):
+        flow_values = kwargs.pop('max_flow')
+        flow_param = MonthlyArrayIndexedParameter(model, flow_values)
+        super().__init__(model, name, **kwargs)
+        self.max_flow = flow_param
