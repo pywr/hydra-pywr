@@ -1,4 +1,4 @@
-from pywr.nodes import Link, Storage, Output
+from pywr.nodes import Link, Storage, Output, Input, AggregatedNode
 from pywr.parameters.control_curves import ControlCurveInterpolatedParameter
 from pywr.parameters._thresholds import ParameterThresholdParameter
 from pywr.parameters import InterpolatedVolumeParameter, ConstantParameter, Parameter
@@ -151,3 +151,18 @@ class MonthlyOutput(Output):
         flow_param = MonthlyArrayIndexedParameter(model, flow_values)
         super().__init__(model, name, **kwargs)
         self.max_flow = flow_param
+
+
+class ProportionalInput(Input):
+    class Schema(NodeSchema):
+        node = fields.NodeField()
+        proportion = marshmallow.fields.Number()
+
+    def __init__(self, model, name, node, proportion, **kwargs):
+        super().__init__(model, name, **kwargs)
+
+        self.node = node
+        # Create the flow factors for the other node and self
+        factors = [1-proportion, proportion]
+        # Create the aggregated node to apply the factors.
+        self.aggregated_node = AggregatedNode(model, f'{name}.aggregated', [node, self], factors=factors)

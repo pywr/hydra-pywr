@@ -10,7 +10,8 @@
       "MonthlyOutput",
       "Link",
       "Input",
-      "Output"
+      "Output",
+      "ProportionalInput"
     ]
   }
 }
