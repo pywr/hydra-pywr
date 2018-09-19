@@ -51,8 +51,10 @@ class Turbine(Link):
         min_operating_elevation = marshmallow.fields.Number()
         efficiency = marshmallow.fields.Number()
         density = marshmallow.fields.Number()
-        flow_unit_conversion = marshmallow.fields.Number(default=1.0)
-        energy_unit_conversion = marshmallow.fields.Number(default=1e-6)
+
+        # Defaults here are for inputting for Mm3/day (1e6) and MW (1.15741e-11)
+        flow_unit_conversion = marshmallow.fields.Number(default=1e6)
+        energy_unit_conversion = marshmallow.fields.Number(default=1.15741e-11)
 
     def __init__(self, model, name, **kwargs):
 
