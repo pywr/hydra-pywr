@@ -43,7 +43,6 @@ class Turbine(Link):
         # The main attributes are not validated (i.e. `Raw`)
         # They could be many different things.
         min_flow = fields.ParameterReferenceField(allow_none=True)
-        max_flow = fields.ParameterReferenceField(allow_none=True)
         cost = fields.ParameterReferenceField(allow_none=True)
 
         storage_node = fields.NodeField()
