@@ -9,6 +9,7 @@ import os
 import json
 import copy
 from .core import data_type_from_field
+from hydra_base.exceptions import HydraError
 
 PYWR_PROTECTED_NODE_KEYS = ('name', 'comment', 'type', 'position')
 
@@ -43,6 +44,10 @@ def get_layout(node_klass):
         node_specific_layout = {}
     layout.update(node_specific_layout)
     return layout
+
+
+class TemplateExistsError(ValueError):
+    pass
 
 
 def pywr_template_name(config_name):
@@ -122,6 +127,8 @@ def generate_pywr_node_templates(attribute_ids, whitelist=None, blacklist=None):
                 'description': '',
             })
 
+            # TODO add default data if there is a default value in the field
+
         # Create an output attribute for each node
         if issubclass(node_klass, Node):
             output_attribute_name = 'simulated_flow'
@@ -149,9 +156,7 @@ def generate_pywr_node_templates(attribute_ids, whitelist=None, blacklist=None):
         }
 
 
-def generate_pywr_template(attribute_ids, default_data_set_ids, config_name):
-
-    config = load_template_config(config_name)
+def generate_pywr_template(attribute_ids, default_data_set_ids, config):
 
     template_types = [
         {
@@ -162,7 +167,7 @@ def generate_pywr_template(attribute_ids, default_data_set_ids, config_name):
             'layout': {"linestyle": "solid", "width": "7", "color": "#000000", "hidden": "N"}
         },
         {
-            'name': 'Pywr {}'.format(config_name.capitalize()),
+            'name': 'Pywr {}'.format(config['name']),
             'resource_type': 'NETWORK',
             'typeattrs': [
                 {
@@ -207,10 +212,17 @@ def add_default_datasets(client):
     return default_data_set_ids
 
 
-def register_template(client, config_name='full'):
+def register_template(client, config_name='full', update=False):
     """ Register the template with Hydra. """
+    config = load_template_config(config_name)
 
-    # TODO check to see if the template exists first.
+    # check to see if the template exists first.
+    template_name = pywr_template_name(config['name'])
+    try:
+        existing_template = client.get_template_by_name(template_name)
+    except HydraError:
+        existing_template = None
+
     attributes = [a for a in generate_pywr_attributes()]
 
     # The response attributes have ids now.
@@ -222,9 +234,28 @@ def register_template(client, config_name='full'):
     # Convert to a simple dict for local processing.
     attribute_ids = {a.name: a.id for a in response_attributes}
 
-    template = generate_pywr_template(attribute_ids, default_data_set_ids, config_name)
+    template = generate_pywr_template(attribute_ids, default_data_set_ids, config)
 
-    client.add_template(template)
+    if existing_template is None:
+        # No template. Add a new one.
+        client.add_template(template)
+    else:
+        if not update:
+            raise TemplateExistsError('Template with name f{template_name} already exists.')
+
+        # Map existing template types to new ones by name
+        for new_tt in template['templatetypes']:
+            for existing_tt in existing_template['templatetypes']:
+                if new_tt['name'] == existing_tt['name'] and \
+                        new_tt['resource_type'] == existing_tt['resource_type']:
+                    new_tt['id'] = existing_tt['id']
+                    new_tt['template_id'] = existing_template['id']
+
+                    for ta in new_tt['typeattrs']:
+                        ta['type_id'] = new_tt['id']
+
+        template['id'] = existing_template['id']
+        client.update_template(template)
 
 
 def unregister_template(client, config_name='full'):

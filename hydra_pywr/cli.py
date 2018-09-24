@@ -10,7 +10,7 @@ from .exporter import PywrHydraExporter
 from .runner import PywrHydraRunner
 from .importer import PywrHydraImporter
 from .util import make_plugins
-from .template import register_template, unregister_template
+from .template import register_template, unregister_template, TemplateExistsError
 
 
 def hydra_app(category='import'):
@@ -137,12 +137,16 @@ def template():
 
 @template.command('register')
 @click.option('-c', '--config', type=str, default='full')
+@click.option('--update/--no-update', default=False)
 @click.pass_obj
-def template_register(obj, config):
+def template_register(obj, config, update):
     """ Register a Pywr template with Hydra. """
 
     client = get_logged_in_client(obj)
-    register_template(client, config_name=config)
+    try:
+        register_template(client, config_name=config, update=update)
+    except TemplateExistsError:
+        click.echo('The template is already registered. To force an updated use the --update option.')
     
     
 @template.command('unregister')
@@ -151,4 +155,6 @@ def template_register(obj, config):
 def template_unregister(obj, config):
     """ Unregister a Pywr template with Hydra. """
     client = get_logged_in_client(obj)
-    unregister_template(client, config_name=config)
+    if click.confirm('Are you sure you want to remove the template? '
+                     'This will invalidate any existing networks that use the template.'):
+        unregister_template(client, config_name=config)
