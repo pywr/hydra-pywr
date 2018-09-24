@@ -22,7 +22,7 @@ def data_type_from_field(field):
     else:
         raise ValueError('No data type found for field: {}'.format(field))
 
-    return data_type
+    return data_type.lower()
 
 
 class BasePywrHydra:
