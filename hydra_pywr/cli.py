@@ -10,7 +10,7 @@ from .exporter import PywrHydraExporter
 from .runner import PywrHydraRunner
 from .importer import PywrHydraImporter
 from .util import make_plugins
-from .template import register_template, unregister_template, TemplateExistsError
+from .template import register_template, unregister_template, migrate_network_template, TemplateExistsError
 
 
 def hydra_app(category='import'):
@@ -158,3 +158,14 @@ def template_unregister(obj, config):
     if click.confirm('Are you sure you want to remove the template? '
                      'This will invalidate any existing networks that use the template.'):
         unregister_template(client, config_name=config)
+
+
+@template.command('migrate')
+@click.argument('network-id', type=int)
+@click.option('--template-name', type=str, default=None)
+@click.option('--template-id', type=int, default=None)
+@click.pass_obj
+def template_migrate(obj, network_id, template_name, template_id):
+    client = get_logged_in_client(obj)
+    if click.confirm('Are you sure you want to migrate network {} to a new template?'.format(network_id)):
+        migrate_network_template(client, network_id, template_name=template_name, template_id=template_id)

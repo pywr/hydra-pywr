@@ -270,3 +270,31 @@ def load_template_config(config_name):
     with open(os.path.join(CONFIG_DIR, '{}.json'.format(config_name))) as fh:
         config = json.load(fh)
     return config
+
+
+def migrate_network_template(client, network_id, template_id=None, template_name=None):
+    """ Migrate an existing network to a new template.
+
+    This will remove all existing templates from the network.
+    """
+    if template_id is None and template_name is None:
+        raise ValueError('One of either `template_id` or `template_name` must be given.')
+
+    if template_id is None:
+        new_template = client.get_template_by_name(template_name)
+        template_id = new_template['id']
+
+    # Get the existing network
+    network = client.get_network(network_id)
+    # Remove all existing templates.
+    for network_type in network['types']:
+        client.remove_template_from_network(network_id, network_type['template_id'], 'N')
+
+    # Apply new template
+    client.apply_template_to_network(template_id, network_id)
+    network = client.get_network(network_id)
+
+    # Check the template has been applied correctly.
+    assert len(network['types']) == 1
+    for network_type in network['types']:
+        assert network_type['template_id'] == template_id
