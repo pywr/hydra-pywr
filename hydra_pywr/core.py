@@ -1,8 +1,8 @@
 import json
-from hydra_base.lib.HydraTypes.Types import Scalar, Array, Descriptor
+from hydra_base.lib.HydraTypes.Types import Scalar, Array, Descriptor, Dataframe
 from pywr.schema.fields import ParameterField, ParameterReferenceField, ParameterValuesField, NodeField
 from marshmallow.fields import Number, Integer, List
-
+from .hydropower_nodes import DataFrameField
 
 # TODO move this to template.py
 def data_type_from_field(field):
@@ -19,6 +19,8 @@ def data_type_from_field(field):
         data_type = Scalar.tag
     elif isinstance(field, List):
         data_type = Array.tag
+    elif isinstance(field, DataFrameField):
+        data_type = Dataframe.tag
     else:
         raise ValueError('No data type found for field: {}'.format(field))
 

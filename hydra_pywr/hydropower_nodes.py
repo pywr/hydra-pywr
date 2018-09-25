@@ -7,8 +7,23 @@ from pywr.recorders import HydropowerRecorder
 from pywr.schema import NodeSchema, fields
 from pywr.domains.river import Catchment
 import numpy as np
+import pandas
 import marshmallow
 from .parameters import MonthlyArrayIndexedParameter
+
+
+# This is a parameter instance.
+class DataFrameField(marshmallow.fields.Field):
+    """ Marshmallow field representing a Parameter. """
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def _serialize(self, value, attr, obj):
+        return value.to_json()
+
+    def _deserialize(self, value, attr, data):
+        return pandas.DataFrame.from_dict(value)
+
 
 
 class LinearStorageReleaseControl(Link):
@@ -22,16 +37,12 @@ class LinearStorageReleaseControl(Link):
         min_flow = fields.ParameterReferenceField(allow_none=True)
         cost = fields.ParameterReferenceField(allow_none=True)
         storage_node = fields.NodeField()
-        release_values = marshmallow.fields.List(marshmallow.fields.List(marshmallow.fields.Number))
+        release_values = DataFrameField()
 
     def __init__(self, model, name, storage_node, release_values, **kwargs):
 
-        control_curves = []
-        values = []
-        for (cc, v) in release_values:
-            control_curves.append(cc)
-            values.append(v)
-        control_curves = control_curves[1:-1]
+        control_curves = release_values['volume'].iloc[1:-1]
+        values = release_values['value']
 
         max_flow_param = ControlCurveInterpolatedParameter(model, storage_node, control_curves, values)
         super().__init__(model, name, max_flow=max_flow_param, **kwargs)
@@ -108,8 +119,7 @@ class Reservoir(Storage):
         cost = fields.ParameterReferenceField(required=False)
         initial_volume = fields.ParameterValuesField(required=False)
         initial_volume_pc = marshmallow.fields.Number(required=False)
-        bathymetry = marshmallow.fields.List(marshmallow.fields.List(marshmallow.fields.Number),
-                                             required=False)
+        bathymetry = DataFrameField()
 
     def __init__(self, model, name, **kwargs):
 
@@ -120,11 +130,9 @@ class Reservoir(Storage):
             self._set_bathymetry(bathymetry)
 
     def _set_bathymetry(self, values):
-
-        values = np.array(values)
-        volumes = values[:, 0]
-        levels = values[:, 1]
-        areas = values[:, 2]
+        volumes = values['volume']
+        levels = values['level']
+        areas = values['area']
 
         self.level = InterpolatedVolumeParameter(self.model, self, volumes, levels)
         self.area = InterpolatedVolumeParameter(self.model, self, volumes, areas)
@@ -132,7 +140,7 @@ class Reservoir(Storage):
 
 class MonthlyCatchment(Catchment):
     class Schema(NodeSchema):
-        flow = marshmallow.fields.List(marshmallow.fields.Number)
+        flow = DataFrameField()
 
     def __init__(self, model, name, **kwargs):
         flow_values = kwargs.pop('flow')
@@ -144,7 +152,7 @@ class MonthlyOutput(Output):
     class Schema(NodeSchema):
         min_flow = fields.ParameterReferenceField(allow_none=True)
         cost = fields.ParameterReferenceField(allow_none=True)
-        max_flow = marshmallow.fields.List(marshmallow.fields.Number)
+        max_flow = DataFrameField()
 
     def __init__(self, model, name, **kwargs):
         flow_values = kwargs.pop('max_flow')
