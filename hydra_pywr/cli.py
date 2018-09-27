@@ -73,7 +73,7 @@ def import_json(obj, filename, project_id, user_id, config):
 @click.option('-s', '--scenario-id', type=int, default=None)
 @click.option('-u', '--user-id', type=int, default=None)
 @click.option('--json-indent', type=int, default=2)
-@click.option('--json-sort-keys', type=int, default=True)
+@click.option('--json-sort-keys/--no-json-sort-keys', default=False)
 def export_json(obj, filename, network_id, scenario_id, user_id, json_sort_keys, json_indent):
     """ Export a Pywr JSON from Hydra. """
     client = get_logged_in_client(obj, user_id=user_id)
