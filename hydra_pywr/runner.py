@@ -150,6 +150,11 @@ class PywrHydraRunner(PywrHydraExporter):
 
         for recorder in self._array_recorders:
             df = recorder.to_dataframe()
+
+            # TODO make this more configurable
+            df = df.resample('M').mean()
+
+            # Convert to JSON for saving in hydra
             value = df.to_json()
 
             # Get the attribute and its ID
