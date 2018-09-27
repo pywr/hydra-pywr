@@ -41,8 +41,8 @@ class LinearStorageReleaseControl(Link):
 
     def __init__(self, model, name, storage_node, release_values, **kwargs):
 
-        control_curves = release_values['volume'].iloc[1:-1]
-        values = release_values['value']
+        control_curves = release_values['volume'].iloc[1:-1].astype(np.float64)
+        values = release_values['value'].astype(np.float64)
 
         max_flow_param = ControlCurveInterpolatedParameter(model, storage_node, control_curves, values)
         super().__init__(model, name, max_flow=max_flow_param, **kwargs)
@@ -130,9 +130,9 @@ class Reservoir(Storage):
             self._set_bathymetry(bathymetry)
 
     def _set_bathymetry(self, values):
-        volumes = values['volume']
-        levels = values['level']
-        areas = values['area']
+        volumes = values['volume'].astype(np.float64)
+        levels = values['level'].astype(np.float64)
+        areas = values['area'].astype(np.float64)
 
         self.level = InterpolatedVolumeParameter(self.model, self, volumes, levels)
         self.area = InterpolatedVolumeParameter(self.model, self, volumes, areas)
