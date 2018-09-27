@@ -174,3 +174,21 @@ class ProportionalInput(Input):
         factors = [1-proportion, proportion]
         # Create the aggregated node to apply the factors.
         self.aggregated_node = AggregatedNode(model, f'{name}.aggregated', [node, self], factors=factors)
+
+
+class MonthlyOutputWithReturn(MonthlyOutput):
+    class Schema(NodeSchema):
+        min_flow = fields.ParameterReferenceField(allow_none=True)
+        cost = fields.ParameterReferenceField(allow_none=True)
+        max_flow = DataFrameField()
+        proportion = marshmallow.fields.Number()
+
+    def __init__(self, model, name, proportion, **kwargs):
+        super().__init__(model, name, **kwargs)
+        self.input = ProportionalInput(model, '{}.input'.format(name), self, proportion)
+
+    def iter_slots(self, slot_name=None, is_connector=True):
+        if is_connector:
+            yield self.input
+        else:
+            yield self

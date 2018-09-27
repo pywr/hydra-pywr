@@ -78,7 +78,7 @@
         },
         {
             "name": "demand1",
-            "type": "monthlyoutput",
+            "type": "monthlyoutputwithreturn",
             "cost": -10,
             "max_flow": {
                 "flow": {
@@ -95,7 +95,8 @@
                     "10": 1.0,
                     "11": 1.0
                 }
-            }
+            },
+            "proportion": 0.1
         },
         {
             "name": "end1",
@@ -112,6 +113,7 @@
         ["release1", "reach1"],
         ["turbine1", "reach1"],
         ["spill1", "reach1"],
+        ["demand1", "end1"],
         ["reach1", "end1"]
     ]
 }
