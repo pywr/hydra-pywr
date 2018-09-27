@@ -77,6 +77,27 @@
             "type": "link"
         },
         {
+            "name": "demand1",
+            "type": "monthlyoutput",
+            "cost": -10,
+            "max_flow": {
+                "flow": {
+                    "0": 1.0,
+                    "1": 1.0,
+                    "2": 1.0,
+                    "3": 1.0,
+                    "4": 1.0,
+                    "5": 1.0,
+                    "6": 1.0,
+                    "7": 1.0,
+                    "8": 1.0,
+                    "9": 1.0,
+                    "10": 1.0,
+                    "11": 1.0
+                }
+            }
+        },
+        {
             "name": "end1",
             "type": "output"
         }
@@ -87,6 +108,7 @@
         ["control1", "turbine1"],
         ["control1", "release1"],
         ["reservoir1", "spill1"],
+        ["reservoir1", "demand1"],
         ["release1", "reach1"],
         ["turbine1", "reach1"],
         ["spill1", "reach1"],

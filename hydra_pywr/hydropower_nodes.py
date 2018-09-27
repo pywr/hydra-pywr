@@ -144,7 +144,7 @@ class MonthlyCatchment(Catchment):
 
     def __init__(self, model, name, **kwargs):
         flow_values = kwargs.pop('flow')
-        flow_param = MonthlyArrayIndexedParameter(model, flow_values.iloc[:, 0])
+        flow_param = MonthlyArrayIndexedParameter(model, flow_values.iloc[:, 0].values.astype(np.float64))
         super().__init__(model, name, flow=flow_param, **kwargs)
 
 
@@ -156,7 +156,7 @@ class MonthlyOutput(Output):
 
     def __init__(self, model, name, **kwargs):
         flow_values = kwargs.pop('max_flow')
-        flow_param = MonthlyProfileParameter(model, flow_values.iloc[:, 0])
+        flow_param = MonthlyProfileParameter(model, flow_values.iloc[:, 0].values.astype(np.float64))
         super().__init__(model, name, **kwargs)
         self.max_flow = flow_param
 
