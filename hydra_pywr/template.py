@@ -11,6 +11,8 @@ import copy
 from .core import data_type_from_field
 from hydra_base.exceptions import HydraError
 
+PYWR_EDGE_LINK_NAME = 'edge'
+
 PYWR_PROTECTED_NODE_KEYS = ('name', 'comment', 'type', 'position')
 
 PYWR_ARRAY_RECORDER_ATTRIBUTES = {
@@ -160,7 +162,7 @@ def generate_pywr_template(attribute_ids, default_data_set_ids, config):
 
     template_types = [
         {
-            'name': 'edge',
+            'name': PYWR_EDGE_LINK_NAME,
             'resource_type': 'LINK',
             'typeattrs': [],
             # Default layout for links

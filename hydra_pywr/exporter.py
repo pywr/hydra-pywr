@@ -1,6 +1,6 @@
 import json
 from past.builtins import basestring
-from .template import pywr_template_name, PYWR_TIMESTEPPER_ATTRIBUTES
+from .template import pywr_template_name, PYWR_TIMESTEPPER_ATTRIBUTES, PYWR_EDGE_LINK_NAME
 from .core import BasePywrHydra
 from hydra_pywr_common import PywrParameter, PywrRecorder
 from pywr.nodes import NodeMeta
@@ -166,7 +166,15 @@ class PywrHydraExporter(BasePywrHydra):
     def generate_pywr_edges(self):
         """ Generator returning a Pywr tuple for each link/edge in the network. """
 
+        # Only make "real" edges in the Pywr model using the main link type with name PYWR_EDGE_LINK_NAME.
+        # Other link types are for virtual or data connections and should not be added to the list of Pywr edges.
         for link in self.data['links']:
+            for link_type in link['types']:
+                if link_type['name'] == PYWR_EDGE_LINK_NAME:
+                    break
+            else:
+                continue  # Skip this link type
+
             node_from = self._get_node(link['node_1_id'])
             node_to = self._get_node(link['node_2_id'])
             yield [node_from['name'], node_to['name']]
