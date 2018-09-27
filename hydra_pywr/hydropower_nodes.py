@@ -99,7 +99,7 @@ class Turbine(Link):
 
         hp_target_flow = HydropowerTargetParameter(model, generation_capacity,
                                                    water_elevation_parameter=level_parameter,
-                                                   min_head=min_head,
+                                                   min_head=min_head, min_flow=ConstantParameter(model, 0),
                                                    turbine_elevation=turbine_elevation,
                                                    **{k: v for k, v in hp_kwargs.items()})
 
