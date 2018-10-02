@@ -1,7 +1,7 @@
 import json
 import warnings
 from past.builtins import basestring
-from .template import PYWR_PROTECTED_NODE_KEYS, pywr_template_name
+from .template import PYWR_PROTECTED_NODE_KEYS, pywr_template_name, load_template_config
 from .core import BasePywrHydra, data_type_from_field
 from pywr.nodes import NodeMeta
 from hydra_pywr_common import data_type_from_component_type
@@ -30,7 +30,8 @@ class PywrHydraImporter(BasePywrHydra):
 
     @classmethod
     def from_client(cls, client, data, config_name):
-        template = client.get_template_by_name(pywr_template_name(config_name))
+        config = load_template_config(config_name)
+        template = client.get_template_by_name(pywr_template_name(config['name']))
         return cls(data, template)
 
     @property
@@ -237,6 +238,7 @@ class PywrHydraImporter(BasePywrHydra):
             for resource_attribute, resource_scenario in self.generate_node_resource_scenarios(pywr_node, attribute_ids):
                 resource_attributes.append(resource_attribute)
                 hydra_resource_scenarios.append(resource_scenario)
+
 
             # Try to get a coordinate from the pywr_node
             x, y = None, None

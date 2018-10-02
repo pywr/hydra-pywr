@@ -11,7 +11,7 @@ def test_add_network(pywr_json_filename, db_with_template, projectmaker, logged_
 
     project = projectmaker.create()
 
-    importer = PywrHydraImporter.from_client(client, pywr_json_filename, 'Full')
+    importer = PywrHydraImporter.from_client(client, pywr_json_filename, 'full')
     importer.import_data(client, project.id)
 
 
