@@ -106,7 +106,7 @@ class Turbine(Link):
         self.max_flow = hp_target_flow
 
         hp_recorder = HydropowerRecorder(model, self, water_elevation_parameter=level_parameter,
-                                         **hp_kwargs)
+                                         turbine_elevation=turbine_elevation, **hp_kwargs)
         self.hydropower_recorder = hp_recorder
 
 
