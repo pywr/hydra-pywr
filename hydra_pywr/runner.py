@@ -155,7 +155,7 @@ class PywrHydraRunner(PywrHydraExporter):
             df = df.resample('M').mean()
 
             # Convert to JSON for saving in hydra
-            value = df.to_json()
+            value = df.to_json(date_format='iso', date_unit='s')
 
             # Get the attribute and its ID
             attribute_name = self._get_attribute_name_from_recorder(recorder)
