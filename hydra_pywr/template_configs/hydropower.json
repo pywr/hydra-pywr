@@ -8,6 +8,7 @@
       "Catchment",
       "MonthlyCatchment",
       "MonthlyOutput",
+      "MonthlyOutputWithReturn",
       "Link",
       "Input",
       "Output",
