@@ -4,7 +4,7 @@ from pywr.parameters._thresholds import ParameterThresholdParameter
 from pywr.parameters import InterpolatedVolumeParameter, ConstantParameter, Parameter, MonthlyProfileParameter, \
     AggregatedParameter
 from pywr.parameters._hydropower import HydropowerTargetParameter
-from pywr.recorders import HydropowerRecorder
+from pywr.recorders import HydropowerRecorder, NumpyArrayLevelRecorder, NumpyArrayNodeRecorder
 from pywr.schema import NodeSchema, fields
 from pywr.domains.river import Catchment
 import numpy as np
@@ -146,6 +146,11 @@ class Reservoir(Storage):
         self.level = InterpolatedVolumeParameter(self.model, self, volumes, levels)
         self.area = InterpolatedVolumeParameter(self.model, self, volumes, areas)
 
+        # Record the level
+        # TODO Pywr is missing an equivalent area recorder.
+        # TODO fix bug in Pywr with missing `to_dataframe` method (see https://github.com/pywr/pywr/issues/670)
+        # self.level_recorder = NumpyArrayLevelRecorder(self.model, self, name=f'__{self.name}__:level')
+
     def _make_weather_nodes(self, model, weather, cost):
 
         if not isinstance(self.area, Parameter):
@@ -181,6 +186,12 @@ class Reservoir(Storage):
         self.connect(evporation_node)
         self.rainfall_node = rainfall_node
         self.evaporation_node = evporation_node
+
+        # Finally record these flows
+        self.rainfall_recorder = NumpyArrayNodeRecorder(model, rainfall_node,
+                                                        name=f'__{rainfall_node.name}__:rainfall')
+        self.evaporation_recorder = NumpyArrayNodeRecorder(model, evporation_node,
+                                                           name=f'__{evporation_node.name}__:evaporation')
 
 
 class MonthlyCatchment(Catchment):

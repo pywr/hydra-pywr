@@ -2,7 +2,7 @@ from .exporter import PywrHydraExporter
 import copy
 from pywr.model import Model
 from pywr.nodes import Node, Storage
-from pywr.recorders import NumpyArrayNodeRecorder, NumpyArrayStorageRecorder
+from pywr.recorders import NumpyArrayNodeRecorder, NumpyArrayStorageRecorder, NumpyArrayLevelRecorder
 from pywr.recorders.progress import ProgressRecorder
 from .template import PYWR_ARRAY_RECORDER_ATTRIBUTES
 
@@ -63,7 +63,7 @@ class PywrHydraRunner(PywrHydraExporter):
 
         array_recorders = []
         for recorder in model.recorders:
-            if isinstance(recorder, (NumpyArrayNodeRecorder, NumpyArrayStorageRecorder)):
+            if isinstance(recorder, (NumpyArrayNodeRecorder, NumpyArrayStorageRecorder, NumpyArrayLevelRecorder)):
                 array_recorders.append(recorder)
 
         # Check the model
@@ -168,6 +168,10 @@ class PywrHydraRunner(PywrHydraExporter):
                     if node['name'] == recorder.node.name:
                         node_id = node['id']
                         break
+                    if recorder.node.parent is not None:
+                        if node['name'] == recorder.node.parent.name:
+                            node_id = node['id']
+                            break
                 else:
                     continue
                 attribute = self._get_attribute_from_name(attribute_name)
