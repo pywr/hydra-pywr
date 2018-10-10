@@ -62,7 +62,9 @@ def import_json(obj, filename, project_id, user_id, config):
     """ Import a Pywr JSON file into Hydra. """
     client = get_logged_in_client(obj, user_id=user_id)
     importer = PywrHydraImporter.from_client(client, filename, config)
-    importer.import_data(client, project_id)
+    network_id, scenario_id = importer.import_data(client, project_id)
+
+    click.echo(f'Successfully imported "{filename}"! Network ID: {network_id}, Scenario ID: {scenario_id}')
 
 
 @hydra_app(category='export')
@@ -82,6 +84,8 @@ def export_json(obj, filename, network_id, scenario_id, user_id, json_sort_keys,
     with open(filename, mode='w') as fh:
         json.dump(exporter.get_pywr_data(), fh, sort_keys=json_sort_keys, indent=json_indent)
 
+    click.echo(f'Successfully exported "{filename}"! Network ID: {network_id}, Scenario ID: {scenario_id}')
+
 
 @hydra_app(category='model')
 @cli.command()
@@ -100,6 +104,8 @@ def run(obj, network_id, scenario_id, user_id):
     runner.run_pywr_model()
 
     runner.save_pywr_results(client)
+
+    click.echo(f'Pywr model run success! Network ID: {network_id}, Scenario ID: {scenario_id}')
 
 
 @cli.command()
