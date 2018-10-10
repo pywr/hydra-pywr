@@ -1,7 +1,8 @@
 from pywr.nodes import Link, Storage, Output, Input, AggregatedNode
 from pywr.parameters.control_curves import ControlCurveInterpolatedParameter
 from pywr.parameters._thresholds import ParameterThresholdParameter
-from pywr.parameters import InterpolatedVolumeParameter, ConstantParameter, Parameter, MonthlyProfileParameter
+from pywr.parameters import InterpolatedVolumeParameter, ConstantParameter, Parameter, MonthlyProfileParameter, \
+    AggregatedParameter
 from pywr.parameters._hydropower import HydropowerTargetParameter
 from pywr.recorders import HydropowerRecorder
 from pywr.schema import NodeSchema, fields
@@ -120,14 +121,22 @@ class Reservoir(Storage):
         initial_volume = fields.ParameterValuesField(required=False)
         initial_volume_pc = marshmallow.fields.Number(required=False)
         bathymetry = DataFrameField()
+        weather = DataFrameField()
 
     def __init__(self, model, name, **kwargs):
 
         bathymetry = kwargs.pop('bathymetry', None)
+        weather = kwargs.pop('weather', None)
+        weather_cost = kwargs.pop('weather_cost', -999)
 
         super().__init__(model, name, **kwargs)
         if bathymetry is not None:
             self._set_bathymetry(bathymetry)
+
+        self.rainfall_node = None
+        self.evaporation_node = None
+        if weather is not None:
+            self._make_weather_nodes(model, weather, weather_cost)
 
     def _set_bathymetry(self, values):
         volumes = values['volume'].astype(np.float64)
@@ -136,6 +145,42 @@ class Reservoir(Storage):
 
         self.level = InterpolatedVolumeParameter(self.model, self, volumes, levels)
         self.area = InterpolatedVolumeParameter(self.model, self, volumes, areas)
+
+    def _make_weather_nodes(self, model, weather, cost):
+
+        if not isinstance(self.area, Parameter):
+            raise ValueError('Weather nodes can only be created if an area Parameter is given.')
+
+        rainfall = weather['rainfall'].astype(np.float64)
+        rainfall_param = MonthlyProfileParameter(model, rainfall)
+
+        evaporation = weather['evaporation'].astype(np.float64)
+        evaporation_param = MonthlyProfileParameter(model, evaporation)
+
+        # Assume rainfall/evap is mm/day
+        # Need to convert to Mm/day to be multiplied by area of Mm2
+        # TODO allow this to be configured
+        const = ConstantParameter(model, 1e-9)
+
+        # Create the flow parameters multiplying area by rate of rainfall/evap
+        rainfall_flow_param = AggregatedParameter(model, [rainfall_param, const, self.area],
+                                                  agg_func='product')
+        evaporation_flow_param = AggregatedParameter(model, [evaporation_param, const, self.area],
+                                                     agg_func='product')
+
+        # Create the nodes to provide the flows
+        rainfall_node = Input(model, '{}.rainfall'.format(self.name), parent=self)
+        rainfall_node.max_flow = rainfall_flow_param
+        rainfall_node.cost = cost
+
+        evporation_node = Output(model, '{}.evaporation'.format(self.name), parent=self)
+        evporation_node.max_flow = evaporation_flow_param
+        evporation_node.cost = cost
+
+        rainfall_node.connect(self)
+        self.connect(evporation_node)
+        self.rainfall_node = rainfall_node
+        self.evaporation_node = evporation_node
 
 
 class MonthlyCatchment(Catchment):
