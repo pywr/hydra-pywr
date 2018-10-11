@@ -23,8 +23,13 @@ class DataFrameField(marshmallow.fields.Field):
         return value.to_json()
 
     def _deserialize(self, value, attr, data):
-        return pandas.DataFrame.from_dict(value)
-
+        df = pandas.DataFrame.from_dict(value)
+        # Row ordering is not preserved by from_dict.
+        # We return the dataframe with the same ordering in the rows and columns as given in value.
+        # TODO do something better than this.
+        row_order = value[list(value.keys())[0]]
+        df = df.loc[row_order, list(value.keys())]
+        return df
 
 
 class LinearStorageReleaseControl(Link):
