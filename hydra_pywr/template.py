@@ -12,6 +12,8 @@ from .core import data_type_from_field
 from hydra_base.exceptions import HydraError
 
 PYWR_EDGE_LINK_NAME = 'edge'
+PYWR_CONSTRAINED_EDGE_LINK_NAME = 'constrained edge'
+PYWR_CONSTRAINED_EDGE_ATTRIBUTES = ('min_flow', 'max_flow', 'cost')
 
 PYWR_PROTECTED_NODE_KEYS = ('name', 'comment', 'type', 'position')
 
@@ -161,6 +163,7 @@ def generate_pywr_node_templates(attribute_ids, whitelist=None, blacklist=None):
 def generate_pywr_template(attribute_ids, default_data_set_ids, config):
 
     template_types = [
+        # Default link type (not constraint)
         {
             'name': PYWR_EDGE_LINK_NAME,
             'resource_type': 'LINK',
@@ -168,6 +171,23 @@ def generate_pywr_template(attribute_ids, default_data_set_ids, config):
             # Default layout for links
             'layout': {"linestyle": "solid", "width": "7", "color": "#000000", "hidden": "N"}
         },
+        # Constraint link
+        {
+            'name': PYWR_CONSTRAINED_EDGE_LINK_NAME,
+            'resource_type': 'LINK',
+            'typeattrs': [
+                {
+                    'attr_id': attribute_ids[name],
+                    'data_type': 'scalar',
+                    'description': '',
+                    'is_var': 'N'
+                }
+                for name in PYWR_CONSTRAINED_EDGE_ATTRIBUTES
+            ],
+            # Default layout for links
+            'layout': {"linestyle": "solid", "width": "7", "color": "#CA3013", "hidden": "N"}
+        },
+        # Timestepper attributes
         {
             'name': 'Pywr {}'.format(config['name']),
             'resource_type': 'NETWORK',
