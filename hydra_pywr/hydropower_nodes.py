@@ -168,9 +168,12 @@ class Reservoir(Storage):
         evaporation_param = MonthlyProfileParameter(model, evaporation)
 
         # Assume rainfall/evap is mm/day
-        # Need to convert to Mm/day to be multiplied by area of Mm2
+        # Need to convert:
+        #   Mm2 -> m2
+        #   mm/day -> m/day
+        #   m3/day -> Mm3/day
         # TODO allow this to be configured
-        const = ConstantParameter(model, 1e-9)
+        const = ConstantParameter(model, 1e6 * 1e-3 * 1e-6)
 
         # Create the flow parameters multiplying area by rate of rainfall/evap
         rainfall_flow_param = AggregatedParameter(model, [rainfall_param, const, self.area],
