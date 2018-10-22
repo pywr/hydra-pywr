@@ -58,13 +58,18 @@ def cli(obj, username, password, hostname, session):
 @click.argument('project_id', type=int)
 @click.option('-u', '--user-id', type=int, default=None)
 @click.option('-c', '--config', type=str, default='full')
-def import_json(obj, filename, project_id, user_id, config):
+@click.option('--run/--no-run', default=False)
+def import_json(obj, filename, project_id, user_id, config, run):
     """ Import a Pywr JSON file into Hydra. """
+    click.echo(f'Beginning import of "{filename}"! Project ID: {project_id}')
     client = get_logged_in_client(obj, user_id=user_id)
     importer = PywrHydraImporter.from_client(client, filename, config)
     network_id, scenario_id = importer.import_data(client, project_id)
 
     click.echo(f'Successfully imported "{filename}"! Network ID: {network_id}, Scenario ID: {scenario_id}')
+
+    if run:
+        run_network_scenario(client, network_id, scenario_id)
 
 
 @hydra_app(category='export')
@@ -95,14 +100,15 @@ def export_json(obj, filename, network_id, scenario_id, user_id, json_sort_keys,
 @click.option('-u', '--user-id', type=int, default=None)
 def run(obj, network_id, scenario_id, user_id):
     """ Export, run and save a Pywr model from Hydra. """
-
     client = get_logged_in_client(obj, user_id=user_id)
+    run_network_scenario(client, network_id, scenario_id)
+
+
+def run_network_scenario(client, network_id, scenario_id):
     runner = PywrHydraRunner.from_network_id(client, network_id, scenario_id)
 
     runner.load_pywr_model()
-
     runner.run_pywr_model()
-
     runner.save_pywr_results(client)
 
     click.echo(f'Pywr model run success! Network ID: {network_id}, Scenario ID: {scenario_id}')
