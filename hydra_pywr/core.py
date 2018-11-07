@@ -2,7 +2,7 @@ import json
 from hydra_base.lib.HydraTypes.Types import Scalar, Array, Descriptor, Dataframe
 from pywr.schema.fields import ParameterField, ParameterReferenceField, ParameterValuesField, NodeField
 from marshmallow.fields import Number, Integer, List
-from .hydropower_nodes import DataFrameField
+from .nodes import DataFrameField
 
 # TODO move this to template.py
 def data_type_from_field(field):

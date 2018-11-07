@@ -1,1 +1,1 @@
-from .hydropower_nodes import *
+from .nodes import *

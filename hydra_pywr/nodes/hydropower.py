@@ -10,26 +10,8 @@ from pywr.domains.river import Catchment
 import numpy as np
 import pandas
 import marshmallow
-from .parameters import MonthlyArrayIndexedParameter
-
-
-# This is a parameter instance.
-class DataFrameField(marshmallow.fields.Field):
-    """ Marshmallow field representing a Parameter. """
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-    def _serialize(self, value, attr, obj):
-        return value.to_json()
-
-    def _deserialize(self, value, attr, data):
-        df = pandas.DataFrame.from_dict(value)
-        # Row ordering is not preserved by from_dict.
-        # We return the dataframe with the same ordering in the rows and columns as given in value.
-        # TODO do something better than this.
-        row_order = value[list(value.keys())[0]]
-        df = df.loc[row_order, list(value.keys())]
-        return df
+from ..parameters import MonthlyArrayIndexedParameter
+from . import DataFrameField
 
 
 class LinearStorageReleaseControl(Link):
@@ -256,3 +238,27 @@ class MonthlyOutputWithReturn(MonthlyOutput):
             yield self.input
         else:
             yield self
+
+
+class WasteWaterTreatmentWorks(ProportionalInput):
+    class Schema(NodeSchema):
+        node = fields.NodeField()
+        proportion = marshmallow.fields.Number()
+        reuse_proportion = marshmallow.fields.Number()
+
+    def __init__(self, model, name, *args, **kwargs):
+        reuse_proportion = kwargs.pop('reuse_proportion')
+        super().__init__(model, name, *args, **kwargs)
+
+        effluent_node = Link(model, f'{name}.effluent', parent=self)
+        reuse_node = Link(model, f'{name}.reuse', parent=self)
+        self.connect(effluent_node)
+        self.connect(reuse_node)
+
+        reuse_factors = [1-reuse_proportion, reuse_proportion]
+        self.reuse_aggregated_node = AggregatedNode(model, f'{name}.reuse_aggregated', factors=reuse_factors)
+
+    def iter_slots(self, slot_name=None, is_connector=True):
+        if is_connector:
+            pass
+
