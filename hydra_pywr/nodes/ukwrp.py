@@ -45,7 +45,7 @@ class WaterResourceZonePR19(Link):
 
         # Track deficits
         deficit_param = DeficitParameter(model, self.demand_node, name=f'{name}-deficit_param')
-        NumpyArrayParameterRecorder(model, deficit_param, name=f'{name}-deficit', temporal_agg_func='sum')
+        NumpyArrayParameterRecorder(model, deficit_param, name=f'__{name}__:deficit', temporal_agg_func='sum')
 
 
 
