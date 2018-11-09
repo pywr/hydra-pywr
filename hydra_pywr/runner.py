@@ -2,7 +2,8 @@ from .exporter import PywrHydraExporter
 import copy
 from pywr.model import Model
 from pywr.nodes import Node, Storage
-from pywr.recorders import NumpyArrayNodeRecorder, NumpyArrayStorageRecorder, NumpyArrayLevelRecorder
+from pywr.recorders import NumpyArrayNodeRecorder, NumpyArrayStorageRecorder, NumpyArrayLevelRecorder, \
+    NumpyArrayParameterRecorder
 from pywr.recorders.progress import ProgressRecorder
 from .template import PYWR_ARRAY_RECORDER_ATTRIBUTES
 
@@ -63,7 +64,12 @@ class PywrHydraRunner(PywrHydraExporter):
 
         array_recorders = []
         for recorder in model.recorders:
-            if isinstance(recorder, (NumpyArrayNodeRecorder, NumpyArrayStorageRecorder, NumpyArrayLevelRecorder)):
+            if isinstance(recorder, (
+                    NumpyArrayNodeRecorder,
+                    NumpyArrayStorageRecorder,
+                    NumpyArrayLevelRecorder,
+                    NumpyArrayParameterRecorder,
+            )):
                 array_recorders.append(recorder)
 
         # Check the model
