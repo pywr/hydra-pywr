@@ -9,7 +9,7 @@ from sqlalchemy.orm import sessionmaker
 import datetime
 import os
 
-from hydra_pywr.template import generate_pywr_attributes, generate_pywr_template, PYWR_DEFAULT_DATASETS
+from hydra_pywr.template import generate_pywr_attributes, generate_pywr_template, load_template_config, PYWR_DEFAULT_DATASETS
 
 global user_id
 user_id = config.get('DEFAULT', 'root_user_id', 1)
@@ -121,7 +121,8 @@ def session_with_pywr_template(session):
         hydra_dataset = hydra_base.add_dataset(flush=True, **dataset)
         default_data_set_ids[attribute_name] = hydra_dataset.id
 
-    template = generate_pywr_template(attribute_ids, default_data_set_ids, 'full')
+    config = load_template_config('full')
+    template = generate_pywr_template(attribute_ids, default_data_set_ids, config)
 
     hydra_base.add_template(JSONObject(template))
 

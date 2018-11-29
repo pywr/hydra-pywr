@@ -10,7 +10,7 @@ from .exporter import PywrHydraExporter
 from .runner import PywrHydraRunner
 from .importer import PywrHydraImporter
 from .util import make_plugins
-from .template import register_template, unregister_template
+from .template import register_template, unregister_template, migrate_network_template, TemplateExistsError
 
 
 def hydra_app(category='import'):
@@ -58,11 +58,18 @@ def cli(obj, username, password, hostname, session):
 @click.argument('project_id', type=int)
 @click.option('-u', '--user-id', type=int, default=None)
 @click.option('-c', '--config', type=str, default='full')
-def import_json(obj, filename, project_id, user_id, config):
+@click.option('--run/--no-run', default=False)
+def import_json(obj, filename, project_id, user_id, config, run):
     """ Import a Pywr JSON file into Hydra. """
+    click.echo(f'Beginning import of "{filename}"! Project ID: {project_id}')
     client = get_logged_in_client(obj, user_id=user_id)
     importer = PywrHydraImporter.from_client(client, filename, config)
-    importer.import_data(client, project_id)
+    network_id, scenario_id = importer.import_data(client, project_id)
+
+    click.echo(f'Successfully imported "{filename}"! Network ID: {network_id}, Scenario ID: {scenario_id}')
+
+    if run:
+        run_network_scenario(client, network_id, scenario_id)
 
 
 @hydra_app(category='export')
@@ -73,7 +80,7 @@ def import_json(obj, filename, project_id, user_id, config):
 @click.option('-s', '--scenario-id', type=int, default=None)
 @click.option('-u', '--user-id', type=int, default=None)
 @click.option('--json-indent', type=int, default=2)
-@click.option('--json-sort-keys', type=int, default=True)
+@click.option('--json-sort-keys/--no-json-sort-keys', default=False)
 def export_json(obj, filename, network_id, scenario_id, user_id, json_sort_keys, json_indent):
     """ Export a Pywr JSON from Hydra. """
     client = get_logged_in_client(obj, user_id=user_id)
@@ -81,6 +88,8 @@ def export_json(obj, filename, network_id, scenario_id, user_id, json_sort_keys,
 
     with open(filename, mode='w') as fh:
         json.dump(exporter.get_pywr_data(), fh, sort_keys=json_sort_keys, indent=json_indent)
+
+    click.echo(f'Successfully exported "{filename}"! Network ID: {network_id}, Scenario ID: {scenario_id}')
 
 
 @hydra_app(category='model')
@@ -91,15 +100,18 @@ def export_json(obj, filename, network_id, scenario_id, user_id, json_sort_keys,
 @click.option('-u', '--user-id', type=int, default=None)
 def run(obj, network_id, scenario_id, user_id):
     """ Export, run and save a Pywr model from Hydra. """
-
     client = get_logged_in_client(obj, user_id=user_id)
+    run_network_scenario(client, network_id, scenario_id)
+
+
+def run_network_scenario(client, network_id, scenario_id):
     runner = PywrHydraRunner.from_network_id(client, network_id, scenario_id)
 
     runner.load_pywr_model()
-
     runner.run_pywr_model()
-
     runner.save_pywr_results(client)
+
+    click.echo(f'Pywr model run success! Network ID: {network_id}, Scenario ID: {scenario_id}')
 
 
 @cli.command()
@@ -137,12 +149,16 @@ def template():
 
 @template.command('register')
 @click.option('-c', '--config', type=str, default='full')
+@click.option('--update/--no-update', default=False)
 @click.pass_obj
-def template_register(obj, config):
+def template_register(obj, config, update):
     """ Register a Pywr template with Hydra. """
 
     client = get_logged_in_client(obj)
-    register_template(client, config_name=config)
+    try:
+        register_template(client, config_name=config, update=update)
+    except TemplateExistsError:
+        click.echo('The template is already registered. To force an updated use the --update option.')
     
     
 @template.command('unregister')
@@ -151,4 +167,17 @@ def template_register(obj, config):
 def template_unregister(obj, config):
     """ Unregister a Pywr template with Hydra. """
     client = get_logged_in_client(obj)
-    unregister_template(client, config_name=config)
+    if click.confirm('Are you sure you want to remove the template? '
+                     'This will invalidate any existing networks that use the template.'):
+        unregister_template(client, config_name=config)
+
+
+@template.command('migrate')
+@click.argument('network-id', type=int)
+@click.option('--template-name', type=str, default=None)
+@click.option('--template-id', type=int, default=None)
+@click.pass_obj
+def template_migrate(obj, network_id, template_name, template_id):
+    client = get_logged_in_client(obj)
+    if click.confirm('Are you sure you want to migrate network {} to a new template?'.format(network_id)):
+        migrate_network_template(client, network_id, template_name=template_name, template_id=template_id)

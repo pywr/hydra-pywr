@@ -18,3 +18,13 @@ class MonthlyArrayIndexedParameter(Parameter):
 
         index = (current_year - start_year)*12 + current_month - start_month
         return self.values[index]
+
+
+class YearlyDataFrameParameter(Parameter):
+    def __init__(self, model, dataframe, *args, **kwargs):
+        super().__init__(model, *args, **kwargs)
+        self.dataframe = dataframe
+
+    def value(self, ts, si):
+        return self.dataframe.loc[str(ts.year)]
+

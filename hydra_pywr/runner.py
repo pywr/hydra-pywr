@@ -2,7 +2,8 @@ from .exporter import PywrHydraExporter
 import copy
 from pywr.model import Model
 from pywr.nodes import Node, Storage
-from pywr.recorders import NumpyArrayNodeRecorder, NumpyArrayStorageRecorder
+from pywr.recorders import NumpyArrayNodeRecorder, NumpyArrayStorageRecorder, NumpyArrayLevelRecorder, \
+    NumpyArrayParameterRecorder
 from pywr.recorders.progress import ProgressRecorder
 from .template import PYWR_ARRAY_RECORDER_ATTRIBUTES
 
@@ -63,7 +64,12 @@ class PywrHydraRunner(PywrHydraExporter):
 
         array_recorders = []
         for recorder in model.recorders:
-            if isinstance(recorder, (NumpyArrayNodeRecorder, NumpyArrayStorageRecorder)):
+            if isinstance(recorder, (
+                    NumpyArrayNodeRecorder,
+                    NumpyArrayStorageRecorder,
+                    NumpyArrayLevelRecorder,
+                    NumpyArrayParameterRecorder,
+            )):
                 array_recorders.append(recorder)
 
         # Check the model
@@ -105,12 +111,20 @@ class PywrHydraRunner(PywrHydraExporter):
                 return attribute
         raise ValueError('No attribute with name "{}" found.'.format(name))
 
+    def _get_node_from_recorder(self, recorder):
+        try:
+            node = recorder.node
+        except AttributeError:
+            node = recorder.parameter.node
+        return node
+
     def _get_attribute_name_from_recorder(self, recorder):
         if recorder.name is None:
             attribute_name = recorder.__class__
         else:
-            prefix = '__{}__:'.format(recorder.node.name)
-            suffix = '.{}'.format(recorder.node.name)
+            node = self._get_node_from_recorder(recorder)
+            prefix = '__{}__:'.format(node.name)
+            suffix = '.{}'.format(node.name)
             if recorder.name.startswith(prefix):
                 attribute_name = recorder.name.replace(prefix, '')
             elif recorder.name.endswith(suffix):
@@ -150,19 +164,31 @@ class PywrHydraRunner(PywrHydraExporter):
 
         for recorder in self._array_recorders:
             df = recorder.to_dataframe()
-            value = df.to_json()
+
+            # Convert to JSON for saving in hydra
+            value = df.to_json(date_format='iso', date_unit='s')
 
             # Get the attribute and its ID
             attribute_name = self._get_attribute_name_from_recorder(recorder)
 
             # Now we need to ensure there is a resource attribute for all nodes and recorder attributes
+
             try:
-                resource_attribute_id = self._get_resource_attribute_id(recorder.node.name, attribute_name)
+                recorder_node = self._get_node_from_recorder(recorder)
+            except AttributeError:
+                continue
+
+            try:
+                resource_attribute_id = self._get_resource_attribute_id(recorder_node.name, attribute_name)
             except ValueError:
                 for node in self.data['nodes']:
-                    if node['name'] == recorder.node.name:
+                    if node['name'] == recorder_node.name:
                         node_id = node['id']
                         break
+                    if recorder_node.parent is not None:
+                        if node['name'] == recorder_node.parent.name:
+                            node_id = node['id']
+                            break
                 else:
                     continue
                 attribute = self._get_attribute_from_name(attribute_name)

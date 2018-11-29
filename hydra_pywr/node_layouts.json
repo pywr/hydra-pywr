@@ -7,15 +7,9 @@
     "color": "#000000",
     "hidden": "N"
   },
-  "input": {
-    "color": "#0055ff"
-  },
-  "catchment": {
-    "color": "#00aa00"
-  },
-  "output": {
-    "color": "#ff5500"
-  },
+  "input": {"shape": "circle", "height": 20, "width": 20, "size": "large", "color": "#0055ff", "hidden": "N"},
+  "catchment": {"shape": "circle", "height": 15, "width": 15, "size": "medium", "color": "#008e00", "hidden": "N"},
+  "output": {"shape": "circle", "height": 20, "width": 20, "size": "large", "color": "#000000", "hidden": "N"},
   "storage": {
     "shape": "triangle",
     "height": 30,
@@ -28,5 +22,12 @@
   "aggregatedstorage": {
     "shape": "square",
     "color": "#0055ff"
-  }
+  },
+  "linearstoragereleasecontrol": {"shape": "square", "height": 15, "width": 15, "size": "medium", "color": "#929000", "hidden": "N"},
+  "link": {"shape": "circle", "height": 5, "width": 5, "size": "small", "color": "#000000", "hidden": "N"},
+  "monthlycatchment": {"shape": "circle", "height": 20, "width": 20, "size": "large", "color": "#008e00", "hidden": "N"},
+  "monthlyoutput": {"shape": "circle", "height": 20, "width": 20, "size": "large", "color": "#ff9300", "hidden": "N"},
+  "proportionalinput": {"shape": "diamond", "height": 15, "width": 15, "size": "medium", "color": "#941651", "hidden": "N"},
+  "reservoir": {"shape": "triangle", "height": 20, "width": 20, "size": "large", "color": "#0432ff", "hidden": "N"},
+  "turbine": {"shape": "cross", "height": 15, "width": 15, "size": "medium", "color": "#00fcff", "hidden": "N"}
 }

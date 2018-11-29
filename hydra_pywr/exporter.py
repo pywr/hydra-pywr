@@ -1,6 +1,6 @@
 import json
 from past.builtins import basestring
-from .template import pywr_template_name, PYWR_TIMESTEPPER_ATTRIBUTES
+from .template import PYWR_EDGE_LINK_NAME, PYWR_CONSTRAINED_EDGE_LINK_NAME
 from .core import BasePywrHydra
 from hydra_pywr_common import PywrParameter, PywrRecorder
 from pywr.nodes import NodeMeta
@@ -64,8 +64,21 @@ class PywrHydraExporter(BasePywrHydra):
         pywr_data['nodes'] = nodes
 
         edges = []
-        for edge in self.generate_pywr_edges():
+        for edge, (node, parameters, recorders) in self.generate_pywr_edges():
             edges.append(edge)
+            if node is not None:
+                pywr_data['nodes'].append(node)
+
+                if len(parameters) > 0:
+                    if 'parameters' not in pywr_data:
+                        pywr_data['parameters'] = {}
+                    pywr_data['parameters'].update(parameters)
+
+                if len(recorders) > 0:
+                    if 'recorders' not in pywr_data:
+                        pywr_data['recorders'] = {}
+                    pywr_data['recorders'].update(recorders)
+
         pywr_data['edges'] = edges
 
         return pywr_data
@@ -92,9 +105,6 @@ class PywrHydraExporter(BasePywrHydra):
         """ Generator returning a Pywr dict for each node in the network. """
 
         for node in self.data['nodes']:
-            parameters = {}
-            recorders = {}
-
             # Create the basic information.
             pywr_node = {'name': node['name']}
 
@@ -108,52 +118,8 @@ class PywrHydraExporter(BasePywrHydra):
             if pywr_node_type is None:
                 raise ValueError('Template does not contain node of type "{}".'.format(pywr_node_type))
 
-            node_klass = NodeMeta.node_registry[pywr_node_type]
-            schema = node_klass.Schema()
-
-            pywr_node['type'] = pywr_node_type
-
-            # Then add any corresponding attributes / data
-            for resource_attribute in node['attributes']:
-                attribute = self.attributes[resource_attribute['attr_id']]
-                try:
-                    resource_scenario = self._get_resource_scenario(resource_attribute['id'])
-                except ValueError:
-                    continue  # No data associated with this attribute.
-
-                if resource_attribute['attr_is_var'] == 'Y':
-                    continue
-
-                attribute_name = attribute['name']
-
-                dataset = resource_scenario['dataset']
-                dataset_type = dataset['type']
-                value = dataset['value']
-
-                if attribute_name in schema.fields:
-                    # The attribute is part of the node definition
-                    if isinstance(value, basestring):
-                        try:
-                            pywr_node[attribute_name] = json.loads(value)
-                        except json.decoder.JSONDecodeError:
-                            pywr_node[attribute_name] = value
-                    else:
-                        pywr_node[attribute_name] = value
-                else:
-                    # Otherwise the attribute is either a parameter or recorder
-                    # defined as a node attribute (for convenience).
-                    hydra_type = typemap[dataset_type]
-                    component_name = self.make_node_attribute_component_name(node['name'], attribute_name)
-                    if issubclass(hydra_type, PywrParameter):
-                        # Must be a parameter
-                        parameters[component_name] = json.loads(value)
-                    elif issubclass(hydra_type, PywrRecorder):
-                        # Must be a recorder
-                        recorders[component_name] = json.loads(value)
-                    else:
-                        # Any other type we do not support as a non-schema nodal attribute
-                        raise ValueError('Hydra dataset type "{}" not supported as a non-schema'
-                                         ' attribute on a Pywr node.'.format(dataset_type))
+            pywr_node_attrs, parameters, recorders = self._generate_component_attributes(node, pywr_node_type)
+            pywr_node.update(pywr_node_attrs)
 
             if node['x'] is not None and node['y'] is not None:
                 # Finally add coordinates from hydra
@@ -166,10 +132,33 @@ class PywrHydraExporter(BasePywrHydra):
     def generate_pywr_edges(self):
         """ Generator returning a Pywr tuple for each link/edge in the network. """
 
+        # Only make "real" edges in the Pywr model using the main link type with name PYWR_EDGE_LINK_NAME.
+        # Other link types are for virtual or data connections and should not be added to the list of Pywr edges.
         for link in self.data['links']:
-            node_from = self._get_node(link['node_1_id'])
-            node_to = self._get_node(link['node_2_id'])
-            yield [node_from['name'], node_to['name']]
+            for link_type in link['types']:
+                if link_type['name'] in (PYWR_EDGE_LINK_NAME, PYWR_CONSTRAINED_EDGE_LINK_NAME):
+                    break
+            else:
+                continue  # Skip this link type
+
+            if link_type['name'] == PYWR_EDGE_LINK_NAME:
+                node_from = self._get_node(link['node_1_id'])
+                node_to = self._get_node(link['node_2_id'])
+                yield [node_from['name'], node_to['name']], (None, {}, {})
+
+            elif link_type['name'] == PYWR_CONSTRAINED_EDGE_LINK_NAME:
+                node_from = self._get_node(link['node_1_id'])
+                node_to = self._get_node(link['node_2_id'])
+
+                pywr_node_type = 'link'
+                pywr_node = {'name': link['name']}
+
+                pywr_node_attrs, parameters, recorders = self._generate_component_attributes(link, pywr_node_type)
+                pywr_node.update(pywr_node_attrs)
+
+                # Yield the two edges and one corresponding node
+                yield [node_from['name'], pywr_node['name']], (pywr_node, parameters, recorders)
+                yield [pywr_node['name'], node_to['name']], (None, {}, {})
 
     def generate_group_data(self, group_name, decode_from_json=False):
         """ Generator returning a key and dict value for meta keys. """
@@ -209,3 +198,56 @@ class PywrHydraExporter(BasePywrHydra):
                 value = int(value)
 
             yield attribute_name, value
+
+    def _generate_component_attributes(self, component, pywr_node_type):
+
+        node_klass = NodeMeta.node_registry[pywr_node_type]
+        schema = node_klass.Schema()
+
+        pywr_node = {'type': pywr_node_type}
+        parameters = {}
+        recorders = {}
+
+        # Then add any corresponding attributes / data
+        for resource_attribute in component['attributes']:
+            attribute = self.attributes[resource_attribute['attr_id']]
+            try:
+                resource_scenario = self._get_resource_scenario(resource_attribute['id'])
+            except ValueError:
+                continue  # No data associated with this attribute.
+
+            if resource_attribute['attr_is_var'] == 'Y':
+                continue
+
+            attribute_name = attribute['name']
+
+            dataset = resource_scenario['dataset']
+            dataset_type = dataset['type']
+            value = dataset['value']
+
+            if attribute_name in schema.fields:
+                # The attribute is part of the node definition
+                if isinstance(value, basestring):
+                    try:
+                        pywr_node[attribute_name] = json.loads(value)
+                    except json.decoder.JSONDecodeError:
+                        pywr_node[attribute_name] = value
+                else:
+                    pywr_node[attribute_name] = value
+            else:
+                # Otherwise the attribute is either a parameter or recorder
+                # defined as a node attribute (for convenience).
+                hydra_type = typemap[dataset_type]
+                component_name = self.make_node_attribute_component_name(component['name'], attribute_name)
+                if issubclass(hydra_type, PywrParameter):
+                    # Must be a parameter
+                    parameters[component_name] = json.loads(value)
+                elif issubclass(hydra_type, PywrRecorder):
+                    # Must be a recorder
+                    recorders[component_name] = json.loads(value)
+                else:
+                    # Any other type we do not support as a non-schema nodal attribute
+                    raise ValueError('Hydra dataset type "{}" not supported as a non-schema'
+                                     ' attribute on a Pywr node.'.format(dataset_type))
+
+        return pywr_node, parameters, recorders
