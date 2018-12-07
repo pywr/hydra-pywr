@@ -51,12 +51,12 @@ class Turbine(Link):
         efficiency = marshmallow.fields.Number()
         density = marshmallow.fields.Number()
 
-        # Defaults here are for inputting for Mm3/day (1e6) and MW (1.15741e-11)
-        flow_unit_conversion = marshmallow.fields.Number(default=1e6)
-        energy_unit_conversion = marshmallow.fields.Number(default=1.15741e-11)
+        # Default values for missing inputs.
+        # Assume inputting for Mm3/day (1e6) and MW (1.15741e-11)
+        flow_unit_conversion = marshmallow.fields.Number(missing=1e6)
+        energy_unit_conversion = marshmallow.fields.Number(missing=1.15741e-11)
 
     def __init__(self, model, name, **kwargs):
-
         # Create the keyword arguments for the HP recorder
         hp_recorder_kwarg_names = ('efficiency', 'density', 'flow_unit_conversion', 'energy_unit_conversion')
         hp_kwargs = {}
