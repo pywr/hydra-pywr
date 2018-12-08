@@ -81,3 +81,19 @@ def db_with_pywr_network(pywr_json_filename, db_with_template, projectmaker, log
 
     return network_id, scenario_id, pywr_json_filename
 
+
+@pytest.fixture()
+def db_with_custom_pywr_network(model_directory, db_with_template, projectmaker, logged_in_client):
+
+    client = logged_in_client
+
+    project = projectmaker.create()
+
+    pywr_json_filename = os.path.join(model_directory, 'custom.json')
+    pywr_module_filename = os.path.join(model_directory, 'custom_node.py')
+
+    importer = PywrHydraImporter.from_client(client, pywr_json_filename, 'full',
+                                             modules=[pywr_module_filename])
+    network_id, scenario_id = importer.import_data(client, project.id)
+
+    return network_id, scenario_id, pywr_json_filename, pywr_module_filename

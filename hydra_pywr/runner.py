@@ -42,7 +42,14 @@ class PywrHydraRunner(PywrHydraExporter):
 
     def load_pywr_model(self):
         """ Create a Pywr model from the exported data. """
-        pywr_data = self.get_pywr_data()
+        pywr_data, modules = self.get_pywr_data()
+
+        for module_name, module_data in modules.items():
+            import pdb; pdb.set_trace()
+            # Simply execute each module in this global namespace
+            module_contents = module_data['contents']
+            exec(module_contents, globals())
+
         model = Model.load(pywr_data)
         self.model = model
 

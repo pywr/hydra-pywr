@@ -2,7 +2,7 @@ import json
 from past.builtins import basestring
 from .template import PYWR_EDGE_LINK_NAME, PYWR_CONSTRAINED_EDGE_LINK_NAME
 from .core import BasePywrHydra
-from hydra_pywr_common import PywrParameter, PywrRecorder
+from hydra_pywr_common import PywrParameter, PywrRecorder, PywrPythonModule
 from pywr.nodes import NodeMeta
 from hydra_base.lib.HydraTypes.Registry import typemap
 
@@ -81,7 +81,10 @@ class PywrHydraExporter(BasePywrHydra):
 
         pywr_data['edges'] = edges
 
-        return pywr_data
+        # Export any modules
+        modules = list(self.generate_pywr_modules())
+
+        return pywr_data, modules
 
     def _get_resource_scenario(self, resource_attribute_id):
 
@@ -251,3 +254,30 @@ class PywrHydraExporter(BasePywrHydra):
                                      ' attribute on a Pywr node.'.format(dataset_type))
 
         return pywr_node, parameters, recorders
+
+    def generate_pywr_modules(self):
+        for resource_attribute in self.data['attributes']:
+
+            attribute = self.attributes[resource_attribute['attr_id']]
+            attribute_name = attribute['name']
+
+            try:
+                resource_scenario = self._get_resource_scenario(resource_attribute['id'])
+            except ValueError:
+                continue
+            dataset = resource_scenario['dataset']
+            value = dataset['value']
+
+            data_type = dataset['type']
+
+            print(dataset)
+            import pdb; pdb.set_trace()
+
+            if data_type != PywrPythonModule.tag:
+                continue
+
+            value = json.loads(value)
+
+            yield attribute_name, value
+
+

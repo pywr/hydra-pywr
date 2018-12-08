@@ -81,3 +81,20 @@ def test_create_empty_network(db_with_template, projectmaker, logged_in_client):
 
     assert 'nodes' in pywr_data_exported
     assert 'edges' in pywr_data_exported
+
+
+def test_export_with_module(db_with_custom_pywr_network, logged_in_client):
+    client = logged_in_client
+
+    pywr_network_id, pywr_scenario_id, pywr_json_filename, pywr_module_filename = db_with_custom_pywr_network
+    exporter = PywrHydraExporter.from_network_id(client, pywr_network_id, pywr_scenario_id)
+    pywr_data_exported, module = exporter.get_pywr_data()
+
+    # Check transformed data is about right
+    with open(pywr_json_filename) as fh:
+        pywr_data = json.load(fh)
+
+    assert_identical_pywr_data(pywr_data, pywr_data_exported)
+
+    m = Model.load(pywr_data)
+    m.run()

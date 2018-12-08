@@ -84,10 +84,12 @@ def import_json(obj, filename, project_id, user_id, config, run):
 def export_json(obj, filename, network_id, scenario_id, user_id, json_sort_keys, json_indent):
     """ Export a Pywr JSON from Hydra. """
     client = get_logged_in_client(obj, user_id=user_id)
-    exporter = PywrHydraExporter.from_network_id(client, network_id, scenario_id)
+    exporter, modules = PywrHydraExporter.from_network_id(client, network_id, scenario_id)
 
     with open(filename, mode='w') as fh:
         json.dump(exporter.get_pywr_data(), fh, sort_keys=json_sort_keys, indent=json_indent)
+
+    # TODO write modules to file
 
     click.echo(f'Successfully exported "{filename}"! Network ID: {network_id}, Scenario ID: {scenario_id}')
 

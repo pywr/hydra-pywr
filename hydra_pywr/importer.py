@@ -5,20 +5,22 @@ from .template import PYWR_PROTECTED_NODE_KEYS, pywr_template_name, load_templat
 from .core import BasePywrHydra, data_type_from_field
 from pywr.nodes import NodeMeta
 from hydra_pywr_common import data_type_from_component_type
+import os
 import logging
 log = logging.getLogger(__name__)
 
 
 class PywrHydraImporter(BasePywrHydra):
 
-    def __init__(self, data, template):
+    def __init__(self, data, template, modules=None):
         super().__init__()
         self.template = template
-
+        self.modules = modules
+        self.path = None
         if isinstance(data, basestring):
             # argument is a filename
-            path = data
-            with open(path, "r") as f:
+            self.path = data
+            with open(self.path, "r") as f:
                 data = json.load(f)
         elif hasattr(data, 'read'):
             # argument is a file-like object
@@ -29,10 +31,10 @@ class PywrHydraImporter(BasePywrHydra):
         self.next_node_id = -1
 
     @classmethod
-    def from_client(cls, client, data, config_name):
+    def from_client(cls, client, data, config_name, modules=None):
         config = load_template_config(config_name)
         template = client.get_template_by_name(pywr_template_name(config['name']))
-        return cls(data, template)
+        return cls(data, template, modules=modules)
 
     @property
     def name(self):
@@ -51,7 +53,15 @@ class PywrHydraImporter(BasePywrHydra):
             description = ''
         return description
 
+    def _exec_modules(self):
+        for module in self.modules:
+            with open(module) as fh:
+                module_contents = fh.read()
+            exec(module_contents, globals())
+
     def import_data(self, client, project_id):
+
+        self._exec_modules()
 
         # First the attributes must be added.
         attributes = self.add_attributes_request_data()
@@ -92,6 +102,12 @@ class PywrHydraImporter(BasePywrHydra):
             for attr in self.attributes_from_component_dict(key):
                 yield attr
 
+        # module attribute names
+        if self.modules is not None:
+            for module in self.modules:
+                attribute_name = self._module_attribute_name(module)
+                yield {'name': attribute_name, 'description': ''}
+
     def add_network_request_data(self, attribute_ids, project_id, projection=None):
         """ Return a dictionary of the data required for adding a network to Hydra. """
 
@@ -122,6 +138,11 @@ class PywrHydraImporter(BasePywrHydra):
             for resource_attribute, resource_scenario in generator:
                 network_attributes.append(resource_attribute)
                 resource_scenarios.append(resource_scenario)
+
+        # Import any Python modules
+        for resource_attribute, resource_scenario in self.generate_module_resource_scenarios(attribute_ids):
+            network_attributes.append(resource_attribute)
+            resource_scenarios.append(resource_scenario)
 
         scenario = self.make_scenario(resource_scenarios)
 
@@ -419,4 +440,46 @@ class PywrHydraImporter(BasePywrHydra):
 
             yield self._make_dataset_resource_attribute_and_scenario(attribute_name, component_data, data_type,
                                                                      attribute_id, **kwargs)
+
+    def _module_attribute_name(self, module):
+        """ Return an attribute name from a module path"""
+        if self.path is not None:
+            # Data is imported from a file
+            # Find the common directory
+            common_path = os.path.commonpath([self.path, module])
+            # Find a relative path from the common directory
+            relative_module_path = os.path.relpath(module, common_path)
+        else:
+            relative_module_path = module
+
+        # Create the attribute name from file name
+        attribute_name, ext = os.path.splitext(relative_module_path)
+        return attribute_name
+
+    def generate_module_resource_scenarios(self, attribute_ids):
+
+        if self.modules is None:
+            return  # Nothing to do if there are no modules
+
+        for module in self.modules:
+            _, ext = os.path.splitext(module)
+
+            with open(module) as fh:
+                module_contents = fh.read()
+
+            attribute_name = self._module_attribute_name(module)
+            # This the attribute corresponding to the component.
+            # It should have a positive id and already be entered in the hydra database.
+            attribute_id = attribute_ids[attribute_name]
+
+            module_data = {
+                'contents': module_contents,
+                'extension': ext
+            }
+
+            data_type = 'PYWR_PY_MODULE'
+
+            yield self._make_dataset_resource_attribute_and_scenario(attribute_name, module_data, data_type,
+                                                                     attribute_id, encode_to_json=True)
+
 
