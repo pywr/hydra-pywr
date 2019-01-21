@@ -1,5 +1,6 @@
-from pywr.parameters import Parameter
+from pywr.parameters import Parameter, DataFrameParameter
 import numpy as np
+import pandas
 
 
 class MonthlyArrayIndexedParameter(Parameter):
@@ -18,6 +19,7 @@ class MonthlyArrayIndexedParameter(Parameter):
 
         index = (current_year - start_year)*12 + current_month - start_month
         return self.values[index]
+MonthlyArrayIndexedParameter.register()
 
 
 class YearlyDataFrameParameter(Parameter):
@@ -27,4 +29,17 @@ class YearlyDataFrameParameter(Parameter):
 
     def value(self, ts, si):
         return self.dataframe.loc[str(ts.year)]
+YearlyDataFrameParameter.register()
 
+
+class EmbeddedDataframeParameter(DataFrameParameter):
+    @classmethod
+    def load(cls, model, data):
+        scenario = data.pop('scenario', None)
+        if scenario is not None:
+            scenario = model.scenarios[scenario]
+        df = pandas.DataFrame.from_dict(data.pop('data'), orient='index')
+        df.index = pandas.to_datetime(df.index)
+        df.index.freq = pandas.infer_freq(df.index)
+        return cls(model, df, scenario=scenario, **data)
+EmbeddedDataframeParameter.register()
