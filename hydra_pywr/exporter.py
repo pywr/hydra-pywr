@@ -2,9 +2,15 @@ import json
 from past.builtins import basestring
 from .template import PYWR_EDGE_LINK_NAME, PYWR_CONSTRAINED_EDGE_LINK_NAME
 from .core import BasePywrHydra
-from hydra_pywr_common import PywrParameter, PywrRecorder
+from hydra_pywr_common import PywrParameter, PywrRecorder, PywrParameterPattern, PywrParameterPatternReference
 from pywr.nodes import NodeMeta
 from hydra_base.lib.HydraTypes.Registry import typemap
+import jinja2
+
+
+class PatternContext(object):
+    """ Container for arbitrary attributes in pattern rendering. """
+    pass
 
 
 class PywrHydraExporter(BasePywrHydra):
@@ -13,6 +19,8 @@ class PywrHydraExporter(BasePywrHydra):
         self.data = data
         self.attributes = attributes
         self.template = template
+
+        self._pattern_templates = None
 
     @classmethod
     def from_network_id(cls, client, network_id, scenario_id, **kwargs):
@@ -31,6 +39,9 @@ class PywrHydraExporter(BasePywrHydra):
         pywr_data = {
             'metadata': {'title': self.data['name'], 'description': self.data['description']}
         }
+
+        # First find any patterns and create jinja2 templates for them.
+        self.create_parameter_pattern_templates()
 
         # TODO see proposed changes to metadata and timestepper data.
         for group_name in ('metadata', 'timestepper', 'recorders', 'parameters'):
@@ -237,17 +248,101 @@ class PywrHydraExporter(BasePywrHydra):
             else:
                 # Otherwise the attribute is either a parameter or recorder
                 # defined as a node attribute (for convenience).
-                hydra_type = typemap[dataset_type]
+                hydra_type = typemap[dataset_type.upper()]
                 component_name = self.make_node_attribute_component_name(component['name'], attribute_name)
-                if issubclass(hydra_type, PywrParameter):
+                if issubclass(hydra_type, PywrParameterPatternReference):
+                    # Is a pattern of parameters
+                    context = self._make_component_pattern_context(component, pywr_node_type)
+                    parameters.update(self.generate_parameters_from_patterns(value, context))
+                elif issubclass(hydra_type, PywrParameter):
                     # Must be a parameter
                     parameters[component_name] = json.loads(value)
                 elif issubclass(hydra_type, PywrRecorder):
                     # Must be a recorder
                     recorders[component_name] = json.loads(value)
                 else:
+                    pass
                     # Any other type we do not support as a non-schema nodal attribute
-                    raise ValueError('Hydra dataset type "{}" not supported as a non-schema'
-                                     ' attribute on a Pywr node.'.format(dataset_type))
+                    # raise ValueError('Hydra dataset type "{}" not supported as a non-schema'
+                    #                 ' attribute on a Pywr node.'.format(dataset_type))
 
         return pywr_node, parameters, recorders
+
+    def create_parameter_pattern_templates(self):
+        """ Create Jinja2 templates for each parameter pattern. """
+
+        templates = {}
+
+        for resource_attribute in self.data['attributes']:
+
+            attribute = self.attributes[resource_attribute['attr_id']]
+            attribute_name = attribute['name']
+
+            try:
+                resource_scenario = self._get_resource_scenario(resource_attribute['id'])
+            except ValueError:
+                continue
+            dataset = resource_scenario['dataset']
+            value = dataset['value']
+
+            data_type = dataset['type']
+
+            if data_type.upper() != PywrParameterPattern.tag:
+                continue
+
+            pattern_template = jinja2.Template(value)
+            templates[attribute_name] = pattern_template
+
+        self._pattern_templates = templates
+
+    def _make_component_pattern_context(self, component, pywr_node_type):
+        """ Create the context for rendering parameter patterns. """
+
+        node_klass = NodeMeta.node_registry[pywr_node_type]
+        schema = node_klass.Schema()
+
+        context = PatternContext()
+        context.name = component['name']
+        context.id = component['id']
+        context.description = component['description']
+
+        data = PatternContext()
+
+        for resource_attribute in component['attributes']:
+            attribute = self.attributes[resource_attribute['attr_id']]
+            try:
+                resource_scenario = self._get_resource_scenario(resource_attribute['id'])
+            except ValueError:
+                continue  # No data associated with this attribute.
+
+            if resource_attribute['attr_is_var'] == 'Y':
+                continue
+
+            attribute_name = attribute['name']
+
+            dataset = resource_scenario['dataset']
+            dataset_type = dataset['type']
+            value = dataset['value']
+
+            hydra_type = typemap[dataset_type.upper()]
+            if issubclass(hydra_type, (PywrParameter, PywrRecorder)):
+                # Ignore Pywr parameter definitions
+                continue
+
+            if isinstance(value, basestring):
+                try:
+                    value = json.loads(value)
+                except json.decoder.JSONDecodeError:
+                    pass
+
+            setattr(data, attribute_name, value)
+        context.data = data
+        return context
+
+    def generate_parameters_from_patterns(self, pattern_name, context):
+
+        template = self._pattern_templates[pattern_name]
+        # TODO make this work for non-node types
+        data = template.render(node=context)
+        parameters = json.loads(data)
+        return parameters
