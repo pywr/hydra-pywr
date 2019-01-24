@@ -135,7 +135,11 @@ class PywrHydraRunner(PywrHydraExporter):
 
     def save_pywr_results(self, client):
         """ Save the outputs from a Pywr model run to Hydra. """
-        scenario = self._copy_scenario()
+
+        # Convert the scenario from JSONObject to normal dict
+        # This is required to ensure that the complete nested structure (of dicts)
+        # is properly converted to JSONObject's by the client.
+        scenario = dict({k: v for k, v in self._copy_scenario().items()})
 
         # First add any new attributes required
         attributes = []
