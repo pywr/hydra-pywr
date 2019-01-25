@@ -58,13 +58,14 @@ def cli(obj, username, password, hostname, session):
 @click.argument('project_id', type=int)
 @click.option('-u', '--user-id', type=int, default=None)
 @click.option('-c', '--config', type=str, default='full')
+@click.option('--projection', type=str, default=None)
 @click.option('--run/--no-run', default=False)
-def import_json(obj, filename, project_id, user_id, config, run):
+def import_json(obj, filename, project_id, user_id, config, projection, run):
     """ Import a Pywr JSON file into Hydra. """
     click.echo(f'Beginning import of "{filename}"! Project ID: {project_id}')
     client = get_logged_in_client(obj, user_id=user_id)
     importer = PywrHydraImporter.from_client(client, filename, config)
-    network_id, scenario_id = importer.import_data(client, project_id)
+    network_id, scenario_id = importer.import_data(client, project_id, projection=projection)
 
     click.echo(f'Successfully imported "{filename}"! Network ID: {network_id}, Scenario ID: {scenario_id}')
 

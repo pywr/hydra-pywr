@@ -51,7 +51,7 @@ class PywrHydraImporter(BasePywrHydra):
             description = ''
         return description
 
-    def import_data(self, client, project_id):
+    def import_data(self, client, project_id, projection=None):
 
         # First the attributes must be added.
         attributes = self.add_attributes_request_data()
@@ -64,7 +64,7 @@ class PywrHydraImporter(BasePywrHydra):
         attribute_ids = {a.name: a.id for a in response_attributes}
 
         # Now we try to create the network
-        network = self.add_network_request_data(attribute_ids, project_id)
+        network = self.add_network_request_data(attribute_ids, project_id, projection=projection)
 
         hydra_network = client.add_network(network)
 
