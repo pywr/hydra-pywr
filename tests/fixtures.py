@@ -23,6 +23,10 @@ def logged_in_client(client):
 def model_directory():
     return os.path.join(os.path.dirname(__file__), 'models')
 
+@pytest.fixture()
+def data_directory():
+    return os.path.join(os.path.dirname(__file__), 'data')
+
 
 @pytest.fixture()
 def simple1(model_directory):

@@ -29,6 +29,7 @@ def add_node_array_recorders(model):
 class PywrHydraRunner(PywrHydraExporter):
     """ An extension to `PywrHydraExporter` that adds methods for running a Pywr model. """
     def __init__(self, *args, **kwargs):
+        self.output_resample_freq = kwargs.pop('output_resample_freq', None)
         super(PywrHydraRunner, self).__init__(*args, **kwargs)
         self.model = None
         self._array_recorders = None
@@ -168,6 +169,9 @@ class PywrHydraRunner(PywrHydraExporter):
 
         for recorder in self._array_recorders:
             df = recorder.to_dataframe()
+
+            if self.output_resample_freq is not None:
+                df = df.resample(self.output_resample_freq).mean()
 
             # Convert to JSON for saving in hydra
             value = df.to_json(date_format='iso', date_unit='s')

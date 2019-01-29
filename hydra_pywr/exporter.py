@@ -15,7 +15,7 @@ class PywrHydraExporter(BasePywrHydra):
         self.template = template
 
     @classmethod
-    def from_network_id(cls, client, network_id, scenario_id):
+    def from_network_id(cls, client, network_id, scenario_id, **kwargs):
         # Fetch the network
         network = client.get_network(network_id, include_data='Y', scenario_ids=[scenario_id])
         # Fetch all the attributes
@@ -24,7 +24,7 @@ class PywrHydraExporter(BasePywrHydra):
 
         # We also need the template to get the node types
         #template = client.get_template_by_name(pywr_template_name())
-        return cls(network, attributes, None)
+        return cls(network, attributes, None, **kwargs)
 
     def get_pywr_data(self):
 
