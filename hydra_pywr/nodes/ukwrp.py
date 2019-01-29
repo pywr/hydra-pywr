@@ -13,29 +13,18 @@ class WaterResourceZonePR19(Link):
     class Schema(NodeSchema):
         # The main attributes are not validated (i.e. `Raw`)
         # They could be many different things.
-        wafu_own = DataFrameField()
-        distribution_input = DataFrameField()
-        target_headroom_climate_change = DataFrameField()
-        target_headroom_other = DataFrameField()
+        demand = fields.ParameterReferenceField()
+        supply = fields.ParameterReferenceField()
 
     def __init__(self, model, name, *args, **kwargs):
-        wafu_own = YearlyDataFrameParameter(model, kwargs.pop('wafu_own'))
-        distribution_input = YearlyDataFrameParameter(model, kwargs.pop('distribution_input'))
-        target_headroom_climate_change = YearlyDataFrameParameter(model, kwargs.pop('target_headroom_climate_change'))
-        target_headroom_other = YearlyDataFrameParameter(model, kwargs.pop('target_headroom_other'))
-
+        demand = kwargs.pop('demand')
+        supply = kwargs.pop('supply')
         super().__init__(model, name, *args, **kwargs)
 
         self.supply_node = Input(model, name=f'{name}-supply', parent=self)
         self.demand_node = Output(model, name=f'{name}-demand', parent=self)
 
-        self.supply_node.max_flow = MaxParameter(model, wafu_own)
-
-        demand = AggregatedParameter(model, [distribution_input,
-                                             target_headroom_climate_change,
-                                             target_headroom_other,
-                                             MinParameter(model, wafu_own)],
-                                     agg_func='sum',)
+        self.supply_node.max_flow = supply
 
         self.demand_node.max_flow = demand
         self.demand_node.cost = -100
