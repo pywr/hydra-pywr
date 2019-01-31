@@ -93,7 +93,6 @@ class PywrHydraRunner(PywrHydraExporter):
         for node in self.data['nodes']:
 
             if node['name'] == node_name:
-                print(node_name, node['id'])
                 resource_attributes = node['attributes']
                 break
         else:
@@ -143,10 +142,15 @@ class PywrHydraRunner(PywrHydraExporter):
         scenario = dict({k: v for k, v in self._copy_scenario().items()})
 
         # First add any new attributes required
-        attributes = []
+        attribute_names = []
         for recorder in self._array_recorders:
+            attribute_names.append(self._get_attribute_name_from_recorder(recorder))
+
+        attribute_names = set(attribute_names)
+        attributes = []
+        for attribute_name in attribute_names:
             attributes.append({
-                'name': self._get_attribute_name_from_recorder(recorder),
+                'name': attribute_name,
                 'description': ''
             })
 
