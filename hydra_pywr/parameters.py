@@ -28,7 +28,14 @@ class YearlyDataFrameParameter(Parameter):
         self.dataframe = dataframe
 
     def value(self, ts, si):
-        return self.dataframe.loc[str(ts.year)]
+        return self.dataframe.loc[str(ts.year)].iloc[0]
+
+    @classmethod
+    def load(cls, model, data):
+        df = pandas.DataFrame.from_dict(data.pop('data'), orient='index')
+        df.index = pandas.to_datetime(df.index)
+        df.index.freq = pandas.infer_freq(df.index)
+        return cls(model, df, **data)
 YearlyDataFrameParameter.register()
 
 
