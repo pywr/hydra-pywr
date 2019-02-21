@@ -99,14 +99,16 @@ def export_json(obj, filename, network_id, scenario_id, user_id, json_sort_keys,
 @click.option('-n', '--network-id', type=int, default=None)
 @click.option('-s', '--scenario-id', type=int, default=None)
 @click.option('-u', '--user-id', type=int, default=None)
-def run(obj, network_id, scenario_id, user_id):
+@click.option('--output-frequency', type=str, default=None)
+def run(obj, network_id, scenario_id, user_id, output_frequency):
     """ Export, run and save a Pywr model from Hydra. """
     client = get_logged_in_client(obj, user_id=user_id)
-    run_network_scenario(client, network_id, scenario_id)
+    run_network_scenario(client, network_id, scenario_id, output_frequency=output_frequency)
 
 
-def run_network_scenario(client, network_id, scenario_id):
-    runner = PywrHydraRunner.from_network_id(client, network_id, scenario_id)
+def run_network_scenario(client, network_id, scenario_id, output_frequency=None):
+    runner = PywrHydraRunner.from_network_id(client, network_id, scenario_id,
+                                             output_resample_freq=output_frequency)
 
     runner.load_pywr_model()
     runner.run_pywr_model()
