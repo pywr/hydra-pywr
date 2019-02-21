@@ -39,7 +39,7 @@ def cli(obj, username, password, hostname, session):
     obj['session'] = session
 
 
-@hydra_app()
+@hydra_app(category='import', name='Import Pywr JSON')
 @cli.command(name='import')
 @click.pass_obj
 @click.argument('filename', type=click.Path(file_okay=True, dir_okay=False, exists=True))
@@ -61,7 +61,7 @@ def import_json(obj, filename, project_id, user_id, config, projection, run):
         run_network_scenario(client, network_id, scenario_id)
 
 
-@hydra_app(category='export')
+@hydra_app(category='export', name='Export to Pywr JSON')
 @cli.command(name='export')
 @click.pass_obj
 @click.argument('filename', type=click.Path(file_okay=True, dir_okay=False))
@@ -81,7 +81,7 @@ def export_json(obj, filename, network_id, scenario_id, user_id, json_sort_keys,
     click.echo(f'Successfully exported "{filename}"! Network ID: {network_id}, Scenario ID: {scenario_id}')
 
 
-@hydra_app(category='model')
+@hydra_app(category='model', name='Run Pywr')
 @cli.command()
 @click.pass_obj
 @click.option('-n', '--network-id', type=int, default=None)
