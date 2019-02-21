@@ -1,23 +1,11 @@
 import click
-import os
-from pathlib import Path
-from shutil import copyfile
-from xml.etree import ElementTree as ET
-from xml.dom.minidom import parseString
 import json
 from hydra_client.connection import JSONConnection
 from .exporter import PywrHydraExporter
 from .runner import PywrHydraRunner
 from .importer import PywrHydraImporter
-from .util import make_plugins
 from .template import register_template, unregister_template, migrate_network_template, TemplateExistsError
-
-
-def hydra_app(category='import'):
-    def hydra_app_decorator(func):
-        func.hydra_app_category = category
-        return func
-    return hydra_app_decorator
+from hydra_client.click import hydra_app, make_plugins, write_plugins
 
 
 def get_client(hostname, **kwargs):
@@ -120,29 +108,11 @@ def run_network_scenario(client, network_id, scenario_id, output_frequency=None)
 @cli.command()
 @click.pass_obj
 @click.argument('docker-image', type=str)
-@click.argument('docker-tag', type=str)
-def register(obj, docker_image, docker_tag):
+def register(obj, docker_image):
     """ Register the app with the Hydra installation. """
-    import hydra_base
-
-    plugins = make_plugins(cli, '{}:{}'.format(docker_image, docker_tag))
-
-    base_plugin_dir = Path(hydra_base.config.get('plugin', 'default_directory'))
-
-    base_plugin_dir = base_plugin_dir.joinpath('{}-{}'.format(docker_image.replace('/', '-'), docker_tag))
-
-    if not base_plugin_dir.exists():
-        base_plugin_dir.mkdir(parents=True, exist_ok=True)
-
-    for name, element in plugins:
-        plugin_path = os.path.join(base_plugin_dir, name)
-
-        if not os.path.exists(plugin_path):
-            os.mkdir(plugin_path)
-
-        with open(os.path.join(plugin_path, 'plugin.xml'), 'w') as fh:
-            reparsed = parseString(ET.tostring(element, 'utf-8'))
-            fh.write(reparsed.toprettyxml(indent="\t"))
+    plugins = make_plugins(cli, 'hydra-pywr', docker_image=docker_image)
+    app_name = docker_image.replace('/', '-').replace(':', '-')
+    write_plugins(plugins, app_name)
 
 
 @cli.group()
