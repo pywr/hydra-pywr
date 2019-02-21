@@ -41,6 +41,7 @@ class Turbine(Link):
     class Schema(NodeSchema):
         # The main attributes are not validated (i.e. `Raw`)
         # They could be many different things.
+        # TODO add turbine max_flow in here
         min_flow = fields.ParameterReferenceField(allow_none=True)
         cost = fields.ParameterReferenceField(allow_none=True)
 
@@ -217,9 +218,12 @@ class ProportionalInput(Input):
 
         self.node = node
         # Create the flow factors for the other node and self
-        factors = [1-proportion, proportion]
-        # Create the aggregated node to apply the factors.
-        self.aggregated_node = AggregatedNode(model, f'{name}.aggregated', [node, self], factors=factors)
+        if proportion < 1e-6:
+            self.max_flow = 0.0
+        else:
+            factors = [1, proportion]
+            # Create the aggregated node to apply the factors.
+            self.aggregated_node = AggregatedNode(model, f'{name}.aggregated', [node, self], factors=factors)
 
 
 class MonthlyOutputWithReturn(MonthlyOutput):
