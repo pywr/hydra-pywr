@@ -3,7 +3,7 @@ import pytest
 import hydra_base
 from hydra_base import JSONObject
 from hydra_pywr.importer import PywrHydraImporter
-from hydra_pywr.template import pywr_template_name, register_template
+from hydra_pywr.template import register_template, load_template_config, pywr_template_name
 from hydra_client.connection import JSONConnection
 from hydra_base_fixtures import testdb_uri
 
@@ -80,7 +80,10 @@ def db_with_pywr_network(pywr_json_filename, db_with_template, projectmaker, log
 
     project = projectmaker.create()
 
-    importer = PywrHydraImporter.from_client(client, pywr_json_filename, 'full')
+    config = load_template_config('full')
+    template = client.get_template_by_name(pywr_template_name(config['name']))
+
+    importer = PywrHydraImporter.from_client(client, pywr_json_filename, template['id'])
     network_id, scenario_id = importer.import_data(client, project.id)
 
     return network_id, scenario_id, pywr_json_filename
