@@ -1,5 +1,6 @@
 import click
 import json
+import os
 from hydra_client.connection import JSONConnection
 from .exporter import PywrHydraExporter
 from .runner import PywrHydraRunner
@@ -42,8 +43,8 @@ def cli(obj, username, password, hostname, session):
 @hydra_app(category='import', name='Import Pywr JSON')
 @cli.command(name='import')
 @click.pass_obj
-@click.argument('filename', type=click.Path(file_okay=True, dir_okay=False, exists=True))
-@click.argument('project_id', type=int)
+@click.option('--filename', type=click.Path(file_okay=True, dir_okay=False, exists=True))
+@click.option('-p', '--project_id', type=int)
 @click.option('-u', '--user-id', type=int, default=None)
 @click.option('--template-id', type=int, default=None)
 @click.option('--projection', type=str, default=None)
@@ -64,19 +65,23 @@ def import_json(obj, filename, project_id, user_id, template_id, projection, run
 @hydra_app(category='export', name='Export to Pywr JSON')
 @cli.command(name='export')
 @click.pass_obj
-@click.argument('filename', type=click.Path(file_okay=True, dir_okay=False))
+@click.option('--data-dir', default='/tmp')
 @click.option('-n', '--network-id', type=int, default=None)
 @click.option('-s', '--scenario-id', type=int, default=None)
 @click.option('-u', '--user-id', type=int, default=None)
 @click.option('--json-indent', type=int, default=2)
 @click.option('--json-sort-keys/--no-json-sort-keys', default=False)
-def export_json(obj, filename, network_id, scenario_id, user_id, json_sort_keys, json_indent):
+def export_json(obj, data_dir, network_id, scenario_id, user_id, json_sort_keys, json_indent):
     """ Export a Pywr JSON from Hydra. """
     client = get_logged_in_client(obj, user_id=user_id)
     exporter = PywrHydraExporter.from_network_id(client, network_id, scenario_id)
 
+    data = exporter.get_pywr_data()
+    title = data['metadata']['title']
+
+    filename = os.path.join(data_dir, f'{title}.json')
     with open(filename, mode='w') as fh:
-        json.dump(exporter.get_pywr_data(), fh, sort_keys=json_sort_keys, indent=json_indent)
+        json.dump(data, fh, sort_keys=json_sort_keys, indent=json_indent)
 
     click.echo(f'Successfully exported "{filename}"! Network ID: {network_id}, Scenario ID: {scenario_id}')
 
