@@ -1,23 +1,12 @@
 import click
-import os
-from pathlib import Path
-from shutil import copyfile
-from xml.etree import ElementTree as ET
-from xml.dom.minidom import parseString
 import json
+import os
 from hydra_client.connection import JSONConnection
 from .exporter import PywrHydraExporter
 from .runner import PywrHydraRunner
 from .importer import PywrHydraImporter
-from .util import make_plugins
 from .template import register_template, unregister_template, migrate_network_template, TemplateExistsError
-
-
-def hydra_app(category='import'):
-    def hydra_app_decorator(func):
-        func.hydra_app_category = category
-        return func
-    return hydra_app_decorator
+from hydra_client.click import hydra_app, make_plugins, write_plugins
 
 
 def get_client(hostname, **kwargs):
@@ -51,20 +40,20 @@ def cli(obj, username, password, hostname, session):
     obj['session'] = session
 
 
-@hydra_app()
+@hydra_app(category='import', name='Import Pywr JSON')
 @cli.command(name='import')
 @click.pass_obj
-@click.argument('filename', type=click.Path(file_okay=True, dir_okay=False, exists=True))
-@click.argument('project_id', type=int)
+@click.option('--filename', type=click.Path(file_okay=True, dir_okay=False, exists=True))
+@click.option('-p', '--project_id', type=int)
 @click.option('-u', '--user-id', type=int, default=None)
-@click.option('-c', '--config', type=str, default='full')
+@click.option('--template-id', type=int, default=None)
 @click.option('--projection', type=str, default=None)
 @click.option('--run/--no-run', default=False)
-def import_json(obj, filename, project_id, user_id, config, projection, run):
+def import_json(obj, filename, project_id, user_id, template_id, projection, run):
     """ Import a Pywr JSON file into Hydra. """
     click.echo(f'Beginning import of "{filename}"! Project ID: {project_id}')
     client = get_logged_in_client(obj, user_id=user_id)
-    importer = PywrHydraImporter.from_client(client, filename, config)
+    importer = PywrHydraImporter.from_client(client, filename, template_id)
     network_id, scenario_id = importer.import_data(client, project_id, projection=projection)
 
     click.echo(f'Successfully imported "{filename}"! Network ID: {network_id}, Scenario ID: {scenario_id}')
@@ -73,40 +62,46 @@ def import_json(obj, filename, project_id, user_id, config, projection, run):
         run_network_scenario(client, network_id, scenario_id)
 
 
-@hydra_app(category='export')
+@hydra_app(category='export', name='Export to Pywr JSON')
 @cli.command(name='export')
 @click.pass_obj
-@click.argument('filename', type=click.Path(file_okay=True, dir_okay=False))
+@click.option('--data-dir', default='/tmp')
 @click.option('-n', '--network-id', type=int, default=None)
 @click.option('-s', '--scenario-id', type=int, default=None)
 @click.option('-u', '--user-id', type=int, default=None)
 @click.option('--json-indent', type=int, default=2)
 @click.option('--json-sort-keys/--no-json-sort-keys', default=False)
-def export_json(obj, filename, network_id, scenario_id, user_id, json_sort_keys, json_indent):
+def export_json(obj, data_dir, network_id, scenario_id, user_id, json_sort_keys, json_indent):
     """ Export a Pywr JSON from Hydra. """
     client = get_logged_in_client(obj, user_id=user_id)
     exporter = PywrHydraExporter.from_network_id(client, network_id, scenario_id)
 
+    data = exporter.get_pywr_data()
+    title = data['metadata']['title']
+
+    filename = os.path.join(data_dir, f'{title}.json')
     with open(filename, mode='w') as fh:
-        json.dump(exporter.get_pywr_data(), fh, sort_keys=json_sort_keys, indent=json_indent)
+        json.dump(data, fh, sort_keys=json_sort_keys, indent=json_indent)
 
     click.echo(f'Successfully exported "{filename}"! Network ID: {network_id}, Scenario ID: {scenario_id}')
 
 
-@hydra_app(category='model')
+@hydra_app(category='model', name='Run Pywr')
 @cli.command()
 @click.pass_obj
 @click.option('-n', '--network-id', type=int, default=None)
 @click.option('-s', '--scenario-id', type=int, default=None)
 @click.option('-u', '--user-id', type=int, default=None)
-def run(obj, network_id, scenario_id, user_id):
+@click.option('--output-frequency', type=str, default=None)
+def run(obj, network_id, scenario_id, user_id, output_frequency):
     """ Export, run and save a Pywr model from Hydra. """
     client = get_logged_in_client(obj, user_id=user_id)
-    run_network_scenario(client, network_id, scenario_id)
+    run_network_scenario(client, network_id, scenario_id, output_frequency=output_frequency)
 
 
-def run_network_scenario(client, network_id, scenario_id):
-    runner = PywrHydraRunner.from_network_id(client, network_id, scenario_id)
+def run_network_scenario(client, network_id, scenario_id, output_frequency=None):
+    runner = PywrHydraRunner.from_network_id(client, network_id, scenario_id,
+                                             output_resample_freq=output_frequency)
 
     runner.load_pywr_model()
     runner.run_pywr_model()
@@ -118,29 +113,11 @@ def run_network_scenario(client, network_id, scenario_id):
 @cli.command()
 @click.pass_obj
 @click.argument('docker-image', type=str)
-@click.argument('docker-tag', type=str)
-def register(obj, docker_image, docker_tag):
+def register(obj, docker_image):
     """ Register the app with the Hydra installation. """
-    import hydra_base
-
-    plugins = make_plugins(cli, '{}:{}'.format(docker_image, docker_tag))
-
-    base_plugin_dir = Path(hydra_base.config.get('plugin', 'default_directory'))
-
-    base_plugin_dir = base_plugin_dir.joinpath('{}-{}'.format(docker_image.replace('/', '-'), docker_tag))
-
-    if not base_plugin_dir.exists():
-        base_plugin_dir.mkdir(parents=True, exist_ok=True)
-
-    for name, element in plugins:
-        plugin_path = os.path.join(base_plugin_dir, name)
-
-        if not os.path.exists(plugin_path):
-            os.mkdir(plugin_path)
-
-        with open(os.path.join(plugin_path, 'plugin.xml'), 'w') as fh:
-            reparsed = parseString(ET.tostring(element, 'utf-8'))
-            fh.write(reparsed.toprettyxml(indent="\t"))
+    plugins = make_plugins(cli, 'hydra-pywr', docker_image=docker_image)
+    app_name = docker_image.replace('/', '-').replace(':', '-')
+    write_plugins(plugins, app_name)
 
 
 @cli.group()
