@@ -4,7 +4,7 @@ from past.builtins import basestring
 from .template import PYWR_PROTECTED_NODE_KEYS, pywr_template_name, load_template_config
 from .core import BasePywrHydra, data_type_from_field
 from pywr.nodes import NodeMeta
-from hydra_pywr_common import data_type_from_component_type
+from hydra_pywr_common import data_type_from_component_type, data_type_from_parameter_value, PywrParameter
 import logging
 log = logging.getLogger(__name__)
 
@@ -238,7 +238,6 @@ class PywrHydraImporter(BasePywrHydra):
                 resource_attributes.append(resource_attribute)
                 hydra_resource_scenarios.append(resource_scenario)
 
-
             # Try to get a coordinate from the pywr_node
             x, y = None, None
             try:
@@ -314,6 +313,14 @@ class PywrHydraImporter(BasePywrHydra):
                 continue
             # Non-protected keys represent data that must be added to Hydra.
             data_type = data_type_from_field(field)
+            if data_type == PywrParameter.tag.lower():
+                # If the field is defined as general parameter then the actual
+                # type might be something more specific.
+                try:
+                    data_type = data_type_from_parameter_value(pywr_node[name]).tag
+                except ValueError:
+                    log.warning(f'No Hydra data type for Pywr field "{name}"'
+                                f' on node type "{node_type}" found.')
 
             # Key is the attribute name. The attributes need to already by added to the
             # database and hence have a valid id.
