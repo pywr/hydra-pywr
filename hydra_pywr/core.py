@@ -46,7 +46,6 @@ class BasePywrHydra:
             'value': json.dumps(value) if encode_to_json else value,
             "hidden": "N",
             "type": data_type,
-            "unit": "-",
             "metadata": json.dumps({'json_encoded': encode_to_json})
         }
 

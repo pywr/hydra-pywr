@@ -30,7 +30,6 @@ def pywr_with_demand_pattern(model_directory, db_with_template, projectmaker, lo
         'value': pattern_str,
         "hidden": "N",
         "type": 'PYWR_PARAMETER_PATTERN',
-        "unit": "-",
     })
 
     client.add_data_to_attribute(scenario_id, ra['id'], pattern_data)

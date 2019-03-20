@@ -52,13 +52,6 @@ def test_add_template(session, root_user_id):
 
     default_data_set_ids = {}
     for attribute_name, dataset in PYWR_DEFAULT_DATASETS.items():
-
-        # Patch the default datasets to convert unit to unit_id.
-        unit = dataset.pop('unit', None)
-        if unit is not None:
-            u = hydra_base.get_unit_by_abbreviation(unit)
-            dataset['unit_id'] = u.id
-
         hydra_dataset = hydra_base.add_dataset(flush=True, **dataset)
         default_data_set_ids[attribute_name] = hydra_dataset.id    
 
