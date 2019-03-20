@@ -1,5 +1,5 @@
 import json
-from hydra_base.lib.objects import JSONObject, Dataset
+import hydra_base
 
 
 def assert_dataset(hydra_data, key, value, decode_from_json=False):

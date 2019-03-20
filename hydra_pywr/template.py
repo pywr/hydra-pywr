@@ -10,6 +10,7 @@ import json
 import copy
 from .core import data_type_from_field
 from hydra_base.exceptions import HydraError
+from hydra_base import units
 
 PYWR_EDGE_LINK_NAME = 'edge'
 PYWR_CONSTRAINED_EDGE_LINK_NAME = 'constrained edge'
@@ -25,9 +26,9 @@ PYWR_ARRAY_RECORDER_ATTRIBUTES = {
 PYWR_OUTPUT_ATTRIBUTES = list(PYWR_ARRAY_RECORDER_ATTRIBUTES.values())
 PYWR_TIMESTEPPER_ATTRIBUTES = ('start', 'end', 'timestep')
 PYWR_DEFAULT_DATASETS = {
-    'start': {'data_type': 'descriptor', 'val': '2018-01-01', 'units': 'date', 'name': 'Default start date'},
-    'end': {'data_type': 'descriptor', 'val': '2018-12-31', 'units': 'date', 'name': 'Default end date'},
-    'timestep': {'data_type': 'scalar', 'val': 1, 'units': 'days', 'name': 'Default timestep'},
+    'start': {'data_type': 'descriptor', 'val': '2018-01-01', 'unit': 'day', 'name': 'Default start date'},
+    'end': {'data_type': 'descriptor', 'val': '2018-12-31', 'unit': 'day', 'name': 'Default end date'},
+    'timestep': {'data_type': 'scalar', 'val': 1, 'unit': None, 'name': 'Default timestep'},
 }
 
 CONFIG_DIR = os.path.join(os.path.dirname(__file__), 'template_configs')
@@ -225,10 +226,21 @@ def generate_pywr_template(attribute_ids, default_data_set_ids, config):
     return template
 
 
+def get_unit_id(client, unit):
+    u = client.get_unit_by_abbreviation(unit)
+    return u.id
+
+
 def add_default_datasets(client):
 
     default_data_set_ids = {}
     for attribute_name, dataset in PYWR_DEFAULT_DATASETS.items():
+
+        # Patch the default datasets to convert unit to unit_id.
+        unit = dataset.pop('unit', None)
+        if unit is not None:
+            dataset['unit_id'] = get_unit_id(client, unit)
+
         hydra_dataset = client.add_dataset(flush=True, **dataset)
         default_data_set_ids[attribute_name] = hydra_dataset['id']
     return default_data_set_ids
