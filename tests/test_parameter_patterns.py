@@ -3,6 +3,7 @@ from fixtures import *
 from hydra_base_fixtures import *
 from hydra_pywr.importer import PywrHydraImporter
 from hydra_pywr.exporter import PywrHydraExporter
+from hydra_pywr.template import pywr_template_name
 from hydra_base.lib.objects import Dataset
 import os
 import pytest
@@ -15,7 +16,9 @@ def pywr_with_demand_pattern(model_directory, db_with_template, projectmaker, lo
     # Create the basic pywr model
     project = projectmaker.create()
     pywr_json_filename = os.path.join(model_directory, 'simple1.json')
-    importer = PywrHydraImporter.from_client(client, pywr_json_filename, 'full')
+    template = client.get_template_by_name(pywr_template_name('Full'))
+
+    importer = PywrHydraImporter.from_client(client, pywr_json_filename, template['id'])
     network_id, scenario_id = importer.import_data(client, project.id)
 
     # Create the demand pattern
