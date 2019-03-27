@@ -1,5 +1,6 @@
 from .exporter import PywrHydraExporter
 import copy
+import pandas
 from pywr.model import Model
 from pywr.nodes import Node, Storage
 from pywr.recorders import NumpyArrayNodeRecorder, NumpyArrayStorageRecorder, NumpyArrayLevelRecorder, \
@@ -32,7 +33,7 @@ class PywrHydraRunner(PywrHydraExporter):
         self.output_resample_freq = kwargs.pop('output_resample_freq', None)
         super(PywrHydraRunner, self).__init__(*args, **kwargs)
         self.model = None
-        self._array_recorders = None
+        self._df_recorders = None
 
     def _copy_scenario(self):
         # Now construct a scenario object
@@ -63,15 +64,10 @@ class PywrHydraRunner(PywrHydraExporter):
         # Add recorders for monitoring the simulated timeseries of nodes
         add_node_array_recorders(model)
 
-        array_recorders = []
+        df_recorders = []
         for recorder in model.recorders:
-            if isinstance(recorder, (
-                    NumpyArrayNodeRecorder,
-                    NumpyArrayStorageRecorder,
-                    NumpyArrayLevelRecorder,
-                    NumpyArrayParameterRecorder,
-            )):
-                array_recorders.append(recorder)
+            if hasattr(recorder, 'to_dataframe'):
+                df_recorders.append(recorder)
 
         # Check the model
         model.check()
@@ -83,7 +79,7 @@ class PywrHydraRunner(PywrHydraExporter):
         run_stats = model.run()
 
         # Save these for later
-        self._array_recorders = array_recorders
+        self._df_recorders = df_recorders
 
     def _get_resource_attribute_id(self, node_name, attribute_name):
 
@@ -131,6 +127,10 @@ class PywrHydraRunner(PywrHydraExporter):
                 attribute_name = recorder.name.replace(suffix, '')
             else:
                 attribute_name = recorder.name
+
+        if not attribute_name.startswith('simulated'):
+            attribute_name = f'simulated_{attribute_name}'
+
         return attribute_name
 
     def save_pywr_results(self, client):
@@ -143,7 +143,7 @@ class PywrHydraRunner(PywrHydraExporter):
 
         # First add any new attributes required
         attribute_names = []
-        for recorder in self._array_recorders:
+        for recorder in self._df_recorders:
             attribute_names.append(self._get_attribute_name_from_recorder(recorder))
 
         attribute_names = set(attribute_names)
@@ -166,15 +166,16 @@ class PywrHydraRunner(PywrHydraExporter):
 
     def generate_array_recorder_resource_scenarios(self, client):
         """ Generate resource scenario data from NumpyArrayXXX recorders. """
-        if self._array_recorders is None:
+        if self._df_recorders is None:
             # TODO turn this on when logging is sorted out.
             # logger.info('No array recorders defined not results saved to Hydra.')
             return
 
-        for recorder in self._array_recorders:
+        for recorder in self._df_recorders:
             df = recorder.to_dataframe()
 
-            if self.output_resample_freq is not None:
+            # Resample timeseries if required
+            if isinstance(df.index, pandas.DatetimeIndex) and self.output_resample_freq is not None:
                 df = df.resample(self.output_resample_freq).mean()
 
             # Convert to JSON for saving in hydra
