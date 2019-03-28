@@ -25,6 +25,23 @@ class PywrHydraRunner(PywrHydraExporter):
         scenario.resourcescenarios = []
         return scenario
 
+    def _delete_resource_scenarios(self, client):
+        scenario = self.data.scenarios[0]
+
+        ra_is_var_map = {ra['id']: ra['attr_is_var'] for ra in self._get_all_resource_attributes()}
+        ra_to_delete = []
+
+        # Compile a list of resource attributes to delete
+        for resource_scenario in scenario['resourcescenarios']:
+            ra_id = resource_scenario['resource_attr_id']
+            ra_is_var = ra_is_var_map[ra_id]
+            if ra_is_var == 'Y':
+                ra_to_delete.append(ra_id)
+
+        # Now delete them all
+        for ra_id in ra_to_delete:
+            client.delete_resource_scenario(scenario['id'], ra_id, quiet=True)
+
     def load_pywr_model(self):
         """ Create a Pywr model from the exported data. """
         pywr_data = self.get_pywr_data()
@@ -195,6 +212,8 @@ class PywrHydraRunner(PywrHydraExporter):
 
     def save_pywr_results(self, client):
         """ Save the outputs from a Pywr model run to Hydra. """
+        # Ensure all the results from previous run are removed.
+        self._delete_resource_scenarios(client)
 
         # Convert the scenario from JSONObject to normal dict
         # This is required to ensure that the complete nested structure (of dicts)

@@ -100,6 +100,20 @@ class PywrHydraExporter(BasePywrHydra):
 
         return pywr_data
 
+    def _get_all_resource_attributes(self):
+        """
+            Get all the complex mode attributes in the network so that they
+            can be used for mapping to resource scenarios later.
+        """
+
+        for a in self.data['attributes']:
+            yield a
+
+        for rtype in ('nodes', 'links', 'resourcegroups'):
+            for o in self.data[rtype]:
+                for a in o['attributes']:
+                    yield a
+
     def _get_resource_scenario(self, resource_attribute_id):
 
         # TODO this just returns the first resource scenario that is found.
