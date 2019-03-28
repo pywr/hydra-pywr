@@ -8,6 +8,7 @@ from hydra_base.lib.HydraTypes.Registry import typemap
 import jinja2
 from collections import defaultdict
 
+COST_ALIASES = ['allocation penalty', 'allocation_penalty', 'Allocation Penalty']
 
 class PatternContext(object):
     """ Container for arbitrary attributes in pattern rendering. """
@@ -235,6 +236,9 @@ class PywrHydraExporter(BasePywrHydra):
                 continue
 
             attribute_name = attribute['name']
+
+            if attribute_name in COST_ALIASES:
+                attribute_name = 'cost'
 
             dataset = resource_scenario['dataset']
             dataset_type = dataset['type']
