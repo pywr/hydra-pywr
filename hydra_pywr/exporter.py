@@ -6,6 +6,7 @@ from hydra_pywr_common import PywrParameter, PywrRecorder, PywrParameterPattern,
 from pywr.nodes import NodeMeta
 from hydra_base.lib.HydraTypes.Registry import typemap
 import jinja2
+from collections import defaultdict
 
 
 class PatternContext(object):
@@ -19,6 +20,9 @@ class PywrHydraExporter(BasePywrHydra):
         self.data = data
         self.attributes = attributes
         self.template = template
+
+        self._parameter_recorder_flags = {}
+        self._inline_parameter_recorder_flags = defaultdict(dict)
 
         self._pattern_templates = None
 
@@ -240,9 +244,20 @@ class PywrHydraExporter(BasePywrHydra):
                 # The attribute is part of the node definition
                 if isinstance(value, basestring):
                     try:
-                        pywr_node[attribute_name] = json.loads(value)
+                        value = json.loads(value)
                     except json.decoder.JSONDecodeError:
+                        pass
+                    else:
+                        # Check for any recorder flags "__recorder__"
+                        try:
+                            recorder_flags = value.pop('__recorder__')
+                        except (KeyError, AttributeError):
+                            pass
+                        else:
+                            self._inline_parameter_recorder_flags[component['name']][attribute_name] = recorder_flags
+                    finally:
                         pywr_node[attribute_name] = value
+
                 else:
                     pywr_node[attribute_name] = value
             else:
@@ -256,7 +271,14 @@ class PywrHydraExporter(BasePywrHydra):
                     parameters.update(self.generate_parameters_from_patterns(value, context))
                 elif issubclass(hydra_type, PywrParameter):
                     # Must be a parameter
-                    parameters[component_name] = json.loads(value)
+                    value = json.loads(value)
+                    try:
+                        recorder_flags = value.pop('__recorder__')
+                    except (KeyError, AttributeError):
+                        pass
+                    else:
+                        self._parameter_recorder_flags[component_name] = recorder_flags
+                    parameters[component_name] = value
                 elif issubclass(hydra_type, PywrRecorder):
                     # Must be a recorder
                     recorders[component_name] = json.loads(value)

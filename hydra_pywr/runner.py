@@ -3,6 +3,7 @@ import copy
 import pandas
 from pywr.model import Model
 from pywr.nodes import Node, Storage
+from pywr.parameters import Parameter, DeficitParameter
 from pywr.recorders import NumpyArrayNodeRecorder, NumpyArrayStorageRecorder, NumpyArrayLevelRecorder, \
     NumpyArrayParameterRecorder
 from pywr.recorders.progress import ProgressRecorder
@@ -63,6 +64,8 @@ class PywrHydraRunner(PywrHydraExporter):
 
         # Add recorders for monitoring the simulated timeseries of nodes
         add_node_array_recorders(model)
+        # Add recorders for parameters that are flagged
+        self._add_parameter_flagged_recorders(model)
 
         df_recorders = []
         for recorder in model.recorders:
@@ -108,23 +111,30 @@ class PywrHydraRunner(PywrHydraExporter):
         raise ValueError('No attribute with name "{}" found.'.format(name))
 
     def _get_node_from_recorder(self, recorder):
-        try:
-            node = recorder.node
-        except AttributeError:
-            node = recorder.parameter.node
+
+        node = None
+        if recorder.name is not None:
+            if ':' in recorder.name:
+                node_name, _ = recorder.name.split(':')
+                node_name = node_name.replace('__', '')
+                try:
+                    node = recorder.model.nodes[node_name]
+                except KeyError:
+                    pass
+
+        if node is None:
+            try:
+                node = recorder.node
+            except AttributeError:
+                node = recorder.parameter.node
         return node
 
     def _get_attribute_name_from_recorder(self, recorder):
         if recorder.name is None:
             attribute_name = recorder.__class__
         else:
-            node = self._get_node_from_recorder(recorder)
-            prefix = '__{}__:'.format(node.name)
-            suffix = '.{}'.format(node.name)
-            if recorder.name.startswith(prefix):
-                attribute_name = recorder.name.replace(prefix, '')
-            elif recorder.name.endswith(suffix):
-                attribute_name = recorder.name.replace(suffix, '')
+            if ':' in recorder.name:
+                _, attribute_name = recorder.name.split(':', 1)
             else:
                 attribute_name = recorder.name
 
@@ -132,6 +142,38 @@ class PywrHydraRunner(PywrHydraExporter):
             attribute_name = f'simulated_{attribute_name}'
 
         return attribute_name
+
+    def _add_parameter_flagged_recorders(self, model):
+        for parameter_name, flags in self._parameter_recorder_flags.items():
+            p = model.parameters[parameter_name]
+            if ':' in p.name:
+                recorder_name = p.name.split(':', 1)
+                recorder_name[1] = 'simulated_' + recorder_name[1]
+                recorder_name = ':'.join(recorder_name)
+            else:
+                recorder_name = 'simulated_' + p.name
+
+            self._add_flagged_recoder(model, p, recorder_name, flags)
+
+        for node_name, attribute_recorder_flags in self._inline_parameter_recorder_flags.items():
+            node = model.nodes[node_name]
+            for attribute_name, flags in attribute_recorder_flags.items():
+                p = getattr(node, attribute_name)
+
+                if not isinstance(p, Parameter):
+                    continue
+
+                recorder_name = f'__{node_name}__:simulated_{attribute_name}'
+                self._add_flagged_recoder(model, p, recorder_name, flags)
+
+    def _add_flagged_recoder(self, model, parameter, recorder_name, flags):
+        try:
+            record_ts = flags['timeseries']
+        except KeyError:
+            pass
+        else:
+            if record_ts:
+                NumpyArrayParameterRecorder(model, parameter, name=recorder_name)
 
     def save_pywr_results(self, client):
         """ Save the outputs from a Pywr model run to Hydra. """
@@ -183,7 +225,6 @@ class PywrHydraRunner(PywrHydraExporter):
 
             # Get the attribute and its ID
             attribute_name = self._get_attribute_name_from_recorder(recorder)
-
             # Now we need to ensure there is a resource attribute for all nodes and recorder attributes
 
             try:
