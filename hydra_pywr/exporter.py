@@ -2,7 +2,7 @@ import json
 from past.builtins import basestring
 from .template import PYWR_EDGE_LINK_NAME, PYWR_CONSTRAINED_EDGE_LINK_NAME
 from .core import BasePywrHydra
-from hydra_pywr_common import PywrParameter, PywrRecorder, PywrParameterPattern, PywrParameterPatternReference
+from hydra_pywr_common import PywrParameter, PywrRecorder, PywrParameterPattern, PywrParameterPatternReference, PywrNodeOutput
 from pywr.nodes import NodeMeta
 from hydra_base.lib.HydraTypes.Registry import typemap
 import jinja2
@@ -24,6 +24,7 @@ class PywrHydraExporter(BasePywrHydra):
 
         self._parameter_recorder_flags = {}
         self._inline_parameter_recorder_flags = defaultdict(dict)
+        self._node_recorder_flags = {}
 
         self._pattern_templates = None
 
@@ -269,7 +270,15 @@ class PywrHydraExporter(BasePywrHydra):
                 # defined as a node attribute (for convenience).
                 hydra_type = typemap[dataset_type.upper()]
                 component_name = self.make_node_attribute_component_name(component['name'], attribute_name)
-                if issubclass(hydra_type, PywrParameterPatternReference):
+                if issubclass(hydra_type, PywrNodeOutput):
+                    value = json.loads(value)
+                    try:
+                        recorder_flags = value.pop('__recorder__')
+                    except (KeyError, AttributeError):
+                        pass
+                    else:
+                        self._node_recorder_flags[component['name']] = recorder_flags
+                elif issubclass(hydra_type, PywrParameterPatternReference):
                     # Is a pattern of parameters
                     context = self._make_component_pattern_context(component, pywr_node_type)
                     parameters.update(self.generate_parameters_from_patterns(value, context))

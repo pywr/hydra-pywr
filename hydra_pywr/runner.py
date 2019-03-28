@@ -10,24 +10,6 @@ from pywr.recorders.progress import ProgressRecorder
 from .template import PYWR_ARRAY_RECORDER_ATTRIBUTES
 
 
-def add_node_array_recorders(model):
-    """ Helper function to add NumpyArrayXXX recorders to a Pywr model. """
-
-    # Add node recorders
-    for node in model.nodes:
-        if isinstance(node, Node):
-            name = '__{}__:{}'.format(node.name, 'simulated_flow')
-            NumpyArrayNodeRecorder(model, node, name=name)
-        elif isinstance(node, Storage):
-            name = '__{}__:{}'.format(node.name, 'simulated_volume')
-            NumpyArrayStorageRecorder(model, node, name=name)
-        else:
-            import warnings
-            warnings.warn('Unrecognised node subclass "{}" with name "{}". Skipping '
-                          'recording this node.'.format(node.__class__.__name__, node.name),
-                          RuntimeWarning)
-
-
 class PywrHydraRunner(PywrHydraExporter):
     """ An extension to `PywrHydraExporter` that adds methods for running a Pywr model. """
     def __init__(self, *args, **kwargs):
@@ -63,7 +45,7 @@ class PywrHydraRunner(PywrHydraExporter):
         ProgressRecorder(model)
 
         # Add recorders for monitoring the simulated timeseries of nodes
-        add_node_array_recorders(model)
+        self._add_node_flagged_recorders(model)
         # Add recorders for parameters that are flagged
         self._add_parameter_flagged_recorders(model)
 
@@ -142,6 +124,42 @@ class PywrHydraRunner(PywrHydraExporter):
             attribute_name = f'simulated_{attribute_name}'
 
         return attribute_name
+
+    def _add_node_flagged_recorders(self, model):
+
+        for node in model.nodes:
+            try:
+                flags = self._node_recorder_flags[node.name]
+            except KeyError:
+                flags = {'timeseries': True}  # Default to recording timeseries if not defined.
+
+            for flag, to_record in flags.items():
+                if not to_record:
+                    continue
+
+                if flag == 'timeseries':
+                    if isinstance(node, Node):
+                        name = '__{}__:{}'.format(node.name, 'simulated_flow')
+                        NumpyArrayNodeRecorder(model, node, name=name)
+                    elif isinstance(node, Storage):
+                        name = '__{}__:{}'.format(node.name, 'simulated_volume')
+                        NumpyArrayStorageRecorder(model, node, name=name)
+                    else:
+                        import warnings
+                        warnings.warn('Unrecognised node subclass "{}" with name "{}" for timeseries recording. Skipping '
+                                      'recording this node.'.format(node.__class__.__name__, node.name),
+                                      RuntimeWarning)
+
+                elif flag == 'deficit':
+                    if isinstance(node, Node):
+                        deficit_parameter = DeficitParameter(model, node)
+                        name = '__{}__:{}'.format(node.name, 'simulated_deficit')
+                        NumpyArrayParameterRecorder(model, deficit_parameter, name=name)
+                    else:
+                        import warnings
+                        warnings.warn('Unrecognised node subclass "{}" with name "{}" for deficit recording. Skipping '
+                                      'recording this node.'.format(node.__class__.__name__, node.name),
+                                      RuntimeWarning)
 
     def _add_parameter_flagged_recorders(self, model):
         for parameter_name, flags in self._parameter_recorder_flags.items():
