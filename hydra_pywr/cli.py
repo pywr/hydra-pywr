@@ -44,7 +44,7 @@ def cli(obj, username, password, hostname, session):
 @cli.command(name='import')
 @click.pass_obj
 @click.option('--filename', type=click.Path(file_okay=True, dir_okay=False, exists=True))
-@click.option('-p', '--project_id', type=int)
+@click.option('-p', '--project-id', type=int)
 @click.option('-u', '--user-id', type=int, default=None)
 @click.option('--template-id', type=int, default=None)
 @click.option('--projection', type=str, default=None)
