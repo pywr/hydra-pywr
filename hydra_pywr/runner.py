@@ -114,7 +114,7 @@ class PywrHydraRunner(PywrHydraExporter):
         node = None
         if recorder.name is not None:
             if ':' in recorder.name:
-                node_name, _ = recorder.name.split(':')
+                node_name, _ = recorder.name.split(':', 1)
                 node_name = node_name.replace('__', '')
                 try:
                     node = recorder.model.nodes[node_name]
