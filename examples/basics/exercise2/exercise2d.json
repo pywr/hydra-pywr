@@ -1,0 +1,105 @@
+{
+  "timestepper": {
+    "start": "2018-01-01",
+    "end": "2018-12-31",
+    "timestep": 1
+  },
+  "metadata": {
+    "description": "Exercise 2d from Pywr basic training.",
+    "title": "Exercise 2d - Time varying inflows."
+  },
+  "edges": [
+    ["input1", "reservoir1"],
+    ["reservoir1", "agri1"],
+    ["reservoir1", "control1"],
+    ["reservoir1", "spill1"],
+    ["control1", "output1"],
+    ["spill1", "output1"]
+  ],
+  "nodes": [
+    {
+      "name": "input1",
+      "type": "monthlycatchment",
+      "flow": {
+          "flow": {
+              "00": 10,
+              "01": 11,
+              "02": 12,
+              "03": 13,
+              "04": 14,
+              "05": 13,
+              "06": 12,
+              "07": 10,
+              "08": 8,
+              "09": 6,
+              "10": 7,
+              "11": 8
+          }
+      },
+      "position": {
+        "geographic": [0, 0]
+      }
+    },
+    {
+      "name": "reservoir1",
+      "type": "reservoir",
+      "max_volume": 365,
+      "initial_volume": 365,
+      "position": {
+        "geographic": [0, 50]
+      }
+    },
+    {
+      "name": "control1",
+      "type": "linearstoragereleasecontrol",
+      "storage_node": "reservoir1",
+      "release_values": {
+          "volume": {"0": 1.0, "1": 0.80, "2": 0.50, "3": 0.20, "4": 0.0},
+          "value": {"0": 15.0, "1": 15.0, "2": 13.0, "3": 10.0, "4": 0.0}
+      },
+      "cost": -50,
+      "position": {
+        "geographic": [-25, 100]
+      }
+    },
+    {
+      "name": "spill1",
+      "type": "link",
+      "cost": 99,
+      "position": {
+        "geographic": [25, 100]
+      }
+    },
+    {
+      "name": "output1",
+      "type": "output",
+      "position": {
+        "geographic": [0, 150]
+      }
+    },
+    {
+      "name": "agri1",
+      "type": "monthlyoutput",
+      "cost": -10,
+      "max_flow": {
+          "flow": {
+              "00": 1.0,
+              "01": 2.0,
+              "02": 4.0,
+              "03": 5.0,
+              "04": 6.0,
+              "05": 8.0,
+              "06": 10.0,
+              "07": 11.0,
+              "08": 8.0,
+              "09": 7.0,
+              "10": 5.0,
+              "11": 3.0
+          }
+      },
+      "position": {
+        "geographic": [50, 50]
+      }
+    }
+  ]
+}

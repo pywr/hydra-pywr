@@ -1,0 +1,63 @@
+{
+  "timestepper": {
+    "start": "2018-01-01",
+    "end": "2018-12-31",
+    "timestep": 1
+  },
+  "metadata": {
+    "description": "Exercise 1d from Pywr basic training. Minimum flow priorities / enforcing control rules.",
+    "title": "Exercise 1d - Minimum flow priorities."
+  },
+  "edges": [
+    ["input1", "link1"],
+    ["input1", "link2"],
+    ["link1", "output1"],
+    ["link2", "output1"],
+    ["input1", "output2"]
+  ],
+  "nodes": [
+    {
+      "name": "input1",
+      "type": "input",
+      "min_flow": 20,
+      "max_flow": 20,
+      "position": {
+        "geographic": [0, 0]
+      }
+    },
+    {
+      "name": "link1",
+      "type": "link",
+      "max_flow": 8,
+      "cost": -10,
+      "position": {
+        "geographic": [-25, 50]
+      }
+    },
+    {
+      "name": "link2",
+      "type": "link",
+      "cost": 0,
+      "position": {
+        "geographic": [25, 50]
+      }
+    },
+    {
+      "name": "output1",
+      "type": "output",
+      "position": {
+        "geographic": [0, 100]
+      }
+    },
+    {
+      "name": "output2",
+      "type": "output",
+      "cost": -5,
+      "max_flow": 8,
+      "position": {
+        "geographic": [50, 0]
+      }
+    }
+  ]
+}
+

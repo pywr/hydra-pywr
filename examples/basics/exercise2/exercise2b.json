@@ -1,0 +1,83 @@
+{
+  "timestepper": {
+    "start": "2018-01-01",
+    "end": "2018-12-31",
+    "timestep": 1
+  },
+  "metadata": {
+    "description": "Exercise 2b from Pywr basic training.",
+    "title": "Exercise 2b - Simple system with overflow."
+  },
+  "edges": [
+    ["input1", "reservoir1"],
+    ["reservoir1", "output1"],
+    ["reservoir1", "agri1"]
+  ],
+  "nodes": [
+    {
+      "name": "input1",
+      "type": "monthlycatchment",
+      "flow": {
+          "flow": {
+              "00": 10,
+              "01": 10,
+              "02": 10,
+              "03": 10,
+              "04": 10,
+              "05": 10,
+              "06": 10,
+              "07": 10,
+              "08": 10,
+              "09": 10,
+              "10": 10,
+              "11": 10
+          }
+      },
+      "position": {
+        "geographic": [0, 0]
+      }
+    },
+    {
+      "name": "reservoir1",
+      "type": "reservoir",
+      "max_volume": 365,
+      "initial_volume": 200,
+      "cost": -1,
+      "position": {
+        "geographic": [0, 50]
+      }
+    },
+    {
+      "name": "output1",
+      "type": "output",
+      "position": {
+        "geographic": [0, 100]
+      }
+    },
+    {
+      "name": "agri1",
+      "type": "monthlyoutput",
+      "cost": -10,
+      "max_flow": {
+          "flow": {
+              "00": 8.0,
+              "01": 8.0,
+              "02": 8.0,
+              "03": 8.0,
+              "04": 8.0,
+              "05": 8.0,
+              "06": 8.0,
+              "07": 8.0,
+              "08": 8.0,
+              "09": 8.0,
+              "10": 8.0,
+              "11": 8.0
+          }
+      },
+      "position": {
+        "geographic": [50, 50]
+      }
+    }
+  ]
+}
+
