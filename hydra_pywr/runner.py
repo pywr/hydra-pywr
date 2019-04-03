@@ -114,7 +114,7 @@ class PywrHydraRunner(PywrHydraExporter):
         node = None
         if recorder.name is not None:
             if ':' in recorder.name:
-                node_name, _ = recorder.name.split(':', 1)
+                node_name, _ = recorder.name.rsplit(':', 1)
                 node_name = node_name.replace('__', '')
                 try:
                     node = recorder.model.nodes[node_name]
@@ -133,7 +133,7 @@ class PywrHydraRunner(PywrHydraExporter):
             attribute_name = recorder.__class__
         else:
             if ':' in recorder.name:
-                _, attribute_name = recorder.name.split(':', 1)
+                _, attribute_name = recorder.name.rsplit(':', 1)
             else:
                 attribute_name = recorder.name
 
@@ -182,7 +182,7 @@ class PywrHydraRunner(PywrHydraExporter):
         for parameter_name, flags in self._parameter_recorder_flags.items():
             p = model.parameters[parameter_name]
             if ':' in p.name:
-                recorder_name = p.name.split(':', 1)
+                recorder_name = p.name.rsplit(':', 1)
                 recorder_name[1] = 'simulated_' + recorder_name[1]
                 recorder_name = ':'.join(recorder_name)
             else:
