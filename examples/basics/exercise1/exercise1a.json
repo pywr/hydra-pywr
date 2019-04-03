@@ -1,0 +1,33 @@
+{
+  "timestepper": {
+    "start": "2018-01-01",
+    "end": "2018-12-31",
+    "timestep": 1
+  },
+  "metadata": {
+    "description": "Exercise 1a from Pywr basic training.",
+    "title": "Exercise 1a - Two nodes."
+  },
+  "edges": [
+    ["input1", "output1"]
+  ],
+  "nodes": [
+    {
+      "name": "input1",
+      "type": "input",
+      "max_flow": 10,
+      "position": {
+        "geographic": [0, 0]
+      }
+    },
+    {
+      "name": "output1",
+      "type": "output",
+      "cost": -10,
+      "position": {
+        "geographic": [0, 50]
+      }
+    }
+  ]
+}
+

@@ -2,11 +2,13 @@ import json
 from past.builtins import basestring
 from .template import PYWR_EDGE_LINK_NAME, PYWR_CONSTRAINED_EDGE_LINK_NAME
 from .core import BasePywrHydra
-from hydra_pywr_common import PywrParameter, PywrRecorder, PywrParameterPattern, PywrParameterPatternReference
+from hydra_pywr_common import PywrParameter, PywrRecorder, PywrParameterPattern, PywrParameterPatternReference, PywrNodeOutput
 from pywr.nodes import NodeMeta
 from hydra_base.lib.HydraTypes.Registry import typemap
 import jinja2
+from collections import defaultdict
 
+COST_ALIASES = ['allocation penalty', 'allocation_penalty', 'Allocation Penalty']
 
 class PatternContext(object):
     """ Container for arbitrary attributes in pattern rendering. """
@@ -19,6 +21,10 @@ class PywrHydraExporter(BasePywrHydra):
         self.data = data
         self.attributes = attributes
         self.template = template
+
+        self._parameter_recorder_flags = {}
+        self._inline_parameter_recorder_flags = defaultdict(dict)
+        self._node_recorder_flags = {}
 
         self._pattern_templates = None
 
@@ -93,6 +99,20 @@ class PywrHydraExporter(BasePywrHydra):
         pywr_data['edges'] = edges
 
         return pywr_data
+
+    def _get_all_resource_attributes(self):
+        """
+            Get all the complex mode attributes in the network so that they
+            can be used for mapping to resource scenarios later.
+        """
+
+        for a in self.data['attributes']:
+            yield a
+
+        for rtype in ('nodes', 'links', 'resourcegroups'):
+            for o in self.data[rtype]:
+                for a in o['attributes']:
+                    yield a
 
     def _get_resource_scenario(self, resource_attribute_id):
 
@@ -232,6 +252,9 @@ class PywrHydraExporter(BasePywrHydra):
 
             attribute_name = attribute['name']
 
+            if attribute_name in COST_ALIASES:
+                attribute_name = 'cost'
+
             dataset = resource_scenario['dataset']
             dataset_type = dataset['type']
             value = dataset['value']
@@ -240,9 +263,20 @@ class PywrHydraExporter(BasePywrHydra):
                 # The attribute is part of the node definition
                 if isinstance(value, basestring):
                     try:
-                        pywr_node[attribute_name] = json.loads(value)
+                        value = json.loads(value)
                     except json.decoder.JSONDecodeError:
+                        pass
+                    else:
+                        # Check for any recorder flags "__recorder__"
+                        try:
+                            recorder_flags = value.pop('__recorder__')
+                        except (KeyError, AttributeError):
+                            pass
+                        else:
+                            self._inline_parameter_recorder_flags[component['name']][attribute_name] = recorder_flags
+                    finally:
                         pywr_node[attribute_name] = value
+
                 else:
                     pywr_node[attribute_name] = value
             else:
@@ -250,13 +284,28 @@ class PywrHydraExporter(BasePywrHydra):
                 # defined as a node attribute (for convenience).
                 hydra_type = typemap[dataset_type.upper()]
                 component_name = self.make_node_attribute_component_name(component['name'], attribute_name)
-                if issubclass(hydra_type, PywrParameterPatternReference):
+                if issubclass(hydra_type, PywrNodeOutput):
+                    value = json.loads(value)
+                    try:
+                        recorder_flags = value.pop('__recorder__')
+                    except (KeyError, AttributeError):
+                        pass
+                    else:
+                        self._node_recorder_flags[component['name']] = recorder_flags
+                elif issubclass(hydra_type, PywrParameterPatternReference):
                     # Is a pattern of parameters
                     context = self._make_component_pattern_context(component, pywr_node_type)
                     parameters.update(self.generate_parameters_from_patterns(value, context))
                 elif issubclass(hydra_type, PywrParameter):
                     # Must be a parameter
-                    parameters[component_name] = json.loads(value)
+                    value = json.loads(value)
+                    try:
+                        recorder_flags = value.pop('__recorder__')
+                    except (KeyError, AttributeError):
+                        pass
+                    else:
+                        self._parameter_recorder_flags[component_name] = recorder_flags
+                    parameters[component_name] = value
                 elif issubclass(hydra_type, PywrRecorder):
                     # Must be a recorder
                     recorders[component_name] = json.loads(value)

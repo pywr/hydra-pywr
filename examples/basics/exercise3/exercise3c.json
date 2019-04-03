@@ -1,0 +1,174 @@
+{
+  "timestepper": {
+    "start": "2018-01-01",
+    "end": "2018-12-31",
+    "timestep": 1
+  },
+  "metadata": {
+    "description": "Exercise 3c from Pywr basic training.",
+    "title": "Exercise 3c - Demand restrictions."
+  },
+  "edges": [
+    ["input1", "river1"],
+    ["river1", "river2"],
+    ["river2", "mrf"],
+    ["river2", "river3"],
+    ["mrf", "output1"],
+    ["river3", "output1"],
+    ["river1", "abs1"],
+    ["abs1", "reservoir1"],
+    ["input2", "reservoir1"],
+    ["reservoir1", "release1"],
+    ["release1", "river2"],
+    ["reservoir1", "demand1"]
+  ],
+  "nodes": [
+    {
+      "name": "input1",
+      "type": "catchment",
+      "flow": 10,
+      "position": {
+        "geographic": [0, 0]
+      }
+    },
+    {
+      "name": "river1",
+      "type": "link",
+      "position": {
+        "geographic": [0, 25]
+      }
+    },
+    {
+      "name": "river2",
+      "type": "link",
+      "position": {
+        "geographic": [0, 75]
+      }
+    },
+    {
+      "name": "mrf",
+      "type": "link",
+      "max_flow": 2,
+      "cost": -10,
+      "position": {
+        "geographic": [-10, 100]
+      }
+    },
+    {
+      "name": "river3",
+      "type": "link",
+      "position": {
+        "geographic": [10, 100]
+      }
+    },
+    {
+      "name": "abs1",
+      "type": "link",
+      "max_flow": 5,
+      "cost": 0.1,
+      "position": {
+        "geographic": [25, 25]
+      }
+    },
+    {
+      "name": "release1",
+      "type": "link",
+      "position": {
+        "geographic": [25, 75]
+      }
+    },
+    {
+      "name": "input2",
+      "type": "catchment",
+      "flow": 3,
+      "position": {
+        "geographic": [50, 25]
+      }
+    },
+    {
+      "name": "reservoir1",
+      "type": "storage",
+      "max_volume": 365,
+      "initial_volume": 365,
+      "cost": -1,
+      "position": {
+        "geographic": [50, 50]
+      }
+    },
+    {
+      "name": "output1",
+      "type": "output",
+      "position": {
+        "geographic": [0, 125]
+      }
+    },
+    {
+      "name": "demand1",
+      "type": "output",
+      "cost": -10,
+      "max_flow": {
+        "type": "aggregatedparameter",
+        "agg_func": "product",
+        "parameters": [
+          "__demand1__:base_demand",
+          "__reservoir1__:demand_saving_factor"
+        ]
+      },
+      "position": {
+        "geographic": [50, 100]
+      }
+    }
+  ],
+  "parameters": {
+    "__demand1__:base_demand": {
+      "type": "monthlyprofile",
+      "values": [10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10]
+    },
+    "__reservoir1__:demand_saving_factor": {
+      "type": "indexedarrayparameter",
+      "index_parameter": "__reservoir1__:demand_saving_level",
+      "params": [1.0, 0.85, 0.6]
+    },
+    "__reservoir1__:demand_saving_level": {
+      "type": "controlcurveindexparameter",
+      "storage_node": "reservoir1",
+      "control_curves": [
+        {
+          "type": "monthlyprofile",
+          "values": [
+            0.8,
+            0.8,
+            0.8,
+            0.8,
+            0.8,
+            0.8,
+            0.8,
+            0.8,
+            0.8,
+            0.8,
+            0.8,
+            0.8
+          ]
+        },
+        {
+          "type": "monthlyprofile",
+          "values": [
+            0.5,
+            0.5,
+            0.5,
+            0.5,
+            0.5,
+            0.5,
+            0.5,
+            0.5,
+            0.5,
+            0.5,
+            0.5,
+            0.5
+          ]
+        }
+      ]
+    }
+  }
+}
+

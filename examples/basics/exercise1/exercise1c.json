@@ -1,0 +1,63 @@
+{
+  "timestepper": {
+    "start": "2018-01-01",
+    "end": "2018-12-31",
+    "timestep": 1
+  },
+  "metadata": {
+    "description": "Exercise 1c from Pywr basic training. Link node priorities using costs.",
+    "title": "Exercise 1c - Intermediate priorities."
+  },
+  "edges": [
+    ["input1", "link1"],
+    ["link1", "output1"],
+    ["link1", "output2"],
+    ["input1", "output3"]
+  ],
+  "nodes": [
+    {
+      "name": "input1",
+      "type": "input",
+      "max_flow": 20,
+      "position": {
+        "geographic": [0, 0]
+      }
+    },
+    {
+      "name": "link1",
+      "type": "link",
+      "max_flow": 12,
+      "cost": -3,
+      "position": {
+        "geographic": [0, 50]
+      }
+    },
+    {
+      "name": "output1",
+      "type": "output",
+      "cost": -10,
+      "max_flow": 8,
+      "position": {
+        "geographic": [-25, 100]
+      }
+    },
+    {
+      "name": "output2",
+      "type": "output",
+      "cost": -3,
+      "max_flow": 8,
+      "position": {
+        "geographic": [25, 100]
+      }
+    },
+    {
+      "name": "output3",
+      "type": "output",
+      "cost": -5,
+      "position": {
+        "geographic": [50, 0]
+      }
+    }
+  ]
+}
+

@@ -1,0 +1,204 @@
+{
+  "timestepper": {
+    "start": "2018-01-01",
+    "end": "2018-12-31",
+    "timestep": 1
+  },
+  "metadata": {
+    "description": "Exercise 2e from Pywr basic training.",
+    "title": "Exercise 2e - Reservoir chains."
+  },
+  "edges": [
+    ["input1", "reservoir1"],
+    ["reservoir1", "control1"],
+    ["reservoir1", "spill1"],
+    ["reservoir1", "agri1"],
+
+    ["control1", "river1"],
+    ["spill1", "river1"],
+
+    ["river1", "reservoir2"],
+    ["input2", "reservoir2"],
+    ["reservoir2", "control2"],
+    ["reservoir2", "spill2"],
+    ["reservoir2", "agri2"],
+    ["control2", "output1"],
+    ["spill2", "output1"]
+  ],
+  "nodes": [
+    {
+      "name": "input1",
+      "type": "monthlycatchment",
+      "flow": {
+          "flow": {
+              "0": 10,
+              "1": 20,
+              "2": 30,
+              "3": 40,
+              "4": 20,
+              "5": 10,
+              "6": 6,
+              "7": 4,
+              "8": 12,
+              "9": 8,
+              "10": 10,
+              "11": 10
+          }
+      },
+      "position": {
+        "geographic": [0, 0]
+      }
+    },
+    {
+      "name": "reservoir1",
+      "type": "reservoir",
+      "max_volume": 365,
+      "initial_volume": 365,
+      "position": {
+        "geographic": [0, 50]
+      }
+    },
+    {
+      "name": "control1",
+      "type": "linearstoragereleasecontrol",
+      "storage_node": "reservoir1",
+      "release_values": {
+          "volume": {"0": 1.0, "1": 0.80, "2": 0.50, "3": 0.20, "4": 0.0},
+          "value": {"0": 15.0, "1": 15.0, "2": 13.0, "3": 10.0, "4": 0.0}
+      },
+      "cost": -50,
+      "position": {
+        "geographic": [-25, 100]
+      }
+    },
+    {
+      "name": "spill1",
+      "type": "link",
+      "cost": 99,
+      "position": {
+        "geographic": [25, 100]
+      }
+    },
+
+    {
+      "name": "river1",
+      "type": "link",
+      "position": {
+        "geographic": [0, 150]
+      }
+    },
+    {
+      "name": "agri1",
+      "type": "monthlyoutput",
+      "cost": -10,
+      "max_flow": {
+          "flow": {
+              "00": 0,
+              "01": 0.2,
+              "02": 0.4,
+              "03": 0.5,
+              "04": 0.6,
+              "05": 0.8,
+              "06": 1.0,
+              "07": 1.1,
+              "08": 0.8,
+              "09": 0.7,
+              "10": 0.5,
+              "11": 0.3
+          }
+      },
+      "position": {
+        "geographic": [50, 50]
+      }
+    },
+
+
+    {
+      "name": "input2",
+      "type": "monthlycatchment",
+      "flow": {
+          "flow": {
+              "0": 2,
+              "1": 3,
+              "2": 5,
+              "3": 2,
+              "4": 1,
+              "5": 1,
+              "6": 0.3,
+              "7": 0.1,
+              "8": 0.8,
+              "9": 1.0,
+              "10": 2,
+              "11": 2
+          }
+      },
+      "position": {
+        "geographic": [25, 150]
+      }
+    },
+    {
+      "name": "reservoir2",
+      "type": "reservoir",
+      "max_volume": 1000,
+      "initial_volume": 800,
+      "position": {
+        "geographic": [0, 200]
+      }
+    },
+    {
+      "name": "control2",
+      "type": "linearstoragereleasecontrol",
+      "storage_node": "reservoir2",
+      "release_values": {
+          "volume": {"0": 1.0, "1": 0.80, "2": 0.50, "3": 0.20, "4": 0.0},
+          "value": {"0": 15.0, "1": 15.0, "2": 13.0, "3": 10.0, "4": 0.0}
+      },
+      "cost": -50,
+      "position": {
+        "geographic": [-25, 250]
+      }
+    },
+    {
+      "name": "spill2",
+      "type": "link",
+      "cost": 99,
+      "position": {
+        "geographic": [25, 250]
+      }
+    },
+    {
+      "name": "agri2",
+      "type": "monthlyoutput",
+      "cost": -10,
+      "max_flow": {
+          "flow": {
+              "00": 1.0,
+              "01": 2.0,
+              "02": 4.0,
+              "03": 5.0,
+              "04": 6.0,
+              "05": 8.0,
+              "06": 10.0,
+              "07": 11.0,
+              "08": 8.0,
+              "09": 7.0,
+              "10": 5.0,
+              "11": 3.0
+          }
+      },
+      "position": {
+        "geographic": [50, 200]
+      }
+    },
+
+
+    {
+      "name": "output1",
+      "type": "output",
+      "position": {
+        "geographic": [0, 300]
+      }
+    }
+  ]
+}
+

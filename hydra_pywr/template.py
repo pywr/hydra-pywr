@@ -25,9 +25,9 @@ PYWR_ARRAY_RECORDER_ATTRIBUTES = {
 PYWR_OUTPUT_ATTRIBUTES = list(PYWR_ARRAY_RECORDER_ATTRIBUTES.values())
 PYWR_TIMESTEPPER_ATTRIBUTES = ('start', 'end', 'timestep')
 PYWR_DEFAULT_DATASETS = {
-    'start': {'data_type': 'descriptor', 'val': '2018-01-01', 'units': 'date', 'name': 'Default start date'},
-    'end': {'data_type': 'descriptor', 'val': '2018-12-31', 'units': 'date', 'name': 'Default end date'},
-    'timestep': {'data_type': 'scalar', 'val': 1, 'units': 'days', 'name': 'Default timestep'},
+    'start': {'data_type': 'descriptor', 'val': '2018-01-01', 'name': 'Default start date'},
+    'end': {'data_type': 'descriptor', 'val': '2018-12-31', 'name': 'Default end date'},
+    'timestep': {'data_type': 'scalar', 'val': 1, 'name': 'Default timestep'},
 }
 
 CONFIG_DIR = os.path.join(os.path.dirname(__file__), 'template_configs')
@@ -69,8 +69,6 @@ def generate_pywr_attributes():
         if name not in attribute_names:
             yield {
                 'name': 'timestepper.{}'.format(name),
-                'dimension': 'dimensionless',
-                'description': ''
             }
 
     # Now add the constant attributes defined here.
@@ -78,8 +76,6 @@ def generate_pywr_attributes():
         if name not in attribute_names:
             yield {
                 'name': name,
-                'dimension': 'dimensionless',
-                'description': ''
             }
             attribute_names.add(name)
 
@@ -94,8 +90,6 @@ def generate_pywr_attributes():
             if name not in attribute_names:
                 yield {
                     'name': name,
-                    'dimension': 'dimensionless',
-                    'description': ''
                 }
                 attribute_names.add(name)
 

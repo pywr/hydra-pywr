@@ -1,5 +1,6 @@
 from hydra_base.db import DeclarativeBase as _db
-from hydra_base.util.hdb import create_default_users_and_perms, make_root_user
+from hydra_base.util.hdb import create_default_users_and_perms, \
+    create_default_units_and_dimensions, make_root_user
 from hydra_base.lib.objects import JSONObject
 import hydra_base
 from hydra_base import config
@@ -64,6 +65,7 @@ def db_with_users(db_empty, engine, request):
     hydra_base.db.DBSession = session
     # Now apply the default users and roles
     create_default_users_and_perms()
+    create_default_units_and_dimensions()
     make_root_user()
 
     # Add some users
@@ -118,6 +120,15 @@ def session_with_pywr_template(session):
 
     default_data_set_ids = {}
     for attribute_name, dataset in PYWR_DEFAULT_DATASETS.items():
+
+        # Patch the default datasets to convert unit to unit_id.
+        unit = dataset.pop('unit', None)
+        if unit is not None and 'unit_id' not in dataset:
+            u = hydra_base.get_unit_by_abbreviation(unit)
+            dataset['unit_id'] = u.id
+        else:
+            dataset['unit_id'] = None
+
         hydra_dataset = hydra_base.add_dataset(flush=True, **dataset)
         default_data_set_ids[attribute_name] = hydra_dataset.id
 

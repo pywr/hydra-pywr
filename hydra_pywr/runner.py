@@ -1,29 +1,13 @@
 from .exporter import PywrHydraExporter
 import copy
+import pandas
 from pywr.model import Model
 from pywr.nodes import Node, Storage
+from pywr.parameters import Parameter, DeficitParameter
 from pywr.recorders import NumpyArrayNodeRecorder, NumpyArrayStorageRecorder, NumpyArrayLevelRecorder, \
     NumpyArrayParameterRecorder
 from pywr.recorders.progress import ProgressRecorder
 from .template import PYWR_ARRAY_RECORDER_ATTRIBUTES
-
-
-def add_node_array_recorders(model):
-    """ Helper function to add NumpyArrayXXX recorders to a Pywr model. """
-
-    # Add node recorders
-    for node in model.nodes:
-        if isinstance(node, Node):
-            name = '__{}__:{}'.format(node.name, 'simulated_flow')
-            NumpyArrayNodeRecorder(model, node, name=name)
-        elif isinstance(node, Storage):
-            name = '__{}__:{}'.format(node.name, 'simulated_volume')
-            NumpyArrayStorageRecorder(model, node, name=name)
-        else:
-            import warnings
-            warnings.warn('Unrecognised node subclass "{}" with name "{}". Skipping '
-                          'recording this node.'.format(node.__class__.__name__, node.name),
-                          RuntimeWarning)
 
 
 class PywrHydraRunner(PywrHydraExporter):
@@ -32,7 +16,7 @@ class PywrHydraRunner(PywrHydraExporter):
         self.output_resample_freq = kwargs.pop('output_resample_freq', None)
         super(PywrHydraRunner, self).__init__(*args, **kwargs)
         self.model = None
-        self._array_recorders = None
+        self._df_recorders = None
 
     def _copy_scenario(self):
         # Now construct a scenario object
@@ -40,6 +24,23 @@ class PywrHydraRunner(PywrHydraExporter):
         scenario = copy.deepcopy(scenario)
         scenario.resourcescenarios = []
         return scenario
+
+    def _delete_resource_scenarios(self, client):
+        scenario = self.data.scenarios[0]
+
+        ra_is_var_map = {ra['id']: ra['attr_is_var'] for ra in self._get_all_resource_attributes()}
+        ra_to_delete = []
+
+        # Compile a list of resource attributes to delete
+        for resource_scenario in scenario['resourcescenarios']:
+            ra_id = resource_scenario['resource_attr_id']
+            ra_is_var = ra_is_var_map[ra_id]
+            if ra_is_var == 'Y':
+                ra_to_delete.append(ra_id)
+
+        # Now delete them all
+        for ra_id in ra_to_delete:
+            client.delete_resource_scenario(scenario['id'], ra_id, quiet=True)
 
     def load_pywr_model(self):
         """ Create a Pywr model from the exported data. """
@@ -61,17 +62,14 @@ class PywrHydraRunner(PywrHydraExporter):
         ProgressRecorder(model)
 
         # Add recorders for monitoring the simulated timeseries of nodes
-        add_node_array_recorders(model)
+        self._add_node_flagged_recorders(model)
+        # Add recorders for parameters that are flagged
+        self._add_parameter_flagged_recorders(model)
 
-        array_recorders = []
+        df_recorders = []
         for recorder in model.recorders:
-            if isinstance(recorder, (
-                    NumpyArrayNodeRecorder,
-                    NumpyArrayStorageRecorder,
-                    NumpyArrayLevelRecorder,
-                    NumpyArrayParameterRecorder,
-            )):
-                array_recorders.append(recorder)
+            if hasattr(recorder, 'to_dataframe'):
+                df_recorders.append(recorder)
 
         # Check the model
         model.check()
@@ -83,7 +81,7 @@ class PywrHydraRunner(PywrHydraExporter):
         run_stats = model.run()
 
         # Save these for later
-        self._array_recorders = array_recorders
+        self._df_recorders = df_recorders
 
     def _get_resource_attribute_id(self, node_name, attribute_name):
 
@@ -112,29 +110,110 @@ class PywrHydraRunner(PywrHydraExporter):
         raise ValueError('No attribute with name "{}" found.'.format(name))
 
     def _get_node_from_recorder(self, recorder):
-        try:
-            node = recorder.node
-        except AttributeError:
-            node = recorder.parameter.node
+
+        node = None
+        if recorder.name is not None:
+            if ':' in recorder.name:
+                node_name, _ = recorder.name.split(':', 1)
+                node_name = node_name.replace('__', '')
+                try:
+                    node = recorder.model.nodes[node_name]
+                except KeyError:
+                    pass
+
+        if node is None:
+            try:
+                node = recorder.node
+            except AttributeError:
+                node = recorder.parameter.node
         return node
 
     def _get_attribute_name_from_recorder(self, recorder):
         if recorder.name is None:
             attribute_name = recorder.__class__
         else:
-            node = self._get_node_from_recorder(recorder)
-            prefix = '__{}__:'.format(node.name)
-            suffix = '.{}'.format(node.name)
-            if recorder.name.startswith(prefix):
-                attribute_name = recorder.name.replace(prefix, '')
-            elif recorder.name.endswith(suffix):
-                attribute_name = recorder.name.replace(suffix, '')
+            if ':' in recorder.name:
+                _, attribute_name = recorder.name.split(':', 1)
             else:
                 attribute_name = recorder.name
+
+        if not attribute_name.startswith('simulated'):
+            attribute_name = f'simulated_{attribute_name}'
+
         return attribute_name
+
+    def _add_node_flagged_recorders(self, model):
+
+        for node in model.nodes:
+            try:
+                flags = self._node_recorder_flags[node.name]
+            except KeyError:
+                flags = {'timeseries': True}  # Default to recording timeseries if not defined.
+
+            for flag, to_record in flags.items():
+                if not to_record:
+                    continue
+
+                if flag == 'timeseries':
+                    if isinstance(node, Node):
+                        name = '__{}__:{}'.format(node.name, 'simulated_flow')
+                        NumpyArrayNodeRecorder(model, node, name=name)
+                    elif isinstance(node, Storage):
+                        name = '__{}__:{}'.format(node.name, 'simulated_volume')
+                        NumpyArrayStorageRecorder(model, node, name=name)
+                    else:
+                        import warnings
+                        warnings.warn('Unrecognised node subclass "{}" with name "{}" for timeseries recording. Skipping '
+                                      'recording this node.'.format(node.__class__.__name__, node.name),
+                                      RuntimeWarning)
+
+                elif flag == 'deficit':
+                    if isinstance(node, Node):
+                        deficit_parameter = DeficitParameter(model, node)
+                        name = '__{}__:{}'.format(node.name, 'simulated_deficit')
+                        NumpyArrayParameterRecorder(model, deficit_parameter, name=name)
+                    else:
+                        import warnings
+                        warnings.warn('Unrecognised node subclass "{}" with name "{}" for deficit recording. Skipping '
+                                      'recording this node.'.format(node.__class__.__name__, node.name),
+                                      RuntimeWarning)
+
+    def _add_parameter_flagged_recorders(self, model):
+        for parameter_name, flags in self._parameter_recorder_flags.items():
+            p = model.parameters[parameter_name]
+            if ':' in p.name:
+                recorder_name = p.name.split(':', 1)
+                recorder_name[1] = 'simulated_' + recorder_name[1]
+                recorder_name = ':'.join(recorder_name)
+            else:
+                recorder_name = 'simulated_' + p.name
+
+            self._add_flagged_recoder(model, p, recorder_name, flags)
+
+        for node_name, attribute_recorder_flags in self._inline_parameter_recorder_flags.items():
+            node = model.nodes[node_name]
+            for attribute_name, flags in attribute_recorder_flags.items():
+                p = getattr(node, attribute_name)
+
+                if not isinstance(p, Parameter):
+                    continue
+
+                recorder_name = f'__{node_name}__:simulated_{attribute_name}'
+                self._add_flagged_recoder(model, p, recorder_name, flags)
+
+    def _add_flagged_recoder(self, model, parameter, recorder_name, flags):
+        try:
+            record_ts = flags['timeseries']
+        except KeyError:
+            pass
+        else:
+            if record_ts:
+                NumpyArrayParameterRecorder(model, parameter, name=recorder_name)
 
     def save_pywr_results(self, client):
         """ Save the outputs from a Pywr model run to Hydra. """
+        # Ensure all the results from previous run are removed.
+        self._delete_resource_scenarios(client)
 
         # Convert the scenario from JSONObject to normal dict
         # This is required to ensure that the complete nested structure (of dicts)
@@ -143,7 +222,7 @@ class PywrHydraRunner(PywrHydraExporter):
 
         # First add any new attributes required
         attribute_names = []
-        for recorder in self._array_recorders:
+        for recorder in self._df_recorders:
             attribute_names.append(self._get_attribute_name_from_recorder(recorder))
 
         attribute_names = set(attribute_names)
@@ -166,15 +245,16 @@ class PywrHydraRunner(PywrHydraExporter):
 
     def generate_array_recorder_resource_scenarios(self, client):
         """ Generate resource scenario data from NumpyArrayXXX recorders. """
-        if self._array_recorders is None:
+        if self._df_recorders is None:
             # TODO turn this on when logging is sorted out.
             # logger.info('No array recorders defined not results saved to Hydra.')
             return
 
-        for recorder in self._array_recorders:
+        for recorder in self._df_recorders:
             df = recorder.to_dataframe()
 
-            if self.output_resample_freq is not None:
+            # Resample timeseries if required
+            if isinstance(df.index, pandas.DatetimeIndex) and self.output_resample_freq is not None:
                 df = df.resample(self.output_resample_freq).mean()
 
             # Convert to JSON for saving in hydra
@@ -182,7 +262,6 @@ class PywrHydraRunner(PywrHydraExporter):
 
             # Get the attribute and its ID
             attribute_name = self._get_attribute_name_from_recorder(recorder)
-
             # Now we need to ensure there is a resource attribute for all nodes and recorder attributes
 
             try:
