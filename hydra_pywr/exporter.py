@@ -270,7 +270,7 @@ class PywrHydraExporter(BasePywrHydra):
                         # Check for any recorder flags "__recorder__"
                         try:
                             recorder_flags = value.pop('__recorder__')
-                        except (KeyError, AttributeError):
+                        except (KeyError, AttributeError, TypeError):
                             pass
                         else:
                             self._inline_parameter_recorder_flags[component['name']][attribute_name] = recorder_flags
