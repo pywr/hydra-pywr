@@ -253,6 +253,12 @@ class PywrHydraRunner(PywrHydraExporter):
         for recorder in self._df_recorders:
             df = recorder.to_dataframe()
 
+            columns = []
+            for name in df.columns.names:
+                columns.append([f'{name}: {v}' for v in df.columns.get_level_values(name)])
+
+            df.columns = [', '.join(values) for values in zip(*columns)]
+
             # Resample timeseries if required
             if isinstance(df.index, pandas.DatetimeIndex) and self.output_resample_freq is not None:
                 df = df.resample(self.output_resample_freq).mean()

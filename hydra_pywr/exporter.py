@@ -2,7 +2,8 @@ import json
 from past.builtins import basestring
 from .template import PYWR_EDGE_LINK_NAME, PYWR_CONSTRAINED_EDGE_LINK_NAME
 from .core import BasePywrHydra
-from hydra_pywr_common import PywrParameter, PywrRecorder, PywrParameterPattern, PywrParameterPatternReference, PywrNodeOutput
+from hydra_pywr_common import PywrParameter, PywrRecorder, PywrParameterPattern, PywrParameterPatternReference,\
+    PywrNodeOutput, PywrScenarios
 from pywr.nodes import NodeMeta
 from hydra_base.lib.HydraTypes.Registry import typemap
 import jinja2
@@ -64,6 +65,10 @@ class PywrHydraExporter(BasePywrHydra):
                     pywr_data[group_name].update(group_data)
                 else:
                     pywr_data[group_name] = group_data
+
+        scenarios = self.get_scenario_data()
+        if scenarios is not None:
+            pywr_data['scenarios'] = scenarios['scenarios']
 
         nodes = []
         for node, parameters, recorders in self.generate_pywr_nodes():
@@ -207,12 +212,14 @@ class PywrHydraExporter(BasePywrHydra):
             value = dataset['value']
 
             data_type = dataset['type']
+            hydra_type = typemap[data_type.upper()]
+            print(group_name, attribute_name, data_type, PywrParameter.tag)
 
             if group_name == 'parameters':
-                if data_type != PywrParameter.tag:
+                if not issubclass(hydra_type, PywrParameter):
                     continue
             elif group_name == 'recorders':
-                if data_type != PywrRecorder.tag:
+                if not issubclass(hydra_type, PywrRecorder):
                     continue
             else:
                 if not attribute_name.startswith('{}.'.format(group_name)):
@@ -229,6 +236,26 @@ class PywrHydraExporter(BasePywrHydra):
                 value = int(value)
 
             yield attribute_name, value
+
+    def get_scenario_data(self):
+
+        for resource_attribute in self.data['attributes']:
+            attribute = self.attributes[resource_attribute['attr_id']]
+
+            try:
+                resource_scenario = self._get_resource_scenario(resource_attribute['id'])
+            except ValueError:
+                continue
+            dataset = resource_scenario['dataset']
+            value = dataset['value']
+
+            data_type = dataset['type'].lower()
+
+            if data_type != PywrScenarios.tag.lower():
+                continue
+
+            return json.loads(value)
+        return None
 
     def _generate_component_attributes(self, component, pywr_node_type):
 
