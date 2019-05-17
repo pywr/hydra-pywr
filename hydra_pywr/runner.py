@@ -8,6 +8,7 @@ from pywr.recorders import NumpyArrayNodeRecorder, NumpyArrayStorageRecorder, Nu
     NumpyArrayParameterRecorder
 from pywr.recorders.progress import ProgressRecorder
 from .template import PYWR_ARRAY_RECORDER_ATTRIBUTES
+import os
 
 
 class PywrHydraRunner(PywrHydraExporter):
@@ -77,6 +78,12 @@ class PywrHydraRunner(PywrHydraExporter):
 
         # Force a setup regardless of whether the model has been run or setup before
         model.setup()
+
+        max_scenarios = os.environ.get('HYDRA_PYWR_MAX_SCENARIOS', None)
+        if max_scenarios is not None:
+            nscenarios = len(model.scenarios.combinations)
+            if nscenarios > max_scenarios:
+                raise RuntimeError(f'Number of scenarios ({nscenarios}) exceeds the maximum limit of {max_scenarios}.')
 
         # Now run the model.
         run_stats = model.run()
