@@ -21,9 +21,10 @@ class PywrHydraRunner(PywrHydraExporter):
     def _copy_scenario(self):
         # Now construct a scenario object
         scenario = self.data.scenarios[0]
-        scenario = copy.deepcopy(scenario)
-        scenario.resourcescenarios = []
-        return scenario
+        new_scenario = {k: v for k, v in scenario.items() if k is not 'resourcescenarios'}
+
+        new_scenario['resourcescenarios'] = []
+        return new_scenario
 
     def _delete_resource_scenarios(self, client):
         scenario = self.data.scenarios[0]
@@ -218,7 +219,7 @@ class PywrHydraRunner(PywrHydraExporter):
         # Convert the scenario from JSONObject to normal dict
         # This is required to ensure that the complete nested structure (of dicts)
         # is properly converted to JSONObject's by the client.
-        scenario = dict({k: v for k, v in self._copy_scenario().items()})
+        scenario = self._copy_scenario()
 
         # First add any new attributes required
         attribute_names = []
