@@ -248,18 +248,33 @@ class PywrHydraImporter(BasePywrHydra):
                 resource_attributes.append(resource_attribute)
                 hydra_resource_scenarios.append(resource_scenario)
 
-            # Try to get a coordinate from the pywr_node
-            x, y = None, None
+            # Try to get geometry from the pywr_node
+            geometry = None
             try:
-                x, y = pywr_node['position']['geographic']
+                geometry = pywr_node['position']['geographic']
             except KeyError:
                 pass
+
+            x, y = None, None
+            if geometry is not None:
+                if isinstance(geometry, list):
+                    x, y = geometry
+                    geometry = None  # Don't save this a layout
+                elif isinstance(geometry, dict):
+                    from shapely.geometry import shape
+                    rpoint = shape(geometry).representative_point()
+                    x = rpoint.x
+                    y = rpoint.y
+                else:
+                    raise ValueError(f'Node "{pywr_node["name"]}" position data not supported.')
 
             hydra_node = {
                 'id': node_id,
                 'name': pywr_node['name'],
                 'description': comment,
-                'layout': None,  # TODO this is a JSON string
+                'layout': {
+                    'geojson': geometry
+                },
                 'x': x,  # TODO add some tests with coordinates.
                 'y': y,
                 'attributes': resource_attributes,
