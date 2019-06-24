@@ -1,0 +1,59 @@
+{
+  "timestepper": {
+    "start": "2018-01-01",
+    "end": "2018-12-31",
+    "timestep": 1
+  },
+  "metadata": {
+    "description": "Exercise 1e from Pywr basic training.",
+    "title": "Exercise 1e - Aggregated nodes."
+  },
+  "edges": [
+    ["input1", "output1"],
+    ["input2", "output2"]
+  ],
+  "nodes": [
+    {
+      "name": "input1",
+      "type": "input",
+      "max_flow": 10,
+      "position": {
+        "geographic": [0, 0]
+      }
+    },
+    {
+      "name": "output1",
+      "type": "output",
+      "cost": -10,
+      "position": {
+        "geographic": [0, 50]
+      }
+    },
+    {
+      "name": "input2",
+      "type": "input",
+      "position": {
+        "geographic": [50, 50]
+      }
+    },
+    {
+      "name": "output2",
+      "type": "output",
+      "cost": -1,
+      "position": {
+        "geographic": [50, 100]
+      }
+    },
+    {
+      "name": "aggregated",
+      "type": "aggregatednode",
+      "factors": [1, 2],
+      "nodes": ["output1", "input2"],
+      "position": {
+        "geographic": [25, 50]
+      }
+    }
+
+  ]
+}
+

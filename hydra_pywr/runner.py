@@ -8,6 +8,7 @@ from pywr.recorders import NumpyArrayNodeRecorder, NumpyArrayStorageRecorder, Nu
     NumpyArrayParameterRecorder
 from pywr.recorders.progress import ProgressRecorder
 from .template import PYWR_ARRAY_RECORDER_ATTRIBUTES
+import os
 
 
 class PywrHydraRunner(PywrHydraExporter):
@@ -21,9 +22,10 @@ class PywrHydraRunner(PywrHydraExporter):
     def _copy_scenario(self):
         # Now construct a scenario object
         scenario = self.data.scenarios[0]
-        scenario = copy.deepcopy(scenario)
-        scenario.resourcescenarios = []
-        return scenario
+        new_scenario = {k: v for k, v in scenario.items() if k is not 'resourcescenarios'}
+
+        new_scenario['resourcescenarios'] = []
+        return new_scenario
 
     def _delete_resource_scenarios(self, client):
         scenario = self.data.scenarios[0]
@@ -77,6 +79,12 @@ class PywrHydraRunner(PywrHydraExporter):
         # Force a setup regardless of whether the model has been run or setup before
         model.setup()
 
+        max_scenarios = os.environ.get('HYDRA_PYWR_MAX_SCENARIOS', None)
+        if max_scenarios is not None:
+            nscenarios = len(model.scenarios.combinations)
+            if nscenarios > max_scenarios:
+                raise RuntimeError(f'Number of scenarios ({nscenarios}) exceeds the maximum limit of {max_scenarios}.')
+
         # Now run the model.
         run_stats = model.run()
 
@@ -114,7 +122,7 @@ class PywrHydraRunner(PywrHydraExporter):
         node = None
         if recorder.name is not None:
             if ':' in recorder.name:
-                node_name, _ = recorder.name.split(':', 1)
+                node_name, _ = recorder.name.rsplit(':', 1)
                 node_name = node_name.replace('__', '')
                 try:
                     node = recorder.model.nodes[node_name]
@@ -133,7 +141,7 @@ class PywrHydraRunner(PywrHydraExporter):
             attribute_name = recorder.__class__
         else:
             if ':' in recorder.name:
-                _, attribute_name = recorder.name.split(':', 1)
+                _, attribute_name = recorder.name.rsplit(':', 1)
             else:
                 attribute_name = recorder.name
 
@@ -182,7 +190,7 @@ class PywrHydraRunner(PywrHydraExporter):
         for parameter_name, flags in self._parameter_recorder_flags.items():
             p = model.parameters[parameter_name]
             if ':' in p.name:
-                recorder_name = p.name.split(':', 1)
+                recorder_name = p.name.rsplit(':', 1)
                 recorder_name[1] = 'simulated_' + recorder_name[1]
                 recorder_name = ':'.join(recorder_name)
             else:
@@ -218,7 +226,7 @@ class PywrHydraRunner(PywrHydraExporter):
         # Convert the scenario from JSONObject to normal dict
         # This is required to ensure that the complete nested structure (of dicts)
         # is properly converted to JSONObject's by the client.
-        scenario = dict({k: v for k, v in self._copy_scenario().items()})
+        scenario = self._copy_scenario()
 
         # First add any new attributes required
         attribute_names = []
@@ -252,6 +260,12 @@ class PywrHydraRunner(PywrHydraExporter):
 
         for recorder in self._df_recorders:
             df = recorder.to_dataframe()
+
+            columns = []
+            for name in df.columns.names:
+                columns.append([f'{name}: {v}' for v in df.columns.get_level_values(name)])
+
+            df.columns = [', '.join(values) for values in zip(*columns)]
 
             # Resample timeseries if required
             if isinstance(df.index, pandas.DatetimeIndex) and self.output_resample_freq is not None:
