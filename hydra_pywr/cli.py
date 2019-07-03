@@ -6,6 +6,7 @@ from .exporter import PywrHydraExporter
 from .runner import PywrHydraRunner
 from .importer import PywrHydraImporter
 from .template import register_template, unregister_template, migrate_network_template, TemplateExistsError
+from . import utils
 from hydra_client.click import hydra_app, make_plugins, write_plugins
 
 
@@ -113,6 +114,35 @@ def run_network_scenario(client, network_id, scenario_id, output_frequency=None,
     runner.save_pywr_results(client)
 
     click.echo(f'Pywr model run success! Network ID: {network_id}, Scenario ID: {scenario_id}')
+
+
+@hydra_app(category='network_utility', name='Step model')
+@cli.command()
+@click.pass_obj
+@click.option('-n', '--network-id', type=int, default=None)
+@click.option('-s', '--scenario-id', type=int, default=None)
+@click.option('-u', '--user-id', type=int, default=None)
+def step_model(obj, network_id, scenario_id, user_id):
+    client = get_logged_in_client(obj, user_id=user_id)
+    utils.apply_final_volumes_as_initial_volumes(client, network_id, scenario_id)
+    utils.progress_start_end_dates(client, network_id, scenario_id)
+
+
+@hydra_app(category='network_utility', name='Apply initial volumes')
+@cli.command()
+@click.pass_obj
+@click.option('-n', '--network-id', type=int, default=None)
+@click.option('-s', '--scenario-id', type=int, default=None)
+@click.option('-u', '--user-id', type=int, default=None)
+@click.option('-t', '--target-network-ids', multiple=True, type=int, default=None)
+def apply_initial_volumes_to_other_networks(obj, network_id, scenario_id, user_id, target_network_ids):
+
+    client = get_logged_in_client(obj, user_id=user_id)
+
+    for target_network_id in target_network_ids:
+        utils.apply_final_volumes_as_initial_volumes(client, target_network_id, scenario_id,
+                                                     source_network_id=network_id)
+
 
 
 @cli.command()
