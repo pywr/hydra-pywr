@@ -6,12 +6,12 @@ TEMPLATE_ID=$2
 DIR=$3
 
 
-for f in $DIR
+for f in ${DIR}/*
 do
 
 if [[ "$f" = *.json ]]
 then
-    echo ${PROJECT_ID};
+    echo ${f};
     hydra-pywr import --filename ${f} --template-id ${TEMPLATE_ID} -p ${PROJECT_ID} --run;
 fi
 done

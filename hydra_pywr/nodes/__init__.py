@@ -6,10 +6,10 @@ class DataFrameField(marshmallow.fields.Field):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-    def _serialize(self, value, attr, obj):
+    def _serialize(self, value, attr, obj, **kwargs):
         return value.to_json()
 
-    def _deserialize(self, value, attr, data):
+    def _deserialize(self, value, attr, data, **kwargs):
         df = pandas.DataFrame.from_dict(value)
         # Row ordering is not preserved by from_dict.
         # We return the dataframe with the same ordering in the rows and columns as given in value.
