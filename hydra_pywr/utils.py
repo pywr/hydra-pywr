@@ -28,15 +28,19 @@ def get_final_volumes(client, network_id, scenario_id):
             yield node, df.iloc[-1, 0]
 
 
-def apply_final_volumes_as_initial_volumes(client, network_id, scenario_id, source_network_id=None):
+def apply_final_volumes_as_initial_volumes(client, network_id, scenario_id, source_network_id=None,
+                                           source_scenario_id=None):
 
     attribute = client.get_attribute_by_name_and_dimension('initial_volume')
 
     if source_network_id is None:
         source_network_id = network_id
 
+    if source_scenario_id is None:
+        source_scenario_id = scenario_id
+
     node_data = {}
-    for node, new_volume in get_final_volumes(client, source_network_id, scenario_id):
+    for node, new_volume in get_final_volumes(client, source_network_id, source_scenario_id):
 
         # Fetch the node's data
         resource_scenarios = client.get_resource_data('NODE', node['id'], scenario_id)

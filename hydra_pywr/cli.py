@@ -135,13 +135,15 @@ def step_model(obj, network_id, scenario_id, user_id):
 @click.option('-s', '--scenario-id', type=int, default=None)
 @click.option('-u', '--user-id', type=int, default=None)
 @click.option('-t', '--target-network-ids', multiple=True, type=int, default=None)
-def apply_initial_volumes_to_other_networks(obj, network_id, scenario_id, user_id, target_network_ids):
+@click.option('-t', '--target-scenario-ids', multiple=True, type=int, default=None)
+def apply_initial_volumes_to_other_networks(obj, network_id, scenario_id, user_id, target_network_ids,
+                                            target_scenario_ids):
 
     client = get_logged_in_client(obj, user_id=user_id)
 
-    for target_network_id in target_network_ids:
-        utils.apply_final_volumes_as_initial_volumes(client, target_network_id, scenario_id,
-                                                     source_network_id=network_id)
+    for target_network_id, target_scenario_id in zip(target_network_ids, target_scenario_ids):
+        utils.apply_final_volumes_as_initial_volumes(client, target_network_id, target_scenario_id,
+                                                     source_network_id=network_id, source_scenario_id=scenario_id)
 
 
 
