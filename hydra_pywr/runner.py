@@ -3,6 +3,7 @@ import copy
 import pandas
 from pywr.model import Model
 from pywr.nodes import Node, Storage
+from pywr_dcopf.core import Generator, Load, Line, Battery
 from pywr.parameters import Parameter, DeficitParameter
 from pywr.recorders import NumpyArrayNodeRecorder, NumpyArrayStorageRecorder, NumpyArrayLevelRecorder, \
     NumpyArrayParameterRecorder
@@ -164,10 +165,10 @@ class PywrHydraRunner(PywrHydraExporter):
                     continue
 
                 if flag == 'timeseries':
-                    if isinstance(node, Node):
+                    if isinstance(node, (Node, Generator, Load, Line)):
                         name = '__{}__:{}'.format(node.name, 'simulated_flow')
                         NumpyArrayNodeRecorder(model, node, name=name)
-                    elif isinstance(node, Storage):
+                    elif isinstance(node, (Storage, Battery)):
                         name = '__{}__:{}'.format(node.name, 'simulated_volume')
                         NumpyArrayStorageRecorder(model, node, name=name)
                     else:
@@ -273,7 +274,7 @@ class PywrHydraRunner(PywrHydraExporter):
                 df = df.resample(self.output_resample_freq).mean()
 
             # Convert to JSON for saving in hydra
-            value = df.to_json(date_format='iso', date_unit='s')
+            value = df.to_timestamp().to_json(date_format='iso', date_unit='s')
 
             # Get the attribute and its ID
             attribute_name = self._get_attribute_name_from_recorder(recorder)

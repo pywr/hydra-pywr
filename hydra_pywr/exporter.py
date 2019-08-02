@@ -233,7 +233,10 @@ class PywrHydraExporter(BasePywrHydra):
             # Hydra opportunistically converts everything to native types
             # Some of the Pywr data should remain as string despite looking like a float/int
             if attribute_name == 'timestep' and group_name == 'timestepper':
-                value = int(value)
+                try:
+                    value = int(value)
+                except ValueError:
+                    pass
 
             yield attribute_name, value
 

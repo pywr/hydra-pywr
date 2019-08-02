@@ -437,10 +437,7 @@ class PywrHydraImporter(BasePywrHydra):
             if component_key in ('parameters', 'recorders'):
                 data_type = data_type_from_component_type(component_key, component_data['type']).tag
             else:
-                if component_key == 'timestepper' and component_name == 'timestep':
-                    data_type = 'SCALAR'
-                else:
-                    data_type = 'DESCRIPTOR'
+                data_type = 'DESCRIPTOR'
 
             attribute_name = self._attribute_name(component_key, component_name)
 
