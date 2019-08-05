@@ -213,7 +213,6 @@ class PywrHydraExporter(BasePywrHydra):
 
             data_type = dataset['type']
             hydra_type = typemap[data_type.upper()]
-            print(group_name, attribute_name, data_type, PywrParameter.tag)
 
             if group_name == 'parameters':
                 if not issubclass(hydra_type, PywrParameter):
