@@ -223,10 +223,28 @@ class MonthlyOutput(Output):
         min_flow = fields.ParameterReferenceField(allow_none=True)
         cost = fields.ParameterReferenceField(allow_none=True)
         max_flow = DataFrameField()
+        scenario = fields.ScenarioReferenceField(allow_none=True)
 
-    def __init__(self, model, name, **kwargs):
+    def __init__(self, model, name, scenario=None, **kwargs):
         flow_values = kwargs.pop('max_flow')
-        flow_param = MonthlyProfileParameter(model, flow_values.iloc[:, 0].values.astype(np.float64))
+
+        if scenario is None:
+            flow_param = MonthlyProfileParameter(model, flow_values.iloc[:, 0].values.astype(np.float64))
+        else:
+            # There should be multiple control curves defined.
+            nprofiles = flow_values.shape[1]
+            if nprofiles == scenario.size:
+                raise ValueError(f"The number of profiles ({nprofiles}) should equal the size of the "
+                                 f"scenario ({scenario.size}).")
+
+            profiles = []
+            for i in range(nprofiles):
+                profile = MonthlyProfileParameter(model, flow_values.iloc[:, i].values.astype(np.float64))
+                profiles.append(profile)
+
+            flow_param = ScenarioWrapperParameter(model, scenario, profiles)
+        self.scenario = scenario
+
         super().__init__(model, name, **kwargs)
         self.max_flow = flow_param
 
