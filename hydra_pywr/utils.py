@@ -1,5 +1,6 @@
 import pandas
-
+import logging
+logger
 
 def get_final_volumes(client, scenario_id):
 
@@ -44,11 +45,11 @@ def apply_final_volumes_as_initial_volumes(client, source_scenario_id):
             target_scenario_id = int(target_scenario_id.strip())
 
             # Cache the network_ids to prevent repeat calls to get_source (which is expensive)
-            if source_scenario_id in network_id_map:
-                target_network_id = network_id_map[source_scenario_id]
+            if target_scenario_id in network_id_map:
+                target_network_id = network_id_map[target_scenario_id]
             else:
                 target_network_id = client.get_scenario(target_scenario_id, include_data=False)['network_id']
-                network_id_map[source_scenario_id] = target_network_id
+                network_id_map[target_scenario_id] = target_network_id
 
             # Find the equivalent target_node
             target_node = client.get_node_by_name(target_network_id, source_node['name'])
