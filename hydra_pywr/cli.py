@@ -124,7 +124,7 @@ def run_network_scenario(client, network_id, scenario_id, output_frequency=None,
 @click.option('-u', '--user-id', type=int, default=None)
 def step_model(obj, network_id, scenario_id, user_id):
     client = get_logged_in_client(obj, user_id=user_id)
-    utils.apply_final_volumes_as_initial_volumes(client, network_id, scenario_id)
+    utils.apply_final_volumes_as_initial_volumes(client, scenario_id)
     utils.progress_start_end_dates(client, network_id, scenario_id)
 
 
