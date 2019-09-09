@@ -40,7 +40,8 @@ def apply_final_volumes_as_initial_volumes(client, source_scenario_id):
 
         for column, new_initial_volume in new_volumes.items():
             # Naming convention for ensemble names in this setup contains the scenario_id
-            _, target_scenario_id, _ = column.split('_')
+            _, target_scenario_id = column.split(':')
+            target_scenario_id = int(target_scenario_id.strip())
 
             # Cache the network_ids to prevent repeat calls to get_source (which is expensive)
             if source_scenario_id in network_id_map:
