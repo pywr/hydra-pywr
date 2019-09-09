@@ -1,6 +1,5 @@
 import pandas
-import logging
-logger
+
 
 def get_final_volumes(client, scenario_id):
 
