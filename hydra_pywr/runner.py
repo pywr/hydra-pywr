@@ -44,13 +44,13 @@ class PywrHydraRunner(PywrHydraExporter):
         for ra_id in ra_to_delete:
             client.delete_resource_scenario(scenario['id'], ra_id, quiet=True)
 
-    def load_pywr_model(self):
+    def load_pywr_model(self, solver=None):
         """ Create a Pywr model from the exported data. """
         pywr_data = self.get_pywr_data()
-        model = Model.load(pywr_data)
+        model = Model.load(pywr_data, solver=solver)
         self.model = model
 
-    def run_pywr_model(self):
+    def run_pywr_model(self, check=True):
         """ Run a Pywr model from the exported data.
 
         If no model has been loaded (see `load_pywr_model`) then a load is attempted.
@@ -73,8 +73,9 @@ class PywrHydraRunner(PywrHydraExporter):
             if hasattr(recorder, 'to_dataframe'):
                 df_recorders.append(recorder)
 
-        # Check the model
-        model.check()
+        if check:
+            # Check the model
+            model.check()
 
         # Force a setup regardless of whether the model has been run or setup before
         model.setup()

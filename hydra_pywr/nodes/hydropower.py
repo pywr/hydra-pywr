@@ -2,7 +2,7 @@ from pywr.nodes import Link, Storage, Output, Input, AggregatedNode
 from pywr.parameters.control_curves import ControlCurveInterpolatedParameter
 from pywr.parameters._thresholds import ParameterThresholdParameter
 from pywr.parameters import InterpolatedVolumeParameter, ConstantParameter, Parameter, MonthlyProfileParameter, \
-    AggregatedParameter
+    AggregatedParameter, ScenarioWrapperParameter
 from pywr.parameters._hydropower import HydropowerTargetParameter
 from pywr.recorders import HydropowerRecorder, NumpyArrayLevelRecorder, NumpyArrayNodeRecorder
 from pywr.schema import NodeSchema, fields
@@ -26,13 +26,36 @@ class LinearStorageReleaseControl(Link):
         cost = fields.ParameterReferenceField(allow_none=True)
         storage_node = fields.NodeField()
         release_values = DataFrameField()
+        scenario = fields.ScenarioReferenceField(allow_none=True)
 
-    def __init__(self, model, name, storage_node, release_values, **kwargs):
+    def __init__(self, model, name, storage_node, release_values, scenario=None, **kwargs):
 
-        control_curves = release_values['volume'].iloc[1:-1].astype(np.float64)
-        values = release_values['value'].astype(np.float64)
+        if scenario is None:
+            # Only one control curve should be defined. Get it explicitly
+            control_curves = release_values['volume'].iloc[1:-1].astype(np.float64)
+            values = release_values['value'].astype(np.float64)
+            max_flow_param = ControlCurveInterpolatedParameter(model, storage_node, control_curves, values)
 
-        max_flow_param = ControlCurveInterpolatedParameter(model, storage_node, control_curves, values)
+        else:
+            # There should be multiple control curves defined.
+            if release_values.shape[1] % 2 != 0:
+                raise ValueError("An even number of columns (i.e. pairs) is required for the release rules "
+                                 "when using a scenario.")
+
+            ncurves = release_values.shape[1] // 2
+            if ncurves != scenario.size:
+                raise ValueError(f"The number of curves ({ncurves}) should equal the size of the "
+                                 f"scenario ({scenario.size}).")
+
+            curves = []
+            for i in range(ncurves):
+                volume = release_values.iloc[1:-1, i*2]
+                values = release_values.iloc[:, i*2+1]
+                control_curve = ControlCurveInterpolatedParameter(model, storage_node, volume, values)
+                curves.append(control_curve)
+
+            max_flow_param = ScenarioWrapperParameter(model, scenario, curves)
+        self.scenario = scenario
         super().__init__(model, name, max_flow=max_flow_param, **kwargs)
 
 
@@ -200,10 +223,28 @@ class MonthlyOutput(Output):
         min_flow = fields.ParameterReferenceField(allow_none=True)
         cost = fields.ParameterReferenceField(allow_none=True)
         max_flow = DataFrameField()
+        scenario = fields.ScenarioReferenceField(allow_none=True)
 
-    def __init__(self, model, name, **kwargs):
+    def __init__(self, model, name, scenario=None, **kwargs):
         flow_values = kwargs.pop('max_flow')
-        flow_param = MonthlyProfileParameter(model, flow_values.iloc[:, 0].values.astype(np.float64))
+
+        if scenario is None:
+            flow_param = MonthlyProfileParameter(model, flow_values.iloc[:, 0].values.astype(np.float64))
+        else:
+            # There should be multiple control curves defined.
+            nprofiles = flow_values.shape[1]
+            if nprofiles == scenario.size:
+                raise ValueError(f"The number of profiles ({nprofiles}) should equal the size of the "
+                                 f"scenario ({scenario.size}).")
+
+            profiles = []
+            for i in range(nprofiles):
+                profile = MonthlyProfileParameter(model, flow_values.iloc[:, i].values.astype(np.float64))
+                profiles.append(profile)
+
+            flow_param = ScenarioWrapperParameter(model, scenario, profiles)
+        self.scenario = scenario
+
         super().__init__(model, name, **kwargs)
         self.max_flow = flow_param
 

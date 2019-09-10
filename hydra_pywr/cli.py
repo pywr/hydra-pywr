@@ -6,7 +6,9 @@ from .exporter import PywrHydraExporter
 from .runner import PywrHydraRunner
 from .importer import PywrHydraImporter
 from .template import register_template, unregister_template, migrate_network_template, TemplateExistsError
+from . import utils
 from hydra_client.click import hydra_app, make_plugins, write_plugins
+import pandas
 
 
 def get_client(hostname, **kwargs):
@@ -49,7 +51,9 @@ def cli(obj, username, password, hostname, session):
 @click.option('--template-id', type=int, default=None)
 @click.option('--projection', type=str, default=None)
 @click.option('--run/--no-run', default=False)
-def import_json(obj, filename, project_id, user_id, template_id, projection, run):
+@click.option('--solver', type=str, default=None)
+@click.option('--check-model/--no-check-model', default=True)
+def import_json(obj, filename, project_id, user_id, template_id, projection, run, solver, check_model):
     """ Import a Pywr JSON file into Hydra. """
     click.echo(f'Beginning import of "{filename}"! Project ID: {project_id}')
     client = get_logged_in_client(obj, user_id=user_id)
@@ -59,7 +63,7 @@ def import_json(obj, filename, project_id, user_id, template_id, projection, run
     click.echo(f'Successfully imported "{filename}"! Network ID: {network_id}, Scenario ID: {scenario_id}')
 
     if run:
-        run_network_scenario(client, network_id, scenario_id)
+        run_network_scenario(client, network_id, scenario_id, solver=solver, check_model=check_model)
 
 
 @hydra_app(category='export', name='Export to Pywr JSON')
@@ -93,21 +97,77 @@ def export_json(obj, data_dir, network_id, scenario_id, user_id, json_sort_keys,
 @click.option('-s', '--scenario-id', type=int, default=None)
 @click.option('-u', '--user-id', type=int, default=None)
 @click.option('--output-frequency', type=str, default=None)
-def run(obj, network_id, scenario_id, user_id, output_frequency):
+@click.option('--solver', type=str, default=None)
+@click.option('--check-model/--no-check-model', default=True)
+def run(obj, network_id, scenario_id, user_id, output_frequency, solver, check_model):
     """ Export, run and save a Pywr model from Hydra. """
     client = get_logged_in_client(obj, user_id=user_id)
-    run_network_scenario(client, network_id, scenario_id, output_frequency=output_frequency)
+    run_network_scenario(client, network_id, scenario_id, output_frequency=output_frequency,
+                         solver=solver, check_model=check_model)
 
 
-def run_network_scenario(client, network_id, scenario_id, output_frequency=None):
+def run_network_scenario(client, network_id, scenario_id, output_frequency=None, solver=None, check_model=True):
     runner = PywrHydraRunner.from_network_id(client, network_id, scenario_id,
                                              output_resample_freq=output_frequency)
 
-    runner.load_pywr_model()
-    runner.run_pywr_model()
+    runner.load_pywr_model(solver=solver)
+    runner.run_pywr_model(check=check_model)
     runner.save_pywr_results(client)
 
     click.echo(f'Pywr model run success! Network ID: {network_id}, Scenario ID: {scenario_id}')
+
+
+@hydra_app(category='network_utility', name='Step model')
+@cli.command()
+@click.pass_obj
+@click.option('-n', '--network-id', type=int, default=None)
+@click.option('-s', '--scenario-id', type=int, default=None)
+@click.option('--child-scenario-ids', type=int, default=None, multiple=True)
+@click.option('-u', '--user-id', type=int, default=None)
+def step_model(obj, network_id, scenario_id, child_scenario_ids, user_id):
+    client = get_logged_in_client(obj, user_id=user_id)
+    utils.apply_final_volumes_as_initial_volumes(client, scenario_id, child_scenario_ids)
+    utils.progress_start_end_dates(client, network_id, scenario_id)
+
+
+@hydra_app(category='network_utility', name='Apply initial volumes')
+@cli.command()
+@click.pass_obj
+@click.option('-n', '--network-id', type=int, default=None)
+@click.option('-s', '--scenario-id', type=int, default=None)
+@click.option('--child-scenario-ids', type=int, default=None, multiple=True)
+@click.option('-u', '--user-id', type=int, default=None)
+def apply_initial_volumes_to_other_networks(obj, network_id, scenario_id, child_scenario_ids, user_id):
+    client = get_logged_in_client(obj, user_id=user_id)
+    utils.apply_final_volumes_as_initial_volumes(client, scenario_id, child_scenario_ids)
+
+
+@hydra_app(category='network_utility', name='Step forward the game')
+@cli.command()
+@click.pass_obj
+@click.option('-n', '--network-id', type=int, default=None)
+@click.option('-s', '--scenario-id', type=int, default=None)
+@click.option('--child-scenario-ids', type=int, default=None, multiple=True)
+@click.option('--filename', type=click.Path(file_okay=True, dir_okay=False))
+@click.option('--attribute-name', type=str, default=None)
+@click.option('--index-col', type=str, default=None)
+@click.option('--create-new/--no-create-new', default=False)
+@click.option('-u', '--user-id', type=int, default=None)
+def step_game(obj, network_id, scenario_id, child_scenario_ids, filename, attribute_name, index_col,
+              create_new, user_id):
+    client = get_logged_in_client(obj, user_id=user_id)
+
+    # Create new scenarios in each of the networks
+    new_scenario_ids = utils.clone_scenarios(client, child_scenario_ids)
+
+    # Update the initial volumes
+    utils.apply_final_volumes_as_initial_volumes(client, scenario_id, new_scenario_ids)
+    # Load the new data
+    dataframe = pandas.read_csv(filename, index_col=index_col, parse_dates=True)
+    # Update the time-step and data for each scenario
+    for new_scenario_id in new_scenario_ids:
+        utils.import_dataframe(client, dataframe, new_scenario_id, attribute_name, create_new=create_new)
+        utils.progress_start_end_dates(client, new_scenario_id)
 
 
 @cli.command()
