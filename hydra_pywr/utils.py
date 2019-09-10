@@ -1,4 +1,23 @@
 import pandas
+import hydra_network_utils
+
+
+def import_dataframe(client, dataframe, scenario_id, attribute_name, create_new=False, data_type='PYWR_DATAFRAME'):
+
+    attribute = client.get_attribute_by_name_and_dimension(attribute_name, None)
+    attribute_id = attribute['id']
+
+    scenario = client.get_scenario(scenario_id, include_data=False)
+    network_id = scenario['network_id']
+
+    hydra_network_utils.import_dataframe(client, dataframe, network_id, scenario_id, attribute_id,
+                                         create_new=create_new, data_type=data_type)
+
+
+def clone_scenarios(client, scenarios_ids):
+    for scenario_id in scenarios_ids:
+        scenario = client.clone_scenario(scenario_id)
+        yield scenario['scenario_id']
 
 
 def get_final_volumes(client, scenario_id):
@@ -30,7 +49,7 @@ def get_final_volumes(client, scenario_id):
             yield node, {c: v for c, v in zip(df.columns, df.iloc[-1, :])}
 
 
-def apply_final_volumes_as_initial_volumes(client, source_scenario_id):
+def apply_final_volumes_as_initial_volumes(client, source_scenario_id, target_scenario_ids):
 
     attribute = client.get_attribute_by_name_and_dimension('initial_volume')
 
@@ -38,10 +57,7 @@ def apply_final_volumes_as_initial_volumes(client, source_scenario_id):
     node_data = []
     for source_node, new_volumes in get_final_volumes(client, source_scenario_id):
 
-        for column, new_initial_volume in new_volumes.items():
-            # Naming convention for ensemble names in this setup contains the scenario_id
-            _, target_scenario_id = column.split(':')
-            target_scenario_id = int(target_scenario_id.strip())
+        for target_scenario_id, (column, new_initial_volume) in zip(target_scenario_ids, new_volumes.items()):
 
             # Cache the network_ids to prevent repeat calls to get_source (which is expensive)
             if target_scenario_id in network_id_map:
@@ -78,7 +94,9 @@ def apply_final_volumes_as_initial_volumes(client, source_scenario_id):
         client.add_data_to_attribute(data['scenario_id'], data['resource_attribute_id'], data['dataset'])
 
 
-def progress_start_end_dates(client, network_id, scenario_id):
+def progress_start_end_dates(client, scenario_id):
+
+    network_id = client.get_scenario(scenario_id, include_data=False)['network_id']
 
     resource_scenarios = client.get_resource_data('NETWORK', network_id, scenario_id)
 
