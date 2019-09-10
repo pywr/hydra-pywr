@@ -233,7 +233,7 @@ class MonthlyOutput(Output):
         else:
             # There should be multiple control curves defined.
             nprofiles = flow_values.shape[1]
-            if nprofiles == scenario.size:
+            if nprofiles != scenario.size:
                 raise ValueError(f"The number of profiles ({nprofiles}) should equal the size of the "
                                  f"scenario ({scenario.size}).")
 
