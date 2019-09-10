@@ -158,7 +158,7 @@ def step_game(obj, network_id, scenario_id, child_scenario_ids, filename, attrib
     client = get_logged_in_client(obj, user_id=user_id)
 
     # Create new scenarios in each of the networks
-    new_scenario_ids = utils.clone_scenarios(client, child_scenario_ids)
+    new_scenario_ids = list(utils.clone_scenarios(client, child_scenario_ids))
 
     # Update the initial volumes
     utils.apply_final_volumes_as_initial_volumes(client, scenario_id, new_scenario_ids)
