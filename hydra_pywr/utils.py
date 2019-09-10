@@ -17,7 +17,7 @@ def import_dataframe(client, dataframe, scenario_id, attribute_name, create_new=
 def clone_scenarios(client, scenarios_ids):
     for scenario_id in scenarios_ids:
         scenario = client.clone_scenario(scenario_id)
-        yield scenario['scenario_id']
+        yield scenario['id']
 
 
 def get_final_volumes(client, scenario_id):
