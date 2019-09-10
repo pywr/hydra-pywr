@@ -151,10 +151,11 @@ def apply_initial_volumes_to_other_networks(obj, network_id, scenario_id, child_
 @click.option('--filename', type=click.Path(file_okay=True, dir_okay=False))
 @click.option('--attribute-name', type=str, default=None)
 @click.option('--index-col', type=str, default=None)
+@click.option('--data-type', type=str, default='PYWR_DATAFRAME')
 @click.option('--create-new/--no-create-new', default=False)
 @click.option('-u', '--user-id', type=int, default=None)
 def step_game(obj, network_id, scenario_id, child_scenario_ids, filename, attribute_name, index_col,
-              create_new, user_id):
+              data_type, create_new, user_id):
     client = get_logged_in_client(obj, user_id=user_id)
 
     # Create new scenarios in each of the networks
@@ -166,7 +167,8 @@ def step_game(obj, network_id, scenario_id, child_scenario_ids, filename, attrib
     dataframe = pandas.read_csv(filename, index_col=index_col, parse_dates=True)
     # Update the time-step and data for each scenario
     for new_scenario_id in new_scenario_ids:
-        utils.import_dataframe(client, dataframe, new_scenario_id, attribute_name, create_new=create_new)
+        utils.import_dataframe(client, dataframe, new_scenario_id, attribute_name,
+                               create_new=create_new, data_type=data_type)
         utils.progress_start_end_dates(client, new_scenario_id)
 
 
