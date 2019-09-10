@@ -1,5 +1,5 @@
 import pandas
-import hydra_network_utils
+from hydra_network_utils import data as data_utils
 
 
 def import_dataframe(client, dataframe, scenario_id, attribute_name, create_new=False, data_type='PYWR_DATAFRAME'):
@@ -10,7 +10,7 @@ def import_dataframe(client, dataframe, scenario_id, attribute_name, create_new=
     scenario = client.get_scenario(scenario_id, include_data=False)
     network_id = scenario['network_id']
 
-    hydra_network_utils.import_dataframe(client, dataframe, network_id, scenario_id, attribute_id,
+    data_utils.import_dataframe(client, dataframe, network_id, scenario_id, attribute_id,
                                          create_new=create_new, data_type=data_type)
 
 
