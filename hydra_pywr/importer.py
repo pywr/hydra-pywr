@@ -130,6 +130,14 @@ class PywrHydraImporter(BasePywrHydra):
             network_attributes.append(resource_attribute)
             resource_scenarios.append(resource_scenario)
 
+        if 'scenario_combinations' in self.data:
+            resource_attribute, resource_scenario = self._make_dataset_resource_attribute_and_scenario('scenario_combinations',
+                                                                                                       {'scenario_combinations': self.data['scenario_combinations']},
+                                                                                'PYWR_SCENARIO_COMBINATIONS', attribute_ids['scenario_combinations'],
+                                                                                encode_to_json=True)
+            network_attributes.append(resource_attribute)
+            resource_scenarios.append(resource_scenario)
+
         scenario = self.make_scenario(resource_scenarios)
 
         data = {
@@ -192,6 +200,9 @@ class PywrHydraImporter(BasePywrHydra):
         """ Generator to convert Pywr timestepper data in to Hydra attribute data. """
         if 'scenarios' in self.data:
             yield {'name': 'scenarios', 'description': ''}
+
+        if 'scenario_combinations' in self.data:
+            yield {'name': 'scenario_combinations', 'description': ''}
 
         for meta_key in ('metadata', 'timestepper'):
             for key in self.data[meta_key].keys():
