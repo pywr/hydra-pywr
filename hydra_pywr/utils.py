@@ -1,10 +1,30 @@
 import pandas
+from hydra_network_utils import data as data_utils
 
 
-def get_final_volumes(client, network_id, scenario_id):
+def import_dataframe(client, dataframe, scenario_id, attribute_name, create_new=False, data_type='PYWR_DATAFRAME', column=None):
+
+    attribute = client.get_attribute_by_name_and_dimension(attribute_name, None)
+    attribute_id = attribute['id']
+
+    scenario = client.get_scenario(scenario_id, include_data=False)
+    network_id = scenario['network_id']
+
+    data_utils.import_dataframe(client, dataframe, network_id, scenario_id, attribute_id, column,
+                                         create_new=create_new, data_type=data_type)
+
+
+def clone_scenarios(client, scenarios_ids):
+    for scenario_id in scenarios_ids:
+        scenario = client.clone_scenario(scenario_id)
+        yield scenario['id']
+
+
+def get_final_volumes(client, scenario_id):
 
     attribute = client.get_attribute_by_name_and_dimension('simulated_volume')
-    nodes = client.get_nodes(network_id)
+    scenario = client.get_scenario(scenario_id, include_data=False)
+    nodes = client.get_nodes(scenario['network_id'])
 
     for node in nodes:
         # Fetch the node's data
@@ -25,48 +45,58 @@ def get_final_volumes(client, network_id, scenario_id):
                 continue  # Skip non-datasets
 
             df = pandas.read_json(dataset['value'])
-            yield node, df.iloc[-1, 0]
+
+            yield node, {c: v for c, v in zip(df.columns, df.iloc[-1, :])}
 
 
-def apply_final_volumes_as_initial_volumes(client, network_id, scenario_id, source_network_id=None,
-                                           source_scenario_id=None):
+def apply_final_volumes_as_initial_volumes(client, source_scenario_id, target_scenario_ids):
 
     attribute = client.get_attribute_by_name_and_dimension('initial_volume')
 
-    if source_network_id is None:
-        source_network_id = network_id
+    network_id_map = {}
+    node_data = []
+    for source_node, new_volumes in get_final_volumes(client, source_scenario_id):
 
-    if source_scenario_id is None:
-        source_scenario_id = scenario_id
+        for target_scenario_id, (column, new_initial_volume) in zip(target_scenario_ids, new_volumes.items()):
 
-    node_data = {}
-    for node, new_volume in get_final_volumes(client, source_network_id, source_scenario_id):
+            # Cache the network_ids to prevent repeat calls to get_source (which is expensive)
+            if target_scenario_id in network_id_map:
+                target_network_id = network_id_map[target_scenario_id]
+            else:
+                target_network_id = client.get_scenario(target_scenario_id, include_data=False)['network_id']
+                network_id_map[target_scenario_id] = target_network_id
 
-        # Fetch the node's data
-        resource_scenarios = client.get_resource_data('NODE', node['id'], scenario_id)
-        for resource_scenario in resource_scenarios:
-            resource_attribute_id = resource_scenario['resource_attr_id']
-            resource_attribute = client.get_resource_attribute(resource_attribute_id)
+            # Find the equivalent target_node
+            target_node = client.get_node_by_name(target_network_id, source_node['name'])
 
-            if resource_attribute['attr_id'] != attribute['id']:
-                continue  # Skip the wrong attribute data
+            # Fetch the target node's data
+            resource_scenarios = client.get_resource_data('NODE', target_node['id'], target_scenario_id)
+            for resource_scenario in resource_scenarios:
+                resource_attribute_id = resource_scenario['resource_attr_id']
+                resource_attribute = client.get_resource_attribute(resource_attribute_id)
 
-            dataset = resource_scenario['dataset']
-            # Update the volume
-            dataset['value'] = new_volume
+                if resource_attribute['attr_id'] != attribute['id']:
+                    continue  # Skip the wrong attribute data
 
-            node_data[node['name']] = {
-                'node_id': node['id'],
-                'resource_attribute_id': resource_attribute['id'],
-                'dataset': dataset,
-            }
+                dataset = resource_scenario['dataset']
+                # Update the volume
+                dataset['value'] = new_initial_volume
+
+                node_data.append({
+                    'node_id': target_node['id'],
+                    'resource_attribute_id': resource_attribute['id'],
+                    'dataset': dataset,
+                    'scenario_id': target_scenario_id
+                })
 
     # Now update the database with the new data
-    for node_name, data in node_data.items():
-        client.add_data_to_attribute(scenario_id, data['resource_attribute_id'], data['dataset'])
+    for data in node_data:
+        client.add_data_to_attribute(data['scenario_id'], data['resource_attribute_id'], data['dataset'])
 
 
-def progress_start_end_dates(client, network_id, scenario_id):
+def progress_start_end_dates(client, scenario_id):
+
+    network_id = client.get_scenario(scenario_id, include_data=False)['network_id']
 
     resource_scenarios = client.get_resource_data('NETWORK', network_id, scenario_id)
 

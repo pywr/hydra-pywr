@@ -8,6 +8,7 @@ from .importer import PywrHydraImporter
 from .template import register_template, unregister_template, migrate_network_template, TemplateExistsError
 from . import utils
 from hydra_client.click import hydra_app, make_plugins, write_plugins
+import pandas
 
 
 def get_client(hostname, **kwargs):
@@ -121,10 +122,11 @@ def run_network_scenario(client, network_id, scenario_id, output_frequency=None,
 @click.pass_obj
 @click.option('-n', '--network-id', type=int, default=None)
 @click.option('-s', '--scenario-id', type=int, default=None)
+@click.option('--child-scenario-ids', type=int, default=None, multiple=True)
 @click.option('-u', '--user-id', type=int, default=None)
-def step_model(obj, network_id, scenario_id, user_id):
+def step_model(obj, network_id, scenario_id, child_scenario_ids, user_id):
     client = get_logged_in_client(obj, user_id=user_id)
-    utils.apply_final_volumes_as_initial_volumes(client, network_id, scenario_id)
+    utils.apply_final_volumes_as_initial_volumes(client, scenario_id, child_scenario_ids)
     utils.progress_start_end_dates(client, network_id, scenario_id)
 
 
@@ -133,18 +135,42 @@ def step_model(obj, network_id, scenario_id, user_id):
 @click.pass_obj
 @click.option('-n', '--network-id', type=int, default=None)
 @click.option('-s', '--scenario-id', type=int, default=None)
+@click.option('--child-scenario-ids', type=int, default=None, multiple=True)
 @click.option('-u', '--user-id', type=int, default=None)
-@click.option('-t', '--target-network-ids', multiple=True, type=int, default=None)
-@click.option('-t', '--target-scenario-ids', multiple=True, type=int, default=None)
-def apply_initial_volumes_to_other_networks(obj, network_id, scenario_id, user_id, target_network_ids,
-                                            target_scenario_ids):
+def apply_initial_volumes_to_other_networks(obj, network_id, scenario_id, child_scenario_ids, user_id):
+    client = get_logged_in_client(obj, user_id=user_id)
+    utils.apply_final_volumes_as_initial_volumes(client, scenario_id, child_scenario_ids)
 
+
+@hydra_app(category='network_utility', name='Step forward the game')
+@cli.command()
+@click.pass_obj
+@click.option('-n', '--network-id', type=int, default=None)
+@click.option('-s', '--scenario-id', type=int, default=None)
+@click.option('--child-scenario-ids', type=int, default=None, multiple=True)
+@click.option('--filename', type=click.Path(file_okay=True, dir_okay=False))
+@click.option('--attribute-name', type=str, default=None)
+@click.option('--index-col', type=str, default=None)
+@click.option('--column-name', type=str, default=None)
+@click.option('--data-type', type=str, default='PYWR_DATAFRAME')
+@click.option('--create-new/--no-create-new', default=False)
+@click.option('-u', '--user-id', type=int, default=None)
+def step_game(obj, network_id, scenario_id, child_scenario_ids, filename, attribute_name, index_col,
+              column_name, data_type, create_new, user_id):
     client = get_logged_in_client(obj, user_id=user_id)
 
-    for target_network_id, target_scenario_id in zip(target_network_ids, target_scenario_ids):
-        utils.apply_final_volumes_as_initial_volumes(client, target_network_id, target_scenario_id,
-                                                     source_network_id=network_id, source_scenario_id=scenario_id)
+    # Create new scenarios in each of the networks
+    new_scenario_ids = list(utils.clone_scenarios(client, child_scenario_ids))
 
+    # Update the initial volumes
+    utils.apply_final_volumes_as_initial_volumes(client, scenario_id, new_scenario_ids)
+    # Load the new data
+    dataframe = pandas.read_csv(filename, index_col=index_col, parse_dates=True)
+    # Update the time-step and data for each scenario
+    for new_scenario_id in new_scenario_ids:
+        utils.import_dataframe(client, dataframe, new_scenario_id, attribute_name,
+                               create_new=create_new, data_type=data_type, column=column_name)
+        utils.progress_start_end_dates(client, new_scenario_id)
 
 
 @cli.command()
