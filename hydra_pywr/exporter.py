@@ -8,6 +8,10 @@ from pywr.nodes import NodeMeta
 from hydra_base.lib.HydraTypes.Registry import typemap
 import jinja2
 from collections import defaultdict
+from .rules import exec_rules
+
+import logging
+log = logging.getLogger(__name__)
 
 COST_ALIASES = ['allocation penalty', 'allocation_penalty', 'Allocation Penalty']
 
@@ -36,6 +40,10 @@ class PywrHydraExporter(BasePywrHydra):
         # Fetch all the attributes
         attributes = client.get_attributes()
         attributes = {attr.id: attr for attr in attributes}
+
+        rules = client.get_resource_rules('NETWORK', network_id)
+
+        network.rules = rules
 
         # We also need the template to get the node types
         #template = client.get_template_by_name(pywr_template_name())
@@ -69,6 +77,10 @@ class PywrHydraExporter(BasePywrHydra):
         scenarios = self.get_scenario_data()
         if scenarios is not None:
             pywr_data['scenarios'] = scenarios['scenarios']
+
+        #this is executed here to allow the generate_pywr_nodes access to node
+        #schema definitions.
+        self.exec_rules()
 
         nodes = []
         for node, parameters, recorders in self.generate_pywr_nodes():
@@ -136,6 +148,14 @@ class PywrHydraExporter(BasePywrHydra):
                 return node
 
         raise ValueError('No node found with node_id: {}'.format(node_id))
+
+    def exec_rules(self):
+
+        rules = [r.value for r in self.data['rules']]
+
+        log.info("Exec-ing {} rules".format(len(rules)))
+
+        exec_rules(rules)
 
     def generate_pywr_nodes(self):
         """ Generator returning a Pywr dict for each node in the network. """

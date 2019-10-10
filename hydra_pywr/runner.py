@@ -41,12 +41,12 @@ class PywrHydraRunner(PywrHydraExporter):
                 ra_to_delete.append(ra_id)
 
         # Now delete them all
-        for ra_id in ra_to_delete:
-            client.delete_resource_scenario(scenario['id'], ra_id, quiet=True)
+        client.delete_resource_scenarios(scenario['id'], ra_to_delete, quiet=True)
 
     def load_pywr_model(self, solver=None):
         """ Create a Pywr model from the exported data. """
         pywr_data = self.get_pywr_data()
+ 
         model = Model.load(pywr_data, solver=solver)
         self.model = model
 
