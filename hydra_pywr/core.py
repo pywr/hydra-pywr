@@ -37,7 +37,7 @@ class BasePywrHydra:
         self.next_resource_attribute_id = -1
 
     def _make_dataset_resource_scenario(self, name, value, data_type, resource_attribute_id,
-                                        encode_to_json=False,):
+                                        encode_to_json=False, unit_id=None):
         """ A helper method to make a dataset, resource attribute and resource scenario. """
 
         # Create a dataset representing the value
@@ -46,6 +46,7 @@ class BasePywrHydra:
             'value': json.dumps(value) if encode_to_json else value,
             "hidden": "N",
             "type": data_type,
+            "unit_id": unit_id,
             "metadata": json.dumps({'json_encoded': encode_to_json})
         }
 

@@ -278,11 +278,17 @@ class PywrHydraRunner(PywrHydraExporter):
             # Get the attribute and its ID
             attribute_name = self._get_attribute_name_from_recorder(recorder)
             # Now we need to ensure there is a resource attribute for all nodes and recorder attributes
+            
+            #Get the hydra attribute object to its ID can be used to search for a unit for the dataset
+            attribute = self._get_attribute_from_name(attribute_name)
+
 
             try:
                 recorder_node = self._get_node_from_recorder(recorder)
             except AttributeError:
                 continue
+
+            unit_id = self._get_unit_from_type(recorder_node.name if recorder_node.parent is None else recorder_node.parent.name, attribute.id) 
 
             try:
                 resource_attribute_id = self._get_resource_attribute_id(recorder_node.name, attribute_name)
@@ -297,7 +303,6 @@ class PywrHydraRunner(PywrHydraExporter):
                             break
                 else:
                     continue
-                attribute = self._get_attribute_from_name(attribute_name)
 
                 # Try to get the resource attribute
                 resource_attribute = client.add_resource_attribute('NODE', node_id, attribute['id'], is_var='Y',
@@ -305,7 +310,7 @@ class PywrHydraRunner(PywrHydraExporter):
                 resource_attribute_id = resource_attribute['id']
 
             resource_scenario = self._make_dataset_resource_scenario(recorder.name, value, 'dataframe', resource_attribute_id,
-                                                                     encode_to_json=False)
+                                                                     encode_to_json=False, unit_id=unit_id)
 
             yield resource_scenario
 
