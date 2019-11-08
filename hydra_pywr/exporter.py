@@ -38,8 +38,11 @@ class PywrHydraExporter(BasePywrHydra):
         attributes = {attr.id: attr for attr in attributes}
 
         # We also need the template to get the node types
-        #template = client.get_template_by_name(pywr_template_name())
-        return cls(network, attributes, None, **kwargs)
+        template = None
+        if network.types is not None and len(network.types) > 0:
+            template_id = network.types[0]['template_id']
+            template = client.get_template(template_id)
+        return cls(network, attributes, template, **kwargs)
 
     def get_pywr_data(self):
 
@@ -128,6 +131,56 @@ class PywrHydraExporter(BasePywrHydra):
                     return resource_scenario
 
         raise ValueError('No resource scenario found for resource attribute id: {}'.format(resource_attribute_id))
+
+    def _get_unit_from_type(self, node_name, attr_id):
+        """
+            If a unit is specified in the attributes of a node type, then retrieve it here
+            so it can be used when generaing datasets.
+
+            args:
+                node_name (str) : THe name of the node, from which we can identify its type
+                attr_id   (int) : The ID of the attribute which we want to find the unit from
+            returns:
+                unit_id (int) or None
+        """
+
+        if self.template is None:
+            return None
+
+        node = self._get_node_by_name(node_name)
+
+        node_type_id = node.types[0].id
+        
+        type_attrs = []
+        for tmpl_type in self.template.templatetypes:
+            if tmpl_type.id == node_type_id:
+                type_attrs = tmpl_type.typeattrs
+                break
+
+        for type_attr in type_attrs:
+            if type_attr.attr_id == attr_id:
+                return type_attr.unit_id
+
+        return None
+
+    def _get_node_by_name(self, node_name):
+        """
+            Find a node by its name.
+            This is allowed because Hydra node names are unique within a network
+
+            args:
+                node_name (str): The name of the node
+            returns:
+                a Node JSONObject 
+            raises:
+                ValueError: if the node does not exist
+        """
+
+        for node in self.data['nodes']:
+            if node['name'] == node_name:
+                return node
+
+        raise ValueError('No node found with node_name: {}'.format(node_name))
 
     def _get_node(self, node_id):
 
