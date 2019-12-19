@@ -83,6 +83,11 @@ def export_json(obj, data_dir, network_id, scenario_id, user_id, json_sort_keys,
     data = exporter.get_pywr_data()
     title = data['metadata']['title']
 
+    #check if the output folder exists and create it if not
+    if not os.path.isdir(data_dir):
+        #exist_ok sets unix the '-p' functionality to create the whole path
+        os.makedirs(data_dir, exist_ok=True)
+
     filename = os.path.join(data_dir, f'{title}.json')
     with open(filename, mode='w') as fh:
         json.dump(data, fh, sort_keys=json_sort_keys, indent=json_indent)
@@ -200,8 +205,8 @@ def template_register(obj, config, update):
         register_template(client, config_name=config, update=update)
     except TemplateExistsError:
         click.echo('The template is already registered. To force an updated use the --update option.')
-    
-    
+
+
 @template.command('unregister')
 @click.option('-c', '--config', type=str, default='full')
 @click.pass_obj
