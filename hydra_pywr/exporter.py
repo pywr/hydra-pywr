@@ -151,7 +151,7 @@ class PywrHydraExporter(BasePywrHydra):
 
     def exec_rules(self):
 
-        rules = [r.value for r in self.data['rules']]
+        rules = [r.value for r in self.data['rules'] if r.status.lower() == 'a']
 
         log.info("Exec-ing {} rules".format(len(rules)))
 
