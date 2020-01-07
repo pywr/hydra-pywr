@@ -43,7 +43,9 @@ def cli(obj, username, password, hostname, session):
 
 
 @hydra_app(category='import', name='Import Pywr JSON')
-@cli.command(name='import')
+@cli.command(name='import', context_settings=dict(
+    ignore_unknown_options=True,
+    allow_extra_args=True))
 @click.pass_obj
 @click.option('--filename', type=click.Path(file_okay=True, dir_okay=False, exists=True))
 @click.option('-p', '--project-id', type=int)
@@ -53,7 +55,7 @@ def cli(obj, username, password, hostname, session):
 @click.option('--run/--no-run', default=False)
 @click.option('--solver', type=str, default=None)
 @click.option('--check-model/--no-check-model', default=True)
-def import_json(obj, filename, project_id, user_id, template_id, projection, run, solver, check_model):
+def import_json(obj, filename, project_id, user_id, template_id, projection, run, solver, check_model, *args):
     """ Import a Pywr JSON file into Hydra. """
     click.echo(f'Beginning import of "{filename}"! Project ID: {project_id}')
     client = get_logged_in_client(obj, user_id=user_id)
@@ -67,7 +69,9 @@ def import_json(obj, filename, project_id, user_id, template_id, projection, run
 
 
 @hydra_app(category='export', name='Export to Pywr JSON')
-@cli.command(name='export')
+@cli.command(name='export', context_settings=dict(
+    ignore_unknown_options=True,
+    allow_extra_args=True))
 @click.pass_obj
 @click.option('--data-dir', default='/tmp')
 @click.option('-n', '--network-id', type=int, default=None)
@@ -96,7 +100,9 @@ def export_json(obj, data_dir, network_id, scenario_id, user_id, json_sort_keys,
 
 
 @hydra_app(category='model', name='Run Pywr')
-@cli.command()
+@cli.command(context_settings=dict(
+    ignore_unknown_options=True,
+    allow_extra_args=True))
 @click.pass_obj
 @click.option('-n', '--network-id', type=int, default=None)
 @click.option('-s', '--scenario-id', type=int, default=None)
@@ -107,6 +113,14 @@ def export_json(obj, data_dir, network_id, scenario_id, user_id, json_sort_keys,
 def run(obj, network_id, scenario_id, user_id, output_frequency, solver, check_model):
     """ Export, run and save a Pywr model from Hydra. """
     client = get_logged_in_client(obj, user_id=user_id)
+
+    if network_id is None:
+        raise Exception('No network specified.')
+    if scenario_id is None:
+        raise Exception('No scenario specified')
+    if user_id is None:
+        raise Exception('No User specified')
+
     run_network_scenario(client, network_id, scenario_id, output_frequency=output_frequency,
                          solver=solver, check_model=check_model)
 
@@ -123,7 +137,9 @@ def run_network_scenario(client, network_id, scenario_id, output_frequency=None,
 
 
 @hydra_app(category='network_utility', name='Step model')
-@cli.command()
+@cli.command(context_settings=dict(
+    ignore_unknown_options=True,
+    allow_extra_args=True))
 @click.pass_obj
 @click.option('-n', '--network-id', type=int, default=None)
 @click.option('-s', '--scenario-id', type=int, default=None)
@@ -136,7 +152,9 @@ def step_model(obj, network_id, scenario_id, child_scenario_ids, user_id):
 
 
 @hydra_app(category='network_utility', name='Apply initial volumes')
-@cli.command()
+@cli.command(context_settings=dict(
+    ignore_unknown_options=True,
+    allow_extra_args=True))
 @click.pass_obj
 @click.option('-n', '--network-id', type=int, default=None)
 @click.option('-s', '--scenario-id', type=int, default=None)
@@ -148,7 +166,9 @@ def apply_initial_volumes_to_other_networks(obj, network_id, scenario_id, child_
 
 
 @hydra_app(category='network_utility', name='Step forward the game')
-@cli.command()
+@cli.command(context_settings=dict(
+    ignore_unknown_options=True,
+    allow_extra_args=True))
 @click.pass_obj
 @click.option('-n', '--network-id', type=int, default=None)
 @click.option('-s', '--scenario-id', type=int, default=None)
