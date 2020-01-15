@@ -1,6 +1,7 @@
 """ Module to generate a Hydra template from Pywr.
 """
 # TODO import the other domains
+from pywr_dcopf.core import *
 from pywr.domains.river import *
 from pywr.nodes import NodeMeta, Node, Storage
 from pywr.recorders import NumpyArrayNodeRecorder, NumpyArrayStorageRecorder
@@ -56,8 +57,7 @@ class TemplateExistsError(ValueError):
 
 def pywr_template_name(config_name):
     """ The name of the Hydra template for Pywr. """
-    return 'Pywr {} template (version: {}, git hash: {})'.format(config_name, pywr.__version__,
-                                                                 pywr.__git_hash__[:6])
+    return 'Pywr {} template (version: {})'.format(config_name, pywr.__version__)
 
 
 def generate_pywr_attributes():

@@ -3,7 +3,7 @@ from past.builtins import basestring
 from .template import PYWR_EDGE_LINK_NAME, PYWR_CONSTRAINED_EDGE_LINK_NAME
 from .core import BasePywrHydra
 from hydra_pywr_common import PywrParameter, PywrRecorder, PywrParameterPattern, PywrParameterPatternReference,\
-    PywrNodeOutput, PywrScenarios
+    PywrNodeOutput, PywrScenarios, PywrScenarioCombinations
 from pywr.nodes import NodeMeta
 from hydra_base.lib.HydraTypes.Registry import typemap
 import jinja2
@@ -81,6 +81,10 @@ class PywrHydraExporter(BasePywrHydra):
         #this is executed here to allow the generate_pywr_nodes access to node
         #schema definitions.
         self.exec_rules()
+
+        scenario_combinations = self.get_scenario_combinations_data()
+        if scenario_combinations is not None:
+            pywr_data['scenario_combinations'] = scenario_combinations['scenario_combinations']
 
         nodes = []
         for node, parameters, recorders in self.generate_pywr_nodes():
@@ -233,7 +237,6 @@ class PywrHydraExporter(BasePywrHydra):
 
             data_type = dataset['type']
             hydra_type = typemap[data_type.upper()]
-            print(group_name, attribute_name, data_type, PywrParameter.tag)
 
             if group_name == 'parameters':
                 if not issubclass(hydra_type, PywrParameter):
@@ -253,7 +256,10 @@ class PywrHydraExporter(BasePywrHydra):
             # Hydra opportunistically converts everything to native types
             # Some of the Pywr data should remain as string despite looking like a float/int
             if attribute_name == 'timestep' and group_name == 'timestepper':
-                value = int(value)
+                try:
+                    value = int(value)
+                except ValueError:
+                    pass
 
             yield attribute_name, value
 
@@ -272,6 +278,26 @@ class PywrHydraExporter(BasePywrHydra):
             data_type = dataset['type'].lower()
 
             if data_type != PywrScenarios.tag.lower():
+                continue
+
+            return json.loads(value)
+        return None
+
+    def get_scenario_combinations_data(self):
+
+        for resource_attribute in self.data['attributes']:
+            attribute = self.attributes[resource_attribute['attr_id']]
+
+            try:
+                resource_scenario = self._get_resource_scenario(resource_attribute['id'])
+            except ValueError:
+                continue
+            dataset = resource_scenario['dataset']
+            value = dataset['value']
+
+            data_type = dataset['type'].lower()
+
+            if data_type != PywrScenarioCombinations.tag.lower():
                 continue
 
             return json.loads(value)
