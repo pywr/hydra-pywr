@@ -53,18 +53,17 @@ class PywrHydraImporter(BasePywrHydra):
     def import_data(self, client, project_id, projection=None):
 
         # First the attributes must be added.
-        attributes = self.add_attributes_request_data()
+        attributes = list(self.add_attributes_request_data())
 
         # The response attributes have ids now.
         response_attributes = client.add_attributes(attributes)
 
         # Convert to a simple dict for local processing.
         # TODO change this variable name to map or lookup
-        attribute_ids = {a.name: a.id for a in response_attributes}
+        attribute_ids = {a.name.lower(): a.id for a in response_attributes}
 
         # Now we try to create the network
         network = self.add_network_request_data(attribute_ids, project_id, projection=projection)
-
         hydra_network = client.add_network(network)
 
         # Get the added scenario_id. There should only be one scenario
@@ -384,7 +383,7 @@ class PywrHydraImporter(BasePywrHydra):
 
             # This the attribute corresponding to the component.
             # It should have a positive id and already be entered in the hydra database.
-            attribute_id = attribute_ids[attribute_name]
+            attribute_id = attribute_ids[attribute_name.lower()]
             yield self._make_dataset_resource_attribute_and_scenario(attribute_name, component_data, data_type,
                                                                      attribute_id, **kwargs)
 
@@ -432,7 +431,13 @@ class PywrHydraImporter(BasePywrHydra):
         except KeyError:
             components = {}
 
+        #Recorders and parameters can result in duplicate attributes.
+        #To avoid this, we keep track of duplicates and add them as a list within
+        #a single attribute, and change the data type
+        attribute_data_registry = {}
+
         for component_name, component_data in components.items():
+
             if component_key == 'metadata':
                 if component_name in ('title', 'description'):
                     # These names are saved on the hydra network directly (name and descripton)
@@ -454,8 +459,26 @@ class PywrHydraImporter(BasePywrHydra):
 
             # This the attribute corresponding to the component.
             # It should have a positive id and already be entered in the hydra database.
-            attribute_id = attribute_ids[attribute_name]
+            attribute_id = attribute_ids[attribute_name.lower()]
 
-            yield self._make_dataset_resource_attribute_and_scenario(attribute_name, component_data, data_type,
+            attribute_data = {'attribute_name':attribute_name,
+                              'data':{component_name:component_data},
+                              'data_type':data_type,
+                              'attribute_id':attribute_id}
+
+            if attribute_data_registry.get(attribute_name):
+                attribute_data_registry[attribute_name]['data'][component_name] = component_data
+            else:
+                attribute_data_registry[attribute_name] = attribute_data
+
+        for attribute_name, attribute_data in attribute_data_registry.items():
+            if attribute_name == 'capacity:capex':
+                log.info(f"capacity:capex: {attribute_data}")
+            attribute_name = attribute_data['attribute_name']
+            data = attribute_data['data']
+            if len(data) == 1:
+                data = list(data.values())[0]
+            data_type = attribute_data['data_type']
+            attribute_id=attribute_data['attribute_id']
+            yield self._make_dataset_resource_attribute_and_scenario(attribute_name, data, data_type,
                                                                      attribute_id, **kwargs)
-
