@@ -10,6 +10,8 @@ from pywr.recorders import NumpyArrayNodeRecorder, NumpyArrayStorageRecorder, Nu
 from pywr.recorders.progress import ProgressRecorder
 from .template import PYWR_ARRAY_RECORDER_ATTRIBUTES
 import os
+import logging
+log = logging.getLogger(__name__)
 
 
 class PywrHydraRunner(PywrHydraExporter):
@@ -47,7 +49,6 @@ class PywrHydraRunner(PywrHydraExporter):
     def load_pywr_model(self, solver=None):
         """ Create a Pywr model from the exported data. """
         pywr_data = self.get_pywr_data()
- 
         model = Model.load(pywr_data, solver=solver)
         self.model = model
 
@@ -57,7 +58,7 @@ class PywrHydraRunner(PywrHydraExporter):
         If no model has been loaded (see `load_pywr_model`) then a load is attempted.
         """
         if self.model is None:
-            self.load_pywr_model()
+            self.load_pywr_model(solver='glpk-edge')
 
         model = self.model
 
@@ -272,9 +273,18 @@ class PywrHydraRunner(PywrHydraExporter):
             # Resample timeseries if required
             if isinstance(df.index, pandas.DatetimeIndex) and self.output_resample_freq is not None:
                 df = df.resample(self.output_resample_freq).mean()
+            elif isinstance(df.index, pandas.PeriodIndex):
+                df.index = df.index.to_timestamp()
+
+            #clean up column names, as some can look like: ' : 0' so turn it into '0'
+            if df.columns[0].strip().find(':') == 0:
+                new_col_names = []
+                for colname in df.columns:
+                    new_col_names.append(colname.split(':')[1].strip())
+                df.columns = new_col_names
 
             # Convert to JSON for saving in hydra
-            value = df.to_timestamp().to_json(date_format='iso', date_unit='s')
+            value = df.to_json(date_format='iso', date_unit='s')
 
             # Get the attribute and its ID
             attribute_name = self._get_attribute_name_from_recorder(recorder)
@@ -309,5 +319,3 @@ class PywrHydraRunner(PywrHydraExporter):
                                                                      encode_to_json=False)
 
             yield resource_scenario
-
-
