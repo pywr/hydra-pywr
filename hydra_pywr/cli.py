@@ -106,11 +106,12 @@ def export_json(obj, data_dir, network_id, scenario_id, user_id, json_sort_keys,
 @click.pass_obj
 @click.option('-n', '--network-id', type=int, default=None)
 @click.option('-s', '--scenario-id', type=int, default=None)
+@click.option('-s', '--template-id', type=int, default=None)
 @click.option('-u', '--user-id', type=int, default=None)
 @click.option('--output-frequency', type=str, default=None)
 @click.option('--solver', type=str, default=None)
 @click.option('--check-model/--no-check-model', default=True)
-def run(obj, network_id, scenario_id, user_id, output_frequency, solver, check_model):
+def run(obj, network_id, scenario_id, template_id, user_id, output_frequency, solver, check_model):
     """ Export, run and save a Pywr model from Hydra. """
     client = get_logged_in_client(obj, user_id=user_id)
 
@@ -121,12 +122,12 @@ def run(obj, network_id, scenario_id, user_id, output_frequency, solver, check_m
     if user_id is None:
         raise Exception('No User specified')
 
-    run_network_scenario(client, network_id, scenario_id, output_frequency=output_frequency,
+    run_network_scenario(client, network_id, scenario_id, template_id, output_frequency=output_frequency,
                          solver=solver, check_model=check_model)
 
-
-def run_network_scenario(client, network_id, scenario_id, output_frequency=None, solver=None, check_model=True):
+def run_network_scenario(client, network_id, scenario_id, template_id, output_frequency=None, solver=None, check_model=True):
     runner = PywrHydraRunner.from_network_id(client, network_id, scenario_id,
+                                             template_id=template_id,
                                              output_resample_freq=output_frequency)
 
     runner.load_pywr_model(solver=solver)
