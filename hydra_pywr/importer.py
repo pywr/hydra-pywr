@@ -335,6 +335,7 @@ class PywrHydraImporter(BasePywrHydra):
         """ Generate resource attribute, resource scenario and datasets for a Pywr node.
 
         """
+        node_name = pywr_node['name']
         node_type = pywr_node['type'].lower()
         node_klass = NodeMeta.node_registry[node_type]
         schema = node_klass.Schema()
@@ -384,6 +385,7 @@ class PywrHydraImporter(BasePywrHydra):
             # This the attribute corresponding to the component.
             # It should have a positive id and already be entered in the hydra database.
             attribute_id = attribute_ids[attribute_name.lower()]
+
             yield self._make_dataset_resource_attribute_and_scenario(attribute_name, component_data, data_type,
                                                                      attribute_id, **kwargs)
 

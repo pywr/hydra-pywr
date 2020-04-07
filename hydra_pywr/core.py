@@ -80,6 +80,7 @@ class BasePywrHydra:
     @classmethod
     def is_component_a_node_attribute(cls, component_name, node_name=None):
         """Test whether a component's name should be inferred as a node level attribute in Hydra. """
+
         if node_name is None:
             # This should probably be done with regex
             if cls._node_attribute_component_delimiter not in component_name:
