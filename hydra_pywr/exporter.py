@@ -369,7 +369,7 @@ class PywrHydraExporter(BasePywrHydra):
                     # Is a pattern of parameters
                     context = self._make_component_pattern_context(component, pywr_node_type)
                     parameters.update(self.generate_parameters_from_patterns(value, context))
-                elif isinstance(hydra_type, PywrParameter) or issubclass(hydra_type, PywrParameter):
+                elif issubclass(hydra_type, PywrParameter):
                     # Must be a parameter
                     value = json.loads(value)
                     try:
