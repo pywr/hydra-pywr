@@ -65,7 +65,8 @@ def import_json(obj, filename, project_id, user_id, template_id, projection, run
     click.echo(f'Successfully imported "{filename}"! Network ID: {network_id}, Scenario ID: {scenario_id}')
 
     if run:
-        run_network_scenario(client, network_id, scenario_id, solver=solver, check_model=check_model)
+        run_network_scenario(client, network_id, scenario_id, template_id,
+                             solver=solver, check_model=check_model)
 
 
 @hydra_app(category='export', name='Export to Pywr JSON')
