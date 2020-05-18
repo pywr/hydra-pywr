@@ -1,17 +1,35 @@
-from pywr.parameters import parameter_registry, Parameter
-import pandas
+"""
+    Module to execute hydra rules (parameter, recorder and node subclasses) defined
+    in python in Hydra.
+    This is housed in a separate module to control the context (imports) which
+    the executed code can use. This avoids importing lots of unused imports in
+    the main exporter file
+"""
+import logging
 
-from pywr.nodes import Link, Storage, Output, Input, AggregatedNode
-from pywr.parameters.control_curves import ControlCurveInterpolatedParameter
-from pywr.parameters._thresholds import ParameterThresholdParameter
-from pywr.parameters._hydropower import HydropowerTargetParameter
-from pywr.schema import NodeSchema, fields
-from pywr.domains.river import Catchment
+import pandas
 import numpy as np
+import scipy
+
 import marshmallow
-from . import DataFrameField
+
+from pywr.parameters import *
+from pywr.recorders import *
+
+from pywr.nodes import *
+from pywr.parameters.control_curves import *
+from pywr.parameters._thresholds import *
+from pywr.parameters._hydropower import *
+from pywr.schema import *
+from pywr.domains.river import *
+
+#In case use wants to namespace stuff by parameters/recorders, the recommended way.
 from pywr import recorders
 from pywr import parameters
+
+from .nodes import DataFrameField
+
+LOG = logging.getLogger('hydra_pywr')
 
 """
     This file is the environment in which all the node types, parameters and recorders
@@ -19,14 +37,21 @@ from pywr import parameters
 
     The idea is that the code being executed only has
     access to a subset of libraries, and cannot use 'os' or 'sys', for example.
-    
+
     The imports at the top define which modules are available to the hydra rules.
 """
 
+
+
 def exec_rules(rules):
     for rule in rules:
-
-        if rule.find('import ') >= 0:
+        LOG.info("Executing rule %s", rule.name)
+        #allow importing hydra_pywr but nothing else
+        if rule.value.find('import ') >= 0:
             raise PermissionError("Calling 'import' is not permitted. Please contact the hydra-pywr maintainer to request additional libraries be made available.")
 
-        exec(rule)
+        try:
+            exec(rule.value)
+        except Exception as e:
+            LOG.exception(e)
+            LOG.critical("Unable to execute rule %s. Error was: %s", rule.name, e)

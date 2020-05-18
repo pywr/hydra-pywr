@@ -155,7 +155,7 @@ class PywrHydraExporter(BasePywrHydra):
 
     def exec_rules(self):
 
-        rules = [r.value for r in self.data['rules'] if r.status.lower() == 'a']
+        rules = [r for r in self.data['rules'] if r.status.lower() == 'a']
 
         log.info("Exec-ing {} rules".format(len(rules)))
 
@@ -332,7 +332,36 @@ class PywrHydraExporter(BasePywrHydra):
             dataset_type = dataset['type']
             value = dataset['value']
 
+            hydra_type = typemap[dataset_type.upper()]
+
             if attribute_name in schema.fields:
+                #TODO: This is repeated. fix.
+                if issubclass(hydra_type, PywrParameterPatternReference):
+                    # Is a pattern of parameters
+                    context = self._make_component_pattern_context(component, pywr_node_type)
+                    parameters.update(self.generate_parameters_from_patterns(value, context))
+                elif issubclass(hydra_type, PywrParameter):
+                    component_name = self.make_node_attribute_component_name(
+                        component['name'],
+                        attribute_name
+                    )
+
+                    # Must be a parameter
+                    param_value = json.loads(value)
+                    try:
+                        recorder_flags = value.pop('__recorder__')
+                    except (KeyError, AttributeError):
+                        pass
+                    else:
+                        self._parameter_recorder_flags[component_name] = recorder_flags
+
+                    parameters[component_name] = param_value
+
+                    value = component_name
+
+
+
+
                 # The attribute is part of the node definition
                 if isinstance(value, basestring):
                     try:
@@ -355,8 +384,10 @@ class PywrHydraExporter(BasePywrHydra):
             else:
                 # Otherwise the attribute is either a parameter or recorder
                 # defined as a node attribute (for convenience).
-                hydra_type = typemap[dataset_type.upper()]
-                component_name = self.make_node_attribute_component_name(component['name'], attribute_name)
+                component_name = self.make_node_attribute_component_name(
+                    component['name'],
+                    attribute_name
+                )
                 if issubclass(hydra_type, PywrNodeOutput):
                     value = json.loads(value)
                     try:

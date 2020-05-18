@@ -3,7 +3,7 @@ import copy
 import pandas
 from pywr.model import Model
 from pywr.nodes import Node, Storage
-from pywr_dcopf.core import Generator, Load, Line, Battery
+#from pywr_dcopf.core import Generator, Load, Line, Battery
 from pywr.parameters import Parameter, DeficitParameter
 from pywr.recorders import NumpyArrayNodeRecorder, NumpyArrayStorageRecorder, NumpyArrayLevelRecorder, \
     NumpyArrayParameterRecorder
@@ -166,10 +166,11 @@ class PywrHydraRunner(PywrHydraExporter):
                     continue
 
                 if flag == 'timeseries':
-                    if isinstance(node, (Node, Generator, Load, Line)):
+                    #if isinstance(node, (Node, Generator, Load, Line)):
+                    if isinstance(node, (Node)):
                         name = '__{}__:{}'.format(node.name, 'simulated_flow')
                         NumpyArrayNodeRecorder(model, node, name=name)
-                    elif isinstance(node, (Storage, Battery)):
+                    elif isinstance(node, (Storage)):
                         name = '__{}__:{}'.format(node.name, 'simulated_volume')
                         NumpyArrayStorageRecorder(model, node, name=name)
                     else:

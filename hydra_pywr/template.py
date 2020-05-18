@@ -1,7 +1,7 @@
 """ Module to generate a Hydra template from Pywr.
 """
 # TODO import the other domains
-from pywr_dcopf.core import *
+#from pywr_dcopf.core import *
 from pywr.domains.river import *
 from pywr.nodes import NodeMeta, Node, Storage
 from pywr.recorders import NumpyArrayNodeRecorder, NumpyArrayStorageRecorder
