@@ -18,3 +18,7 @@ class DataFrameField(marshmallow.fields.Field):
         row_order = value[list(value.keys())[0]]
         df = df.loc[row_order, list(value.keys())]
         return df
+
+
+from .hydropower import *
+from .ukwrp import *
