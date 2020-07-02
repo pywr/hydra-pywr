@@ -18,13 +18,13 @@ def test_export(session_with_pywr_network, root_user_id):
     # Fetch the network
     network = hydra_base.get_network(pywr_network_id, user_id=root_user_id, include_data='Y')
     # Fetch all the attributes
-    attributes = hydra_base.get_attributes()
+    attributes = hydra_base.get_attributes(user_id=root_user_id)
     # TODO not sure why this returns SQLAlchemy object?
     # TODO rename this to map/lookup
     attributes = {attr.id: JSONObject(attr) for attr in attributes}
 
     # We also need the template to get the node types
-    template = JSONObject(hydra_base.get_template_by_name(pywr_template_name('Full')))
+    template = JSONObject(hydra_base.get_template_by_name(pywr_template_name('Full'), user_id=root_user_id))
 
     exporter = PywrHydraExporter(network, attributes, template)
 
@@ -35,4 +35,3 @@ def test_export(session_with_pywr_network, root_user_id):
         pywr_data = json.load(fh)
 
     assert_identical_pywr_data(pywr_data, pywr_data_exported)
-

@@ -15,7 +15,7 @@ import json
 def test_add_network(pywr_json_filename, session_with_pywr_template, projectmaker, root_user_id):
     project = projectmaker.create()
 
-    template = JSONObject(hydra_base.get_template_by_name(pywr_template_name('Full')))
+    template = JSONObject(hydra_base.get_template_by_name(pywr_template_name('Full')), user_id=root_user_id)
 
     importer = PywrHydraImporter(pywr_json_filename, template)
 
@@ -23,7 +23,7 @@ def test_add_network(pywr_json_filename, session_with_pywr_template, projectmake
     attributes = [JSONObject(a) for a in importer.add_attributes_request_data()]
 
     # The response attributes have ids now.
-    response_attributes = hydra_base.add_attributes(attributes)
+    response_attributes = hydra_base.add_attributes(attributes, user_id=root_user_id)
 
     # Convert to a simple dict for local processing.
     # TODO change this variable name to map or lookup
@@ -45,7 +45,7 @@ def test_add_template(session, root_user_id):
     attributes = [JSONObject(a) for a in generate_pywr_attributes()]
 
     # The response attributes have ids now.
-    response_attributes = hydra_base.add_attributes(attributes)
+    response_attributes = hydra_base.add_attributes(attributes, user_id=root_user_id)
 
     # Convert to a simple dict for local processing.
     attribute_ids = {a.name: a.id for a in response_attributes}
@@ -53,9 +53,9 @@ def test_add_template(session, root_user_id):
     default_data_set_ids = {}
     for attribute_name, dataset in PYWR_DEFAULT_DATASETS.items():
         hydra_dataset = hydra_base.add_dataset(flush=True, **dataset)
-        default_data_set_ids[attribute_name] = hydra_dataset.id    
+        default_data_set_ids[attribute_name] = hydra_dataset.id
 
     config = load_template_config('full')
     template = generate_pywr_template(attribute_ids, default_data_set_ids, config)
 
-    hydra_base.add_template(JSONObject(template))
+    hydra_base.add_template(JSONObject(template), user_id=root_user_id)
