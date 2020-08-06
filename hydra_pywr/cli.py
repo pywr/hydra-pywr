@@ -127,6 +127,7 @@ def run(obj, network_id, scenario_id, template_id, user_id, output_frequency, so
                          solver=solver, check_model=check_model)
 
 def run_network_scenario(client, network_id, scenario_id, template_id, output_frequency=None, solver=None, check_model=True):
+
     runner = PywrHydraRunner.from_network_id(client, network_id, scenario_id,
                                              template_id=template_id,
                                              output_resample_freq=output_frequency)

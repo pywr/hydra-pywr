@@ -2,10 +2,7 @@ import pandas
 from hydra_network_utils import data as data_utils
 
 
-def import_dataframe(client, dataframe, scenario_id, attribute_name, create_new=False, data_type='PYWR_DATAFRAME', column=None):
-
-    attribute = client.get_attribute_by_name_and_dimension(attribute_name, None)
-    attribute_id = attribute['id']
+def import_dataframe(client, dataframe, scenario_id, attribute_id, create_new=False, data_type='PYWR_DATAFRAME', column=None):
 
     scenario = client.get_scenario(scenario_id, include_data=False)
     network_id = scenario['network_id']
@@ -22,7 +19,7 @@ def clone_scenarios(client, scenarios_ids):
 
 def get_final_volumes(client, scenario_id):
 
-    attribute = client.get_attribute_by_name_and_dimension('simulated_volume')
+    attribute = None
     scenario = client.get_scenario(scenario_id, include_data=False)
     nodes = client.get_nodes(scenario['network_id'])
 
@@ -32,8 +29,15 @@ def get_final_volumes(client, scenario_id):
         for resource_scenario in resource_scenarios:
             resource_attribute_id = resource_scenario['resource_attr_id']
             resource_attribute = client.get_resource_attribute(resource_attribute_id)
+            this_attr_id = resource_attribute['attr_id']
 
-            if resource_attribute['attr_id'] != attribute['id']:
+            if attribute is None:
+                possible_attr = client.get_attribute_by_id(this_attr_id)
+                if possible_attr.name == 'simulated_volume':
+                    attribute = possible_attr
+
+
+            if attribute is None or this_attr_id != attribute['id']:
                 continue
 
             attribute_name = attribute['name']
@@ -51,7 +55,15 @@ def get_final_volumes(client, scenario_id):
 
 def apply_final_volumes_as_initial_volumes(client, source_scenario_id, target_scenario_ids):
 
-    attribute = client.get_attribute_by_name_and_dimension('initial_volume')
+    scenario = client.get_scenario(source_scenario_id, include_data=False)
+
+    #Find the correct initial volume
+    attribute = None
+    network_attributes = client.get_all_network_attributes(scenario['network_id'])
+    for network_attr in network_attributes:
+        if network_attr.name == 'initial_volume':
+            attribute = network_attr
+            break
 
     network_id_map = {}
     node_data = []

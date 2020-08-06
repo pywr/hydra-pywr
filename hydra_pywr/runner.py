@@ -21,6 +21,7 @@ class PywrHydraRunner(PywrHydraExporter):
         super(PywrHydraRunner, self).__init__(*args, **kwargs)
         self.model = None
         self._df_recorders = None
+        self._non_df_recorders = None
 
     def _copy_scenario(self):
         # Now construct a scenario object
@@ -71,9 +72,12 @@ class PywrHydraRunner(PywrHydraExporter):
         self._add_parameter_flagged_recorders(model)
 
         df_recorders = []
+        non_df_recorders = []
         for recorder in model.recorders:
             if hasattr(recorder, 'to_dataframe'):
                 df_recorders.append(recorder)
+            else:
+                non_df_recorders.append(recorder)
 
         if check:
             # Check the model
@@ -93,6 +97,7 @@ class PywrHydraRunner(PywrHydraExporter):
 
         # Save these for later
         self._df_recorders = df_recorders
+        self._non_df_recorders = non_df_recorders
 
     def _get_resource_attribute_id(self, node_name, attribute_name):
 
@@ -236,6 +241,8 @@ class PywrHydraRunner(PywrHydraExporter):
         attribute_names = []
         for recorder in self._df_recorders:
             attribute_names.append(self._get_attribute_name_from_recorder(recorder))
+        for recorder in self._non_df_recorders:
+            attribute_names.append(self._get_attribute_name_from_recorder(recorder))
 
         attribute_names = set(attribute_names)
         attributes = []
@@ -287,36 +294,76 @@ class PywrHydraRunner(PywrHydraExporter):
             # Convert to JSON for saving in hydra
             value = df.to_json(date_format='iso', date_unit='s')
 
-            # Get the attribute and its ID
-            attribute_name = self._get_attribute_name_from_recorder(recorder)
-            # Now we need to ensure there is a resource attribute for all nodes and recorder attributes
+            resource_scenario = self._make_recorder_resource_scenario(client,
+                                                                      recorder,
+                                                                      value,
+                                                                      'dataframe')
 
-            try:
-                recorder_node = self._get_node_from_recorder(recorder)
-            except AttributeError:
+            if resource_scenario is None:
                 continue
 
+            yield resource_scenario
+
+        if self._non_df_recorders is None:
+            # TODO turn this on when logging is sorted out.
+            # logger.info('No array recorders defined not results saved to Hydra.')
+            return
+
+        #TODO merge this and the above as this is a duplicate
+        for recorder in self._non_df_recorders:
             try:
-                resource_attribute_id = self._get_resource_attribute_id(recorder_node.name, attribute_name)
-            except ValueError:
-                for node in self.data['nodes']:
-                    if node['name'] == recorder_node.name:
-                        node_id = node['id']
-                        break
-                    if recorder_node.parent is not None:
-                        if node['name'] == recorder_node.parent.name:
-                            node_id = node['id']
-                            break
-                else:
-                    continue
-                attribute = self._get_attribute_from_name(attribute_name)
+                value = list(recorder.values())
+            except NotImplementedError:
+                continue
 
-                # Try to get the resource attribute
-                resource_attribute = client.add_resource_attribute('NODE', node_id, attribute['id'], is_var='Y',
-                                                                   error_on_duplicate=False)
-                resource_attribute_id = resource_attribute['id']
+            resource_scenario = self._make_recorder_resource_scenario(client,
+                                                                      recorder,
+                                                                      value,
+                                                                      'array')
 
-            resource_scenario = self._make_dataset_resource_scenario(recorder.name, value, 'dataframe', resource_attribute_id,
-                                                                     encode_to_json=False)
+            if resource_scenario is None:
+                continue
 
             yield resource_scenario
+
+    def _make_recorder_resource_scenario(self, client, recorder, value, data_type):
+        # Get the attribute and its ID
+        attribute_name = self._get_attribute_name_from_recorder(recorder)
+        # Now we need to ensure there is a resource attribute for all nodes and recorder attributes
+
+        try:
+            recorder_node = self._get_node_from_recorder(recorder)
+        except AttributeError:
+            return None
+
+        try:
+            resource_attribute_id = self._get_resource_attribute_id(recorder_node.name,
+                                                                    attribute_name)
+        except ValueError:
+            for node in self.data['nodes']:
+                if node['name'] == recorder_node.name:
+                    node_id = node['id']
+                    break
+                if recorder_node.parent is not None:
+                    if node['name'] == recorder_node.parent.name:
+                        node_id = node['id']
+                        break
+            else:
+                return None
+
+            attribute = self._get_attribute_from_name(attribute_name)
+
+            # Try to get the resource attribute
+            resource_attribute = client.add_resource_attribute('NODE',
+                                                               node_id,
+                                                               attribute['id'],
+                                                               is_var='Y',
+                                                               error_on_duplicate=False)
+            resource_attribute_id = resource_attribute['id']
+
+        resource_scenario = self._make_dataset_resource_scenario(recorder.name,
+                                                                 value,
+                                                                 data_type,
+                                                                 resource_attribute_id,
+                                                                 encode_to_json=False)
+        return resource_scenario
