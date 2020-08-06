@@ -32,18 +32,24 @@ class BasePywrHydra:
     _node_attribute_component_affix = '__'
     _node_attribute_component_delimiter = ':'
 
+    ignore_json_encoding_data_types = ['descriptor', 'scalar']
+
     def __init__(self):
         # Default internal variables
         self.next_resource_attribute_id = -1
 
     def _make_dataset_resource_scenario(self, name, value, data_type, resource_attribute_id,
-                                        encode_to_json=False,):
+                                        encode_to_json=False):
         """ A helper method to make a dataset, resource attribute and resource scenario. """
+
+        if data_type.lower() in self.ignore_json_encoding_data_types:
+            encode_to_json = False
+
 
         # Create a dataset representing the value
         dataset = {
             'name': name,
-            'value': json.dumps(value) if encode_to_json else value,
+            'value': json.dumps(value) if encode_to_json is True else value,
             "hidden": "N",
             "type": data_type,
             "metadata": json.dumps({'json_encoded': encode_to_json})
@@ -60,7 +66,6 @@ class BasePywrHydra:
 
     def _make_dataset_resource_attribute_and_scenario(self, name, value, data_type, attribute_id, **kwargs):
         """ A helper method to make a dataset, resource attribute and resource scenario. """
-
         resource_attribute_id = self.next_resource_attribute_id
         self.next_resource_attribute_id -= 1
 
