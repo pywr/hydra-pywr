@@ -396,7 +396,9 @@ class PywrHydraImporter(BasePywrHydra):
             else:
                 attribute_name = component_name
         else:
-            attribute_name = '{}.{}'.format(component_key, component_name)
+#            attribute_name = '{}.{}'.format(component_key, component_name)
+            attribute_name = component_key
+
         return attribute_name
 
     def attributes_from_component_dict(self, component_key):
