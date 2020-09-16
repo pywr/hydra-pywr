@@ -150,6 +150,8 @@ class PywrHydraRunner(PywrHydraExporter):
         else:
             if ':' in recorder.name:
                 _, attribute_name = recorder.name.rsplit(':', 1)
+            elif '.' in recorder.name:
+                attribute_name = recorder.name.split('.')[0]
             else:
                 attribute_name = recorder.name
 
