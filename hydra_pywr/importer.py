@@ -442,10 +442,12 @@ class PywrHydraImporter(BasePywrHydra):
 
         for component_name, component_data in components.items():
 
-            if component_key == 'metadata':
-                if component_name in ('title', 'description'):
+            if component_key.lower() == 'metadata':
+                if component_name in ('title', 'description', 'minimum_version'):
                     # These names are saved on the hydra network directly (name and descripton)
                     # therefore do not add as a attributes as well.
+                    continue
+            if component_key.lower() == 'timestepper':
                     continue
 
             # Determine whether this component should be store on as a node attribute.
