@@ -349,7 +349,7 @@ class PywrHydraExporter(BasePywrHydra):
                     # Must be a parameter
                     param_value = json.loads(value)
                     try:
-                        recorder_flags = value.pop('__recorder__')
+                        recorder_flags = param_value.pop('__recorder__')
                     except (KeyError, AttributeError):
                         pass
                     else:
