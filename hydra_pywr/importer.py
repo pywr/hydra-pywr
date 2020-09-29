@@ -358,6 +358,12 @@ class PywrHydraImporter(BasePywrHydra):
                     log.warning(f'No Hydra data type for Pywr field "{name}"'
                                 f' on node type "{node_type}" found.')
 
+                #TODO: hack to ignore these when they reference parameters elsewhere
+                if data_type.lower() == 'descriptor' and pywr_node[name].find(f"__{node_name}__") >= 0:
+
+                    log.warn(f"Ignoring descriptor %s on attribute %s, node %s as this it is assumed this is defined as a parameter, and so will be set as an attribute through the parameters.", pywr_node[name], name, node_name)
+                    continue
+
             # Key is the attribute name. The attributes need to already by added to the
             # database and hence have a valid id.
             attribute_id = attribute_ids[name]
@@ -395,8 +401,9 @@ class PywrHydraImporter(BasePywrHydra):
                 attribute_name = component_name.split(self._node_attribute_component_delimiter, 1)[-1]
             else:
                 attribute_name = component_name
+        elif component_key == 'timestepper':
+            attribute_name = '{}.{}'.format(component_key, component_name)
         else:
-#            attribute_name = '{}.{}'.format(component_key, component_name)
             attribute_name = component_key
 
         return attribute_name
@@ -446,8 +453,6 @@ class PywrHydraImporter(BasePywrHydra):
                 if component_name in ('title', 'description', 'minimum_version'):
                     # These names are saved on the hydra network directly (name and descripton)
                     # therefore do not add as a attributes as well.
-                    continue
-            if component_key.lower() == 'timestepper':
                     continue
 
             # Determine whether this component should be store on as a node attribute.
