@@ -26,12 +26,14 @@ class PywrHydraExporter(BasePywrHydra):
         self.data = data
         self.attributes = attributes
         self.template = template
+        self.attr_unit_map = {}
 
         self._parameter_recorder_flags = {}
         self._inline_parameter_recorder_flags = defaultdict(dict)
         self._node_recorder_flags = {}
 
         self._pattern_templates = None
+
 
     @classmethod
     def from_network_id(cls, client, network_id, scenario_id, template_id=None, **kwargs):
@@ -41,13 +43,31 @@ class PywrHydraExporter(BasePywrHydra):
         attributes = client.get_attributes()
         attributes = {attr.id: attr for attr in attributes}
 
+
         rules = client.get_resource_rules('NETWORK', network_id)
 
         network.rules = rules
 
+        template = None
+
+        if template_id is not None:
+            template = client.get_template(template_id)
+        elif len(network.types) == 1:
+            template = client.get_template(network.types[0].template_id)
+
+
         # We also need the template to get the node types
         #template = client.get_template_by_name(pywr_template_name())
-        return cls(network, attributes, None, **kwargs)
+        return cls(network, attributes, template, **kwargs)
+
+    def make_attr_unit_map(self):
+        """
+            Create a mapping between an attribute ID and its unit, as defined
+            in the template
+        """
+        for templatetype in self.template.templatetypes:
+            for typeattr in templatetype.typeattrs:
+                self.attr_unit_map[typeattr.attr_id] = typeattr.unit_id
 
     def get_pywr_data(self):
 

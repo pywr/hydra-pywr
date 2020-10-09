@@ -50,7 +50,7 @@ def cli(obj, username, password, hostname, session):
 @click.option('--filename', type=click.Path(file_okay=True, dir_okay=False, exists=True))
 @click.option('-p', '--project-id', type=int)
 @click.option('-u', '--user-id', type=int, default=None)
-@click.option('--template-id', type=int, default=None)
+@click.option('--template-id', type=int)
 @click.option('--projection', type=str, default=None)
 @click.option('--run/--no-run', default=False)
 @click.option('--solver', type=str, default=None)
@@ -58,6 +58,16 @@ def cli(obj, username, password, hostname, session):
 def import_json(obj, filename, project_id, user_id, template_id, projection, run, solver, check_model, *args):
     """ Import a Pywr JSON file into Hydra. """
     click.echo(f'Beginning import of "{filename}"! Project ID: {project_id}')
+
+    if  filename is None:
+        raise Exception("No file specified")
+
+    if project_id is None:
+        raise Exception("No project specified")
+
+    if template_id is None:
+        raise Exception("No template specified")
+
     client = get_logged_in_client(obj, user_id=user_id)
     importer = PywrHydraImporter.from_client(client, filename, template_id)
     network_id, scenario_id = importer.import_data(client, project_id, projection=projection)
@@ -107,7 +117,7 @@ def export_json(obj, data_dir, network_id, scenario_id, user_id, json_sort_keys,
 @click.pass_obj
 @click.option('-n', '--network-id', type=int, default=None)
 @click.option('-s', '--scenario-id', type=int, default=None)
-@click.option('-s', '--template-id', type=int, default=None)
+@click.option('-t', '--template-id', type=int, default=None)
 @click.option('-u', '--user-id', type=int, default=None)
 @click.option('--output-frequency', type=str, default=None)
 @click.option('--solver', type=str, default=None)

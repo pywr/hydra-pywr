@@ -23,6 +23,9 @@ class PywrHydraRunner(PywrHydraExporter):
         self._df_recorders = None
         self._non_df_recorders = None
 
+
+        self.make_attr_unit_map()
+
     def _copy_scenario(self):
         # Now construct a scenario object
         scenario = self.data.scenarios[0]
@@ -40,7 +43,7 @@ class PywrHydraRunner(PywrHydraExporter):
         # Compile a list of resource attributes to delete
         for resource_scenario in scenario['resourcescenarios']:
             ra_id = resource_scenario['resource_attr_id']
-            ra_is_var = ra_is_var_map[ra_id]
+            ra_is_var = ra_is_var_map.get(ra_id, 'N')
             if ra_is_var == 'Y':
                 ra_to_delete.append(ra_id)
 
@@ -295,7 +298,6 @@ class PywrHydraRunner(PywrHydraExporter):
 
             # Convert to JSON for saving in hydra
             value = df.to_json(date_format='iso', date_unit='s')
-
             resource_scenario = self._make_recorder_resource_scenario(client,
                                                                       recorder,
                                                                       value,
@@ -331,6 +333,8 @@ class PywrHydraRunner(PywrHydraExporter):
     def _make_recorder_resource_scenario(self, client, recorder, value, data_type):
         # Get the attribute and its ID
         attribute_name = self._get_attribute_name_from_recorder(recorder)
+        attribute = self._get_attribute_from_name(attribute_name)
+
         # Now we need to ensure there is a resource attribute for all nodes and recorder attributes
 
         try:
@@ -353,8 +357,6 @@ class PywrHydraRunner(PywrHydraExporter):
             else:
                 return None
 
-            attribute = self._get_attribute_from_name(attribute_name)
-
             # Try to get the resource attribute
             resource_attribute = client.add_resource_attribute('NODE',
                                                                node_id,
@@ -363,9 +365,27 @@ class PywrHydraRunner(PywrHydraExporter):
                                                                error_on_duplicate=False)
             resource_attribute_id = resource_attribute['id']
 
+        unit_id = self.attr_unit_map.get(attribute.id)
+
         resource_scenario = self._make_dataset_resource_scenario(recorder.name,
                                                                  value,
                                                                  data_type,
                                                                  resource_attribute_id,
+                                                                 unit_id=unit_id,
                                                                  encode_to_json=False)
         return resource_scenario
+
+    def make_attr_unit_map(self):
+        """
+            Create a mapping between an attribute ID and its unit, as defined
+            in the template
+        """
+        if self.template is None:
+            log.info("Cannot make unit map. Template is Null")
+            return
+
+        for templatetype in self.template.templatetypes:
+            for typeattr in templatetype.typeattrs:
+                self.attr_unit_map[typeattr.attr_id] = typeattr.unit_id
+
+

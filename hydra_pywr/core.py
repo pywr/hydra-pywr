@@ -40,7 +40,7 @@ class BasePywrHydra:
         self.next_resource_attribute_id = -1
 
     def _make_dataset_resource_scenario(self, name, value, data_type, resource_attribute_id,
-                                        encode_to_json=False):
+                                        unit_id=None, encode_to_json=False):
         """ A helper method to make a dataset, resource attribute and resource scenario. """
 
         if data_type.lower() in self.ignore_json_encoding_data_types:
@@ -53,6 +53,7 @@ class BasePywrHydra:
             'value': json.dumps(value) if encode_to_json is True else value,
             "hidden": "N",
             "type": data_type,
+            "unit_id": unit_id,
             "metadata": json.dumps({'json_encoded': encode_to_json})
         }
 
@@ -65,12 +66,18 @@ class BasePywrHydra:
         # Finally return resource attribute and resource scenario
         return resource_scenario
 
-    def _make_dataset_resource_attribute_and_scenario(self, name, value, data_type, attribute_id, **kwargs):
+    def _make_dataset_resource_attribute_and_scenario(self, name, value, data_type,
+                                                      attribute_id, unit_id=None, **kwargs):
         """ A helper method to make a dataset, resource attribute and resource scenario. """
         resource_attribute_id = self.next_resource_attribute_id
         self.next_resource_attribute_id -= 1
 
-        resource_scenario = self._make_dataset_resource_scenario(name, value, data_type, resource_attribute_id, **kwargs)
+        resource_scenario = self._make_dataset_resource_scenario(name,
+                                                                 value,
+                                                                 data_type,
+                                                                 resource_attribute_id,
+                                                                 unit_id=unit_id,
+                                                                 **kwargs)
 
         # Create a resource attribute linking the resource scenario to the node
         resource_attribute = {

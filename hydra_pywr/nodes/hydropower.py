@@ -227,6 +227,11 @@ class MonthlyOutput(Output):
 
     def __init__(self, model, name, scenario=None, **kwargs):
         flow_values = kwargs.pop('max_flow')
+        try:
+            if flow_values is not None and int(flow_values.index[-1]) != len(flow_values.index):
+                raise Exception("Invalid dataframe")
+        except:
+            import pudb; pudb.set_trace()
 
         if scenario is None:
             flow_param = MonthlyProfileParameter(model, flow_values.iloc[:, 0].values.astype(np.float64))

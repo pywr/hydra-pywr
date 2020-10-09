@@ -25,6 +25,8 @@ class PywrHydraImporter(BasePywrHydra):
             data = json.load(data)
 
         self.data = data
+        self.attr_unit_map = {}
+        self.attr_name_map = {}
 
         self.next_node_id = -1
 
@@ -50,10 +52,27 @@ class PywrHydraImporter(BasePywrHydra):
             description = ''
         return description
 
+    def make_attr_unit_map(self):
+        """
+            Create a mapping between an attribute ID and its unit, as defined
+            in the template
+        """
+        if self.template is None:
+            log.info("Cannot build unit map as no template was specified.")
+            return
+
+        for templatetype in self.template.templatetypes:
+            for typeattr in templatetype.typeattrs:
+                self.attr_unit_map[typeattr.attr_id] = typeattr.unit_id
+
+        log.info("Units map created")
+
     def import_data(self, client, project_id, projection=None):
 
+        self.make_attr_unit_map()
+
         # First the attributes must be added.
-        attributes = list(self.add_attributes_request_data())
+        attributes = list(self.add_attributes_request_data(client))
 
         # The response attributes have ids now.
         response_attributes = client.add_attributes(attributes)
@@ -72,15 +91,30 @@ class PywrHydraImporter(BasePywrHydra):
 
         return hydra_network.id, scenario_id
 
-    def add_attributes_request_data(self):
+    def make_attr_name_map(self, client):
+        """
+            Create a mapping between an attribute's name and itself, as defined
+            in the template
+        """
+        attr_name_map = {}
+        for templatetype in self.template.templatetypes:
+            for typeattr in templatetype.typeattrs:
+                attr = client.get_attribute_by_id(typeattr.attr_id)
+                attr_name_map[attr.name] = attr
+
+        return attr_name_map
+
+    def add_attributes_request_data(self, client):
         """ Generate the data for adding attributes to Hydra. """
 
+        attr_name_map = self.make_attr_name_map(client)
+
         # Yield attributes from the timestepper ...
-        for attr in self.attributes_from_meta():
+        for attr in self.attributes_from_meta(attr_name_map):
             yield attr
 
         # Yield the attributes from the nodes ...
-        for attr in self.attributes_from_nodes():
+        for attr in self.attributes_from_nodes(attr_name_map):
             yield attr
 
         # ... now the attributes associated with the recorders and parameters.
@@ -166,7 +200,7 @@ class PywrHydraImporter(BasePywrHydra):
         }
         return scenario
 
-    def attributes_from_nodes(self):
+    def attributes_from_nodes(self, attr_name_map):
         """ Generator to convert Pywr nodes data in to Hydra attribute data.
 
         This function is intended to be used to convert Pywr components (e.g. recorders, parameters, etc.)  data
@@ -190,26 +224,24 @@ class PywrHydraImporter(BasePywrHydra):
                 attributes.add(name)
 
         for attr in sorted(attributes):
-            yield {
+            yield attr_name_map.get(attr, {
                 'name': attr,
                 'description': ''
-            }
+            })
 
-    def attributes_from_meta(self):
+    def attributes_from_meta(self, attr_name_map):
         """ Generator to convert Pywr timestepper data in to Hydra attribute data. """
         if 'scenarios' in self.data:
-            yield {'name': 'scenarios', 'description': ''}
+            yield attr_name_map.get('scenarios', {'name': 'scenarios', 'description': ''})
 
         if 'scenario_combinations' in self.data:
-            yield {'name': 'scenario_combinations', 'description': ''}
+            yield attr_name_map.get('scenario_combinations', {'name': 'scenario_combinations', 'description': ''})
 
         for meta_key in ('metadata', 'timestepper'):
             for key in self.data[meta_key].keys():
                 # Prefix these names with Pywr JSON section.
-                yield {
-                    'name': '{}.{}'.format(meta_key, key),
-                    'description': ''
-                }
+                attr_name = '{}.{}'.format(meta_key, key)
+                yield attr_name_map.get(attr_name, {'name': attr_name,'description': ''})
 
     def _get_template_type_by_name(self, name, resource_type=None):
         for template_type in self.template['templatetypes']:
@@ -368,10 +400,17 @@ class PywrHydraImporter(BasePywrHydra):
             # database and hence have a valid id.
             attribute_id = attribute_ids[name]
 
-            yield self._make_dataset_resource_attribute_and_scenario(name, pywr_node[name], data_type,
-                                                                     attribute_id, encode_to_json=True)
+            unit_id = self.attr_unit_map.get(attribute_id)
 
-    def generate_node_component_resource_scenarios(self, pywr_node, component_key, attribute_ids, **kwargs):
+            yield self._make_dataset_resource_attribute_and_scenario(name,
+                                                                     pywr_node[name],
+                                                                     data_type,
+                                                                     attribute_id,
+                                                                     unit_id=unit_id,
+                                                                     encode_to_json=True)
+
+    def generate_node_component_resource_scenarios(self, pywr_node, component_key,
+                                                   attribute_ids, **kwargs):
 
         try:
             components = self.data[component_key]
@@ -392,8 +431,14 @@ class PywrHydraImporter(BasePywrHydra):
             # It should have a positive id and already be entered in the hydra database.
             attribute_id = attribute_ids[attribute_name.lower()]
 
-            yield self._make_dataset_resource_attribute_and_scenario(attribute_name, component_data, data_type,
-                                                                     attribute_id, **kwargs)
+            unit_id = self.attr_unit_map.get(attribute_id)
+
+            yield self._make_dataset_resource_attribute_and_scenario(attribute_name,
+                                                                     component_data,
+                                                                     data_type,
+                                                                     attribute_id,
+                                                                     unit_id=unit_id,
+                                                                     **kwargs)
 
     def _attribute_name(self, component_key, component_name):
         if component_key in ('parameters', 'recorders'):
@@ -411,9 +456,10 @@ class PywrHydraImporter(BasePywrHydra):
     def attributes_from_component_dict(self, component_key):
         """ Generator to convert Pywr components data in to Hydra attribute data.
 
-        This function is intended to be used to convert Pywr components (e.g. recorders, parameters, etc.)  data
-        in to a format that can be imported in to Hydra. The Pywr component data is a dict of dict with each
-        sub-dict represent a single component (see the "recorder" or "parameters" section of the Pywr JSON format). This
+        This function is intended to be used to convert Pywr components
+        (e.g. recorders, parameters, etc.) data in to a format that can be imported in to Hydra.
+        The Pywr component data is a dict of dict with each sub-dict represent a single component
+        (see the "recorder" or "parameters" section of the Pywr JSON format). This
         function returns Hydra data to add a Attribute for each of the components in the outer dict.
 
 
@@ -430,10 +476,12 @@ class PywrHydraImporter(BasePywrHydra):
     def generate_component_resource_scenarios(self, component_key, attribute_ids, **kwargs):
         """ Convert from Pywr components to resource attributes and resource scenarios.
 
-        This function is intended to be used to convert Pywr components (e.g. recorders, parameters, etc.)  data
-        in to a format that can be imported in to Hydra. The Pywr component data is a dict of dict with each
-        sub-dict represent a single component (see the "recorder" or "parameters" section of the Pywr JSON format). This
-        function returns a list of resource attributes and resource scenarios. These can be used to import the data
+        This function is intended to be used to convert Pywr components
+        (e.g. recorders, parameters, etc.) data into a format that can be imported in to Hydra.
+        The Pywr component data is a dict of dict with each sub-dict represent a
+        single component (see the "recorder" or "parameters" section of the Pywr JSON format).
+        This function returns a list of resource attributes and resource scenarios.
+        These can be used to import the data
         to Hydra.
 
         """
@@ -490,6 +538,11 @@ class PywrHydraImporter(BasePywrHydra):
             if len(data) == 1:
                 data = list(data.values())[0]
             data_type = attribute_data['data_type']
-            attribute_id=attribute_data['attribute_id']
-            yield self._make_dataset_resource_attribute_and_scenario(attribute_name, data, data_type,
-                                                                     attribute_id, **kwargs)
+            attribute_id = attribute_data['attribute_id']
+            unit_id = self.attr_unit_map.get(attribute_id)
+            yield self._make_dataset_resource_attribute_and_scenario(attribute_name,
+                                                                     data,
+                                                                     data_type,
+                                                                     attribute_id,
+                                                                     unit_id=unit_id,
+                                                                     **kwargs)
