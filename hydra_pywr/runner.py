@@ -298,10 +298,18 @@ class PywrHydraRunner(PywrHydraExporter):
 
             # Convert to JSON for saving in hydra
             value = df.to_json(date_format='iso', date_unit='s')
+
+            #Use this later so we can create sensible labels and metadata
+            #for when the data is back in hydra
+            is_timeseries=False
+            if isinstance(df.index, pandas.DatetimeIndex):
+                is_timeseries=True
+
             resource_scenario = self._make_recorder_resource_scenario(client,
                                                                       recorder,
                                                                       value,
-                                                                      'dataframe')
+                                                                      'dataframe',
+                                                                      is_timeseries=is_timeseries)
 
             if resource_scenario is None:
                 continue
@@ -330,7 +338,7 @@ class PywrHydraRunner(PywrHydraExporter):
 
             yield resource_scenario
 
-    def _make_recorder_resource_scenario(self, client, recorder, value, data_type):
+    def _make_recorder_resource_scenario(self, client, recorder, value, data_type, is_timeseries=False):
         # Get the attribute and its ID
         attribute_name = self._get_attribute_name_from_recorder(recorder)
         attribute = self._get_attribute_from_name(attribute_name)
@@ -367,12 +375,19 @@ class PywrHydraRunner(PywrHydraExporter):
 
         unit_id = self.attr_unit_map.get(attribute.id)
 
+        metadata = {}
+        if attribute_name.find('simulated_') == 0:
+            metadata['yAxisLabel'] = attribute_name.split('_')[1]
+            if is_timeseries is True:
+                metadata['xAxisLabel'] = 'Time'
+
         resource_scenario = self._make_dataset_resource_scenario(recorder.name,
                                                                  value,
                                                                  data_type,
                                                                  resource_attribute_id,
                                                                  unit_id=unit_id,
-                                                                 encode_to_json=False)
+                                                                 encode_to_json=False,
+                                                                 metadata=metadata)
         return resource_scenario
 
     def make_attr_unit_map(self):
