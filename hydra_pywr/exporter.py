@@ -1,6 +1,6 @@
 import json
 from past.builtins import basestring
-from .template import PYWR_EDGE_LINK_NAME, PYWR_CONSTRAINED_EDGE_LINK_NAME
+from .template import PYWR_SPLIT_LINK_TYPES, PYWR_EDGE_LINK_NAME, PYWR_CONSTRAINED_EDGE_LINK_NAME
 from .core import BasePywrHydra
 from hydra_pywr_common import PywrParameter, PywrRecorder, PywrParameterPattern, PywrParameterPatternReference,\
     PywrNodeOutput, PywrScenarios, PywrScenarioCombinations
@@ -27,6 +27,8 @@ class PywrHydraExporter(BasePywrHydra):
         self.attributes = attributes
         self.template = template
         self.attr_unit_map = {}
+        #Lookup of ID to hydra node
+        self.hydra_node_lookup = {}
 
         self._parameter_recorder_flags = {}
         self._inline_parameter_recorder_flags = defaultdict(dict)
@@ -68,6 +70,23 @@ class PywrHydraExporter(BasePywrHydra):
         for templatetype in self.template.templatetypes:
             for typeattr in templatetype.typeattrs:
                 self.attr_unit_map[typeattr.attr_id] = typeattr.unit_id
+
+    def get_type_map(self, resource):
+        """
+        for a given resource (node, link, group) get the type id:name map for it
+        ex: node.types = [{id: 1, name: type1}, {id: 11, name: type11}
+        returns:
+            {
+             1: type1
+             11: type11
+            }
+        """
+        type_map = {}
+
+        for t in resource.get('types', []):
+            type_map[t['id']] = t['name']
+
+        return type_map
 
     def get_pywr_data(self):
 
@@ -165,14 +184,6 @@ class PywrHydraExporter(BasePywrHydra):
 
         raise ValueError('No resource scenario found for resource attribute id: {}'.format(resource_attribute_id))
 
-    def _get_node(self, node_id):
-
-        for node in self.data['nodes']:
-            if node['id'] == node_id:
-                return node
-
-        raise ValueError('No node found with node_id: {}'.format(node_id))
-
     def exec_rules(self):
 
         rules = [r for r in self.data['rules'] if r.status.lower() == 'a']
@@ -187,6 +198,8 @@ class PywrHydraExporter(BasePywrHydra):
         for node in self.data['nodes']:
             # Create the basic information.
             pywr_node = {'name': node['name']}
+
+            self.hydra_node_lookup[node['id']] = node
 
             if node.get('description', None) is not None:
                 pywr_node['comment'] = node['description']
@@ -221,15 +234,22 @@ class PywrHydraExporter(BasePywrHydra):
             else:
                 continue  # Skip this link type
 
+            node_from = self.hydra_node_lookup[link['node_1_id']]
+            node_to = self.hydra_node_lookup[link['node_2_id']]
+
+            from_node_types = self.get_type_map(node_from)
+
+            node_type_names = set([nt.lower() for nt in from_node_types.values()])
+
             if link_type['name'] == PYWR_EDGE_LINK_NAME:
-                node_from = self._get_node(link['node_1_id'])
-                node_to = self._get_node(link['node_2_id'])
-                yield [node_from['name'], node_to['name']], (None, {}, {})
+                #if the node type is a split link, then add the slot name to the link
+                #The target node name is used as the slot reference.
+                if len(set(PYWR_SPLIT_LINK_TYPES).intersection(node_type_names)) > 0:
+                    yield [node_from['name'], node_to['name'], node_to['name']], (None, {}, {})
+                else:
+                    yield [node_from['name'], node_to['name']], (None, {}, {})
 
             elif link_type['name'] == PYWR_CONSTRAINED_EDGE_LINK_NAME:
-                node_from = self._get_node(link['node_1_id'])
-                node_to = self._get_node(link['node_2_id'])
-
                 pywr_node_type = 'link'
                 pywr_node = {'name': link['name']}
 
