@@ -244,8 +244,9 @@ class PywrHydraExporter(BasePywrHydra):
             if link_type['name'] == PYWR_EDGE_LINK_NAME:
                 #if the node type is a split link, then add the slot name to the link
                 #The target node name is used as the slot reference.
+
                 if len(set(PYWR_SPLIT_LINK_TYPES).intersection(node_type_names)) > 0:
-                    yield [node_from['name'], node_to['name'], node_to['name']], (None, {}, {})
+                    yield [node_from['name'], node_to['name'], node_to['name'], None], (None, {}, {})
                 else:
                     yield [node_from['name'], node_to['name']], (None, {}, {})
 

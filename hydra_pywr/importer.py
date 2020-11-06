@@ -11,9 +11,10 @@ log = logging.getLogger(__name__)
 
 class PywrHydraImporter(BasePywrHydra):
 
-    def __init__(self, data, template):
+    def __init__(self, client, data, template):
         super().__init__()
         self.template = template
+        self.client = client
 
         if isinstance(data, basestring):
             # argument is a filename
@@ -26,14 +27,14 @@ class PywrHydraImporter(BasePywrHydra):
 
         self.data = data
         self.attr_unit_map = {}
-        self.attr_name_map = {}
+        self.attr_name_map = self.make_attr_name_map()
 
         self.next_node_id = -1
 
     @classmethod
     def from_client(cls, client, data, template_id):
         template = client.get_template(template_id)
-        return cls(data, template)
+        return cls(client, data, template)
 
     @property
     def name(self):
@@ -67,15 +68,15 @@ class PywrHydraImporter(BasePywrHydra):
 
         log.info("Units map created")
 
-    def import_data(self, client, project_id, projection=None):
+    def import_data(self, project_id, projection=None):
 
         self.make_attr_unit_map()
 
         # First the attributes must be added.
-        attributes = list(self.add_attributes_request_data(client))
+        attributes = list(self.add_attributes_request_data())
 
         # The response attributes have ids now.
-        response_attributes = client.add_attributes(attributes)
+        response_attributes = self.client.add_attributes(attributes)
 
         # Convert to a simple dict for local processing.
         # TODO change this variable name to map or lookup
@@ -83,7 +84,7 @@ class PywrHydraImporter(BasePywrHydra):
 
         # Now we try to create the network
         network = self.add_network_request_data(attribute_ids, project_id, projection=projection)
-        hydra_network = client.add_network(network)
+        hydra_network = self.client.add_network(network)
 
         # Get the added scenario_id. There should only be one scenario
         assert len(hydra_network['scenarios']) == 1
@@ -91,7 +92,7 @@ class PywrHydraImporter(BasePywrHydra):
 
         return hydra_network.id, scenario_id
 
-    def make_attr_name_map(self, client):
+    def make_attr_name_map(self):
         """
             Create a mapping between an attribute's name and itself, as defined
             in the template
@@ -99,22 +100,21 @@ class PywrHydraImporter(BasePywrHydra):
         attr_name_map = {}
         for templatetype in self.template.templatetypes:
             for typeattr in templatetype.typeattrs:
-                attr = client.get_attribute_by_id(typeattr.attr_id)
-                attr_name_map[attr.name] = attr
+                attr = self.client.get_attribute_by_id(typeattr.attr_id)
+                self.attr_name_map[attr.name] = attr
 
         return attr_name_map
 
-    def add_attributes_request_data(self, client):
+    def add_attributes_request_data(self):
         """ Generate the data for adding attributes to Hydra. """
 
-        attr_name_map = self.make_attr_name_map(client)
 
         # Yield attributes from the timestepper ...
-        for attr in self.attributes_from_meta(attr_name_map):
+        for attr in self.attributes_from_meta():
             yield attr
 
         # Yield the attributes from the nodes ...
-        for attr in self.attributes_from_nodes(attr_name_map):
+        for attr in self.attributes_from_nodes():
             yield attr
 
         # ... now the attributes associated with the recorders and parameters.
@@ -200,7 +200,7 @@ class PywrHydraImporter(BasePywrHydra):
         }
         return scenario
 
-    def attributes_from_nodes(self, attr_name_map):
+    def attributes_from_nodes(self):
         """ Generator to convert Pywr nodes data in to Hydra attribute data.
 
         This function is intended to be used to convert Pywr components (e.g. recorders, parameters, etc.)  data
@@ -211,6 +211,7 @@ class PywrHydraImporter(BasePywrHydra):
         nodes = self.data['nodes']
 
         attributes = set()
+
 
         for node in nodes:
             node_type = node['type'].lower()
@@ -224,24 +225,24 @@ class PywrHydraImporter(BasePywrHydra):
                 attributes.add(name)
 
         for attr in sorted(attributes):
-            yield attr_name_map.get(attr, {
+            yield self.attr_name_map.get(attr, {
                 'name': attr,
                 'description': ''
             })
 
-    def attributes_from_meta(self, attr_name_map):
+    def attributes_from_meta(self):
         """ Generator to convert Pywr timestepper data in to Hydra attribute data. """
         if 'scenarios' in self.data:
-            yield attr_name_map.get('scenarios', {'name': 'scenarios', 'description': ''})
+            yield self.attr_name_map.get('scenarios', {'name': 'scenarios', 'description': ''})
 
         if 'scenario_combinations' in self.data:
-            yield attr_name_map.get('scenario_combinations', {'name': 'scenario_combinations', 'description': ''})
+            yield self.attr_name_map.get('scenario_combinations', {'name': 'scenario_combinations', 'description': ''})
 
         for meta_key in ('metadata', 'timestepper'):
             for key in self.data[meta_key].keys():
                 # Prefix these names with Pywr JSON section.
                 attr_name = '{}.{}'.format(meta_key, key)
-                yield attr_name_map.get(attr_name, {'name': attr_name,'description': ''})
+                yield self.attr_name_map.get(attr_name, {'name': attr_name,'description': ''})
 
     def _get_template_type_by_name(self, name, resource_type=None):
         for template_type in self.template['templatetypes']:

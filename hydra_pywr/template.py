@@ -13,7 +13,7 @@ from .core import data_type_from_field
 from hydra_base.exceptions import HydraError
 
 PYWR_EDGE_LINK_NAME = 'edge'
-PYWR_SPLIT_LINK_TYPES = ['riversplit', 'riversplitwitgauge', 'multisplitlink']
+PYWR_SPLIT_LINK_TYPES = ['riversplit', 'riversplitwithgauge', 'multisplitlink']
 PYWR_CONSTRAINED_EDGE_LINK_NAME = 'constrained edge'
 PYWR_CONSTRAINED_EDGE_ATTRIBUTES = ('min_flow', 'max_flow', 'cost')
 

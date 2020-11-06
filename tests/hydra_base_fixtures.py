@@ -142,7 +142,7 @@ def session_with_pywr_template(session):
 
 def create_user(name):
 
-    existing_user = hydra_base.get_user_by_name(name)
+    existing_user = hydra_base.get_user_by_name(name, user_id=1)
     if existing_user is not None:
         return existing_user
 

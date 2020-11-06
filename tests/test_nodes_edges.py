@@ -5,6 +5,7 @@ The unit tests in this module test the internal behaviour of the Pywr-Hydra appl
 from hydra_pywr.importer import PywrHydraImporter
 import pytest
 import json
+from fixtures import logged_in_client
 
 
 @pytest.fixture()
@@ -40,9 +41,9 @@ def pywr_nodes_edges():
 
 
 @pytest.fixture()
-def pywr_nodes_edges_importer(pywr_nodes_edges):
+def pywr_nodes_edges_importer(logged_in_client, pywr_nodes_edges):
     # Note the use of a fake template here because we're not testing nodes/links.
-    return PywrHydraImporter(pywr_nodes_edges, {'templatetypes': []})
+    return PywrHydraImporter(logged_in_client, pywr_nodes_edges, {'templatetypes': []})
 
 
 def test_nodes_to_attributes(pywr_nodes_edges_importer):
