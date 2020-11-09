@@ -56,6 +56,8 @@ class PywrHydraRunner(PywrHydraExporter):
         model = Model.load(pywr_data, solver=solver)
         self.model = model
 
+        return pywr_data
+
     def run_pywr_model(self, check=True):
         """ Run a Pywr model from the exported data.
 

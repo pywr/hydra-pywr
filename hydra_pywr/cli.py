@@ -122,7 +122,8 @@ def export_json(obj, data_dir, network_id, scenario_id, user_id, json_sort_keys,
 @click.option('--output-frequency', type=str, default=None)
 @click.option('--solver', type=str, default=None)
 @click.option('--check-model/--no-check-model', default=True)
-def run(obj, network_id, scenario_id, template_id, user_id, output_frequency, solver, check_model):
+@click.option('--data-dir', default=None)
+def run(obj, network_id, scenario_id, template_id, user_id, output_frequency, solver, check_model, data_dir):
     """ Export, run and save a Pywr model from Hydra. """
     client = get_logged_in_client(obj, user_id=user_id)
 
@@ -134,19 +135,44 @@ def run(obj, network_id, scenario_id, template_id, user_id, output_frequency, so
         raise Exception('No User specified')
 
     run_network_scenario(client, network_id, scenario_id, template_id, output_frequency=output_frequency,
-                         solver=solver, check_model=check_model)
+                         solver=solver, check_model=check_model, data_dir=data_dir)
 
-def run_network_scenario(client, network_id, scenario_id, template_id, output_frequency=None, solver=None, check_model=True):
+def run_network_scenario(client, network_id, scenario_id, template_id, output_frequency=None, solver=None, check_model=True, data_dir=None):
 
     runner = PywrHydraRunner.from_network_id(client, network_id, scenario_id,
                                              template_id=template_id,
                                              output_resample_freq=output_frequency)
 
-    runner.load_pywr_model(solver=solver)
+    pywr_data = runner.load_pywr_model(solver=solver)
+    
+    if data_dir is not None:
+        save_pywr_file(pywr_data, data_dir, network_id, scenario_id)
+
     runner.run_pywr_model(check=check_model)
     runner.save_pywr_results(client)
 
     click.echo(f'Pywr model run success! Network ID: {network_id}, Scenario ID: {scenario_id}')
+
+
+def save_pywr_file(data, data_dir, network_id=None, scenario_id=None):
+    """
+    Save pywr json data to the specified directory
+    """
+    if data_dir is None:
+        click.echo("No data dir specified. Returning.")
+
+    title = data['metadata']['title']
+
+    #check if the output folder exists and create it if not
+    if not os.path.isdir(data_dir):
+        #exist_ok sets unix the '-p' functionality to create the whole path
+        os.makedirs(data_dir, exist_ok=True)
+
+    filename = os.path.join(data_dir, f'{title}.json')
+    with open(filename, mode='w') as fh:
+        json.dump(data, fh, sort_keys=True, indent=2)
+
+    click.echo(f'Successfully exported "{filename}"! Network ID: {network_id}, Scenario ID: {scenario_id}')
 
 
 @hydra_app(category='network_utility', name='Step model')
