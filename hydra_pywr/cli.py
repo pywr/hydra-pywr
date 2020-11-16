@@ -144,7 +144,7 @@ def run_network_scenario(client, network_id, scenario_id, template_id, output_fr
                                              output_resample_freq=output_frequency)
 
     pywr_data = runner.load_pywr_model(solver=solver)
-    
+
     if data_dir is not None:
         save_pywr_file(pywr_data, data_dir, network_id, scenario_id)
 
@@ -239,7 +239,7 @@ def step_game(obj, network_id, scenario_id, child_scenario_ids, filename, attrib
 
 @cli.command()
 @click.pass_obj
-@click.argument('docker-image', type=str)
+@click.argument('docker-image', type=str, default=None)
 def register(obj, docker_image):
     """ Register the app with the Hydra installation. """
     plugins = make_plugins(cli, 'hydra-pywr', docker_image=docker_image)
