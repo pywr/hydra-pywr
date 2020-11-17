@@ -40,7 +40,7 @@ class PywrHydraExporter(BasePywrHydra):
     @classmethod
     def from_network_id(cls, client, network_id, scenario_id, template_id=None, **kwargs):
         # Fetch the network
-        network = client.get_network(network_id, include_data='Y', include_results='N', template_id=template_id, scenario_ids=[scenario_id])
+        network = client.get_network(network_id, include_data=True, include_results=False, template_id=template_id, scenario_ids=[scenario_id])
         # Fetch all the attributes
         attributes = client.get_attributes()
         attributes = {attr.id: attr for attr in attributes}
