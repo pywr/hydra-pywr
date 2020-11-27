@@ -70,7 +70,7 @@ def import_json(obj, filename, project_id, user_id, template_id, projection, run
 
     client = get_logged_in_client(obj, user_id=user_id)
     importer = PywrHydraImporter.from_client(client, filename, template_id)
-    network_id, scenario_id = importer.import_data(client, project_id, projection=projection)
+    network_id, scenario_id = importer.import_data(project_id, projection=projection)
 
     click.echo(f'Successfully imported "{filename}"! Network ID: {network_id}, Scenario ID: {scenario_id}')
 
