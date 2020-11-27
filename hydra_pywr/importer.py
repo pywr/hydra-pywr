@@ -101,7 +101,7 @@ class PywrHydraImporter(BasePywrHydra):
         for templatetype in self.template.templatetypes:
             for typeattr in templatetype.typeattrs:
                 attr = self.client.get_attribute_by_id(typeattr.attr_id)
-                self.attr_name_map[attr.name] = attr
+                attr_name_map[attr.name] = attr
 
         return attr_name_map
 
