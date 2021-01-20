@@ -26,6 +26,11 @@ class PywrHydraExporter(BasePywrHydra):
         self.data = data
         self.attributes = attributes
         self.template = template
+        
+        self.type_id_map = {}
+        for tt in self.template.templatetypes:
+            self.type_id_map[tt.id] = tt
+
         self.attr_unit_map = {}
         #Lookup of ID to hydra node
         self.hydra_node_lookup = {}
@@ -70,7 +75,7 @@ class PywrHydraExporter(BasePywrHydra):
         for templatetype in self.template.templatetypes:
             for typeattr in templatetype.typeattrs:
                 self.attr_unit_map[typeattr.attr_id] = typeattr.unit_id
-
+    
     def get_type_map(self, resource):
         """
         for a given resource (node, link, group) get the type id:name map for it
@@ -84,7 +89,7 @@ class PywrHydraExporter(BasePywrHydra):
         type_map = {}
 
         for t in resource.get('types', []):
-            type_map[t['id']] = t['name']
+            type_map[t['id']] = self.type_id_map[t['id']]['name']
 
         return type_map
 
@@ -207,7 +212,7 @@ class PywrHydraExporter(BasePywrHydra):
             # Get the type for this node from the template
             pywr_node_type = None
             for node_type in node['types']:
-                pywr_node_type = node_type['name']
+                pywr_node_type = self.type_id_map[node_type['id']]['name']
             if pywr_node_type is None:
                 raise ValueError('Template does not contain node of type "{}".'.format(pywr_node_type))
 
@@ -229,7 +234,8 @@ class PywrHydraExporter(BasePywrHydra):
         # Other link types are for virtual or data connections and should not be added to the list of Pywr edges.
         for link in self.data['links']:
             for link_type in link['types']:
-                if link_type['name'] in (PYWR_EDGE_LINK_NAME, PYWR_CONSTRAINED_EDGE_LINK_NAME):
+                link_type_name = self.type_id_map[link_type['id']]['name']
+                if link_type_name in (PYWR_EDGE_LINK_NAME, PYWR_CONSTRAINED_EDGE_LINK_NAME):
                     break
             else:
                 continue  # Skip this link type
@@ -241,7 +247,7 @@ class PywrHydraExporter(BasePywrHydra):
 
             node_type_names = set([nt.lower() for nt in from_node_types.values()])
 
-            if link_type['name'] == PYWR_EDGE_LINK_NAME:
+            if link_type_name == PYWR_EDGE_LINK_NAME:
                 #if the node type is a split link, then add the slot name to the link
                 #The target node name is used as the slot reference.
 
@@ -250,7 +256,7 @@ class PywrHydraExporter(BasePywrHydra):
                 else:
                     yield [node_from['name'], node_to['name']], (None, {}, {})
 
-            elif link_type['name'] == PYWR_CONSTRAINED_EDGE_LINK_NAME:
+            elif link_type_name == PYWR_CONSTRAINED_EDGE_LINK_NAME:
                 pywr_node_type = 'link'
                 pywr_node = {'name': link['name']}
 
