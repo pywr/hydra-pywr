@@ -239,7 +239,11 @@ class PywrHydraImporter(BasePywrHydra):
             yield self.attr_name_map.get('scenario_combinations', {'name': 'scenario_combinations', 'description': ''})
 
         for meta_key in ('metadata', 'timestepper'):
-            for key in self.data[meta_key].keys():
+            meta_data = self.data.get(meta_key)
+            if meta_data is None:
+                log.warning("No meta data found for key %s", meta_key)
+                continue
+            for key in meta_data.keys():
                 # Prefix these names with Pywr JSON section.
                 attr_name = '{}.{}'.format(meta_key, key)
                 yield self.attr_name_map.get(attr_name, {'name': attr_name,'description': ''})
@@ -335,7 +339,8 @@ class PywrHydraImporter(BasePywrHydra):
 
             # TODO slots
             if len(pywr_edge) > 2:
-                raise NotImplementedError('Edges with slot definitions are not currently supported.')
+                log.warning('Edges with slot definitions are not currently supported. %s', pywr_edge)
+                pywr_edge = pywr_edge[0:2]
 
             node_1_name, node_2_name = pywr_edge
 
