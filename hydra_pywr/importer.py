@@ -27,6 +27,9 @@ class PywrHydraImporter(BasePywrHydra):
 
         self.data = data
         self.attr_unit_map = {}
+        self.dimensions = {}
+        #maps the name of an attribute to its dimension (if it has one)
+        self.attr_dimension_map = {}
         self.attr_name_map = self.make_attr_name_map()
 
         self.next_node_id = -1
@@ -58,6 +61,7 @@ class PywrHydraImporter(BasePywrHydra):
             Create a mapping between an attribute ID and its unit, as defined
             in the template
         """
+
         if self.template is None:
             log.info("Cannot build unit map as no template was specified.")
             return
@@ -102,6 +106,8 @@ class PywrHydraImporter(BasePywrHydra):
             for typeattr in templatetype.typeattrs:
                 attr = self.client.get_attribute_by_id(typeattr.attr_id)
                 attr_name_map[attr.name] = attr
+                #populate the dimensioin mapping
+                self.attr_dimension_map[attr.name] = attr.dimension_id
 
         return attr_name_map
 
@@ -227,7 +233,8 @@ class PywrHydraImporter(BasePywrHydra):
         for attr in sorted(attributes):
             yield self.attr_name_map.get(attr, {
                 'name': attr,
-                'description': ''
+                'description': '',
+                'dimension_id' : self.attr_dimension_map.get(attr)
             })
 
     def attributes_from_meta(self):
@@ -474,10 +481,11 @@ class PywrHydraImporter(BasePywrHydra):
         for component_name in components.keys():
             attribute_name = self._attribute_name(component_key, component_name)
 
-            yield {
+            yield self.attr_name_map.get(attribute_name, {
                 'name': attribute_name,
-                'description': ''
-            }
+                'description': '',
+                'dimension_id' : self.attr_dimension_map[attribute_name]
+            })
 
     def generate_component_resource_scenarios(self, component_key, attribute_ids, **kwargs):
         """ Convert from Pywr components to resource attributes and resource scenarios.
