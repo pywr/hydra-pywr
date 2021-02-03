@@ -484,7 +484,7 @@ class PywrHydraImporter(BasePywrHydra):
             yield self.attr_name_map.get(attribute_name, {
                 'name': attribute_name,
                 'description': '',
-                'dimension_id' : self.attr_dimension_map[attribute_name]
+                'dimension_id' : self.attr_dimension_map.get(attribute_name)
             })
 
     def generate_component_resource_scenarios(self, component_key, attribute_ids, **kwargs):
