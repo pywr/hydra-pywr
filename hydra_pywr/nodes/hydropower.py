@@ -132,22 +132,53 @@ class Reservoir(Storage):
         initial_volume = fields.ParameterValuesField(required=False)
         initial_volume_pc = marshmallow.fields.Number(required=False)
         bathymetry = DataFrameField()
+
+        #Weather and rainfall / evaporation are mutually exclusive. If both
+        #are specified, then weather will be used (to simplify logic because
+        #the the other way around requires checking that both rainfall & evaporation
+        #are set
         weather = DataFrameField()
+        rainfall = DataFrameField()
+        evaporation = DataFrameField()
+        weather_cost = fields.ParameterReferenceField(required=False)
+        rainfall_cost = fields.ParameterReferenceField(required=False)
+        evaporation_cost = fields.ParameterReferenceField(required=False)
 
     def __init__(self, model, name, **kwargs):
 
         bathymetry = kwargs.pop('bathymetry', None)
         weather = kwargs.pop('weather', None)
+        evaporation = kwargs.pop('evaporation', None)
+        rainfall = kwargs.pop('rainfall', None)
         weather_cost = kwargs.pop('weather_cost', -999)
+        evaporation_cost = kwargs.pop('evaporation_cost', -999)
+        rainfall_cost = kwargs.pop('rainfall_cost', -999)
 
         super().__init__(model, name, **kwargs)
         if bathymetry is not None:
             self._set_bathymetry(bathymetry)
 
+        # Assume rainfall/evap is mm/day
+        # Need to convert:
+        #   Mm2 -> m2
+        #   mm/day -> m/day
+        #   m3/day -> Mm3/day
+        # TODO allow this to be configured
+        self.const = ConstantParameter(model, 1e6 * 1e-3 * 1e-6)
+
         self.rainfall_node = None
+        self.rainfall_recorder = None
         self.evaporation_node = None
+        self.evaporation_recorder = None
         if weather is not None:
             self._make_weather_nodes(model, weather, weather_cost)
+        else:
+            if evaporation is not None:
+                colname = evaporation.columns[0]
+                self._make_evaporation_node(model, evaporation[colname], evaporation_cost)
+            if rainfall is not None:
+                colname = rainfall.columns[0]
+                self._make_rainfall_node(model, rainfall[colname], rainfall_cost)
 
     def _set_bathymetry(self, values):
         volumes = values['volume'].astype(np.float64)
@@ -168,46 +199,55 @@ class Reservoir(Storage):
             raise ValueError('Weather nodes can only be created if an area Parameter is given.')
 
         rainfall = weather['rainfall'].astype(np.float64)
-        rainfall_param = MonthlyProfileParameter(model, rainfall)
-
         evaporation = weather['evaporation'].astype(np.float64)
+
+        self._make_evaporation_node(model, evaporation, cost)
+        self._make_rainfall_node(model, rainfall, cost)
+
+    def _make_evaporation_node(self, model, evaporation, cost):
+
+        if not isinstance(self.area, Parameter):
+            raise ValueError('Evaporation nodes can only be created if an area Parameter is given.')
+
+        evaporation = evaporation.astype(np.float64)
         evaporation_param = MonthlyProfileParameter(model, evaporation)
 
-        # Assume rainfall/evap is mm/day
-        # Need to convert:
-        #   Mm2 -> m2
-        #   mm/day -> m/day
-        #   m3/day -> Mm3/day
-        # TODO allow this to be configured
-        const = ConstantParameter(model, 1e6 * 1e-3 * 1e-6)
+        evaporation_flow_param = AggregatedParameter(model, [evaporation_param, self.const, self.area],
+                                                     agg_func='product')
+
+        evporation_node = Output(model, '{}.evaporation'.format(self.name), parent=self)
+        evporation_node.max_flow = evaporation_flow_param
+        evporation_node.cost = cost
+
+        self.connect(evporation_node)
+        self.evaporation_node = evporation_node
+
+        self.evaporation_recorder = NumpyArrayNodeRecorder(model, evporation_node,
+                                                           name=f'__{evporation_node.name}__:evaporation')
+
+    def _make_rainfall_node(self, model, rainfall, cost):
+
+        if not isinstance(self.area, Parameter):
+            raise ValueError('Weather nodes can only be created if an area Parameter is given.')
+
+        rainfall = rainfall.astype(np.float64)
+        rainfall_param = MonthlyProfileParameter(model, rainfall)
 
         # Create the flow parameters multiplying area by rate of rainfall/evap
-        rainfall_flow_param = AggregatedParameter(model, [rainfall_param, const, self.area],
+        rainfall_flow_param = AggregatedParameter(model, [rainfall_param, self.const, self.area],
                                                   agg_func='product')
-        evaporation_flow_param = AggregatedParameter(model, [evaporation_param, const, self.area],
-                                                     agg_func='product')
 
         # Create the nodes to provide the flows
         rainfall_node = Input(model, '{}.rainfall'.format(self.name), parent=self)
         rainfall_node.max_flow = rainfall_flow_param
         rainfall_node.cost = cost
 
-        evporation_node = Output(model, '{}.evaporation'.format(self.name), parent=self)
-        evporation_node.max_flow = evaporation_flow_param
-        evporation_node.cost = cost
-
         rainfall_node.connect(self)
-        self.connect(evporation_node)
         self.rainfall_node = rainfall_node
-        self.evaporation_node = evporation_node
 
         # Finally record these flows
         self.rainfall_recorder = NumpyArrayNodeRecorder(model, rainfall_node,
                                                         name=f'__{rainfall_node.name}__:rainfall')
-        self.evaporation_recorder = NumpyArrayNodeRecorder(model, evporation_node,
-                                                           name=f'__{evporation_node.name}__:evaporation')
-
-
 class MonthlyCatchment(Catchment):
     class Schema(NodeSchema):
         flow = DataFrameField()
