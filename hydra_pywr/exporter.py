@@ -21,10 +21,11 @@ class PatternContext(object):
 
 
 class PywrHydraExporter(BasePywrHydra):
-    def __init__(self, data, attributes, template):
+    def __init__(self, client, data, attributes, template):
         super().__init__()
         self.data = data
         self.attributes = attributes
+        self.client = client
         self.template = template
         
         self.type_id_map = {}
@@ -65,7 +66,7 @@ class PywrHydraExporter(BasePywrHydra):
 
         # We also need the template to get the node types
         #template = client.get_template_by_name(pywr_template_name())
-        return cls(network, attributes, template, **kwargs)
+        return cls(client, network, attributes, template, **kwargs)
 
     def make_attr_unit_map(self):
         """

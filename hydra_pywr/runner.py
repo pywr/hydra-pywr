@@ -24,6 +24,10 @@ class PywrHydraRunner(PywrHydraExporter):
         self._non_df_recorders = None
 
 
+        self.attr_dimension_map = {}
+
+        self.attr_name_map = self.make_attr_name_map()
+
         self.make_attr_unit_map()
 
     def _copy_scenario(self):
@@ -34,7 +38,7 @@ class PywrHydraRunner(PywrHydraExporter):
         new_scenario['resourcescenarios'] = []
         return new_scenario
 
-    def _delete_resource_scenarios(self, client):
+    def _delete_resource_scenarios(self):
         scenario = self.data.scenarios[0]
 
         ra_is_var_map = {ra['id']: ra['attr_is_var'] for ra in self._get_all_resource_attributes()}
@@ -48,7 +52,7 @@ class PywrHydraRunner(PywrHydraExporter):
                 ra_to_delete.append(ra_id)
 
         # Now delete them all
-        client.delete_resource_scenarios(scenario['id'], ra_to_delete, quiet=True)
+        self.client.delete_resource_scenarios(scenario['id'], ra_to_delete, quiet=True)
 
     def load_pywr_model(self, solver=None):
         """ Create a Pywr model from the exported data. """
@@ -124,9 +128,10 @@ class PywrHydraRunner(PywrHydraExporter):
             raise ValueError('No resource attribute for node "{}" and attribute "{}" found.'.format(node_name, attribute))
 
     def _get_attribute_from_name(self, name):
+        dimension_id = self.attr_dimension_map.get(name)
 
         for attribute_id, attribute in self.attributes.items():
-            if attribute['name'] == name:
+            if attribute['name'] == name and attribute.get('dimension_id') == dimension_id:
                 return attribute
         raise ValueError('No attribute with name "{}" found.'.format(name))
 
@@ -234,10 +239,10 @@ class PywrHydraRunner(PywrHydraExporter):
             if record_ts:
                 NumpyArrayParameterRecorder(model, parameter, name=recorder_name)
 
-    def save_pywr_results(self, client):
+    def save_pywr_results(self):
         """ Save the outputs from a Pywr model run to Hydra. """
         # Ensure all the results from previous run are removed.
-        self._delete_resource_scenarios(client)
+        self._delete_resource_scenarios()
 
         # Convert the scenario from JSONObject to normal dict
         # This is required to ensure that the complete nested structure (of dicts)
@@ -256,20 +261,21 @@ class PywrHydraRunner(PywrHydraExporter):
         for attribute_name in attribute_names:
             attributes.append({
                 'name': attribute_name,
-                'description': ''
+                'description': '',
+                'dimension_id' : self.attr_dimension_map.get(attribute_name)
             })
 
         # The response attributes have ids now.
-        response_attributes = client.add_attributes(attributes)
+        response_attributes = self.client.add_attributes(attributes)
         # Update the attribute mapping
         self.attributes.update({attr.id: attr for attr in response_attributes})
 
-        for resource_scenario in self.generate_array_recorder_resource_scenarios(client):
+        for resource_scenario in self.generate_array_recorder_resource_scenarios():
             scenario['resourcescenarios'].append(resource_scenario)
 
-        client.update_scenario(scenario)
+        self.client.update_scenario(scenario)
 
-    def generate_array_recorder_resource_scenarios(self, client):
+    def generate_array_recorder_resource_scenarios(self):
         """ Generate resource scenario data from NumpyArrayXXX recorders. """
         if self._df_recorders is None:
             # TODO turn this on when logging is sorted out.
@@ -307,8 +313,7 @@ class PywrHydraRunner(PywrHydraExporter):
             if isinstance(df.index, pandas.DatetimeIndex):
                 is_timeseries=True
 
-            resource_scenario = self._make_recorder_resource_scenario(client,
-                                                                      recorder,
+            resource_scenario = self._make_recorder_resource_scenario(recorder,
                                                                       value,
                                                                       'dataframe',
                                                                       is_timeseries=is_timeseries)
@@ -330,8 +335,7 @@ class PywrHydraRunner(PywrHydraExporter):
             except NotImplementedError:
                 continue
 
-            resource_scenario = self._make_recorder_resource_scenario(client,
-                                                                      recorder,
+            resource_scenario = self._make_recorder_resource_scenario(recorder,
                                                                       value,
                                                                       'array')
 
@@ -340,7 +344,7 @@ class PywrHydraRunner(PywrHydraExporter):
 
             yield resource_scenario
 
-    def _make_recorder_resource_scenario(self, client, recorder, value, data_type, is_timeseries=False):
+    def _make_recorder_resource_scenario(self, recorder, value, data_type, is_timeseries=False):
         # Get the attribute and its ID
         attribute_name = self._get_attribute_name_from_recorder(recorder)
         attribute = self._get_attribute_from_name(attribute_name)
@@ -368,7 +372,7 @@ class PywrHydraRunner(PywrHydraExporter):
                 return None
 
             # Try to get the resource attribute
-            resource_attribute = client.add_resource_attribute('NODE',
+            resource_attribute = self.client.add_resource_attribute('NODE',
                                                                node_id,
                                                                attribute['id'],
                                                                is_var='Y',
@@ -404,5 +408,22 @@ class PywrHydraRunner(PywrHydraExporter):
         for templatetype in self.template.templatetypes:
             for typeattr in templatetype.typeattrs:
                 self.attr_unit_map[typeattr.attr_id] = typeattr.unit_id
+
+    def make_attr_name_map(self):
+        """
+            Create a mapping between an attribute's name and itself, as defined
+            in the template
+        """
+        attr_name_map = {}
+        for templatetype in self.template.templatetypes:
+            for typeattr in templatetype.typeattrs:
+                attr = self.client.get_attribute_by_id(typeattr.attr_id)
+                attr_name_map[attr.name] = attr
+                #populate the dimensioin mapping
+                self.attr_dimension_map[attr.name] = attr.dimension_id
+
+        return attr_name_map
+
+
 
 

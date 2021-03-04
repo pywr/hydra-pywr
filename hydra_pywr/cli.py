@@ -131,8 +131,6 @@ def run(obj, network_id, scenario_id, template_id, user_id, output_frequency, so
         raise Exception('No network specified.')
     if scenario_id is None:
         raise Exception('No scenario specified')
-    if user_id is None:
-        raise Exception('No User specified')
 
     run_network_scenario(client, network_id, scenario_id, template_id, output_frequency=output_frequency,
                          solver=solver, check_model=check_model, data_dir=data_dir)
@@ -149,7 +147,7 @@ def run_network_scenario(client, network_id, scenario_id, template_id, output_fr
         save_pywr_file(pywr_data, data_dir, network_id, scenario_id)
 
     runner.run_pywr_model(check=check_model)
-    runner.save_pywr_results(client)
+    runner.save_pywr_results()
 
     click.echo(f'Pywr model run success! Network ID: {network_id}, Scenario ID: {scenario_id}')
 
