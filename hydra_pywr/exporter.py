@@ -44,15 +44,19 @@ class PywrHydraExporter(BasePywrHydra):
 
 
     @classmethod
-    def from_network_id(cls, client, network_id, scenario_id, template_id=None, **kwargs):
+    def from_scenario_id(cls, client, scenario_id, template_id=None, **kwargs):
+        scenario = client.get_scenario(scenario_id, include_data=True, include_results=False)
         # Fetch the network
-        network = client.get_network(network_id, include_data=True, include_results=False, template_id=template_id, scenario_ids=[scenario_id])
+        network = client.get_network(scenario.network_id, include_data=False, include_results=False, template_id=template_id)
+
+        network.scenarios = [scenario]
+
         # Fetch all the attributes
         attributes = client.get_attributes()
         attributes = {attr.id: attr for attr in attributes}
 
 
-        rules = client.get_resource_rules('NETWORK', network_id)
+        rules = client.get_resource_rules('NETWORK', scenario.network_id)
 
         network.rules = rules
 
@@ -76,7 +80,7 @@ class PywrHydraExporter(BasePywrHydra):
         for templatetype in self.template.templatetypes:
             for typeattr in templatetype.typeattrs:
                 self.attr_unit_map[typeattr.attr_id] = typeattr.unit_id
-    
+
     def get_type_map(self, resource):
         """
         for a given resource (node, link, group) get the type id:name map for it

@@ -94,7 +94,9 @@ def import_json(obj, filename, project_id, user_id, template_id, projection, run
 def export_json(obj, data_dir, network_id, scenario_id, user_id, json_sort_keys, json_indent):
     """ Export a Pywr JSON from Hydra. """
     client = get_logged_in_client(obj, user_id=user_id)
-    exporter = PywrHydraExporter.from_network_id(client, network_id, scenario_id)
+    exporter = PywrHydraExporter.from_scenario_id(client, network_id, scenario_id)
+
+    network_id = exporter.data.id
 
     data = exporter.get_pywr_data()
     title = data['metadata']['title']
@@ -128,21 +130,21 @@ def run(obj, network_id, scenario_id, template_id, user_id, output_frequency, so
     """ Export, run and save a Pywr model from Hydra. """
     client = get_logged_in_client(obj, user_id=user_id)
 
-    if network_id is None:
-        raise Exception('No network specified.')
     if scenario_id is None:
         raise Exception('No scenario specified')
 
-    run_network_scenario(client, network_id, scenario_id, template_id, output_frequency=output_frequency,
+    run_network_scenario(client, scenario_id, template_id, output_frequency=output_frequency,
                          solver=solver, check_model=check_model, data_dir=data_dir)
 
-def run_network_scenario(client, network_id, scenario_id, template_id, output_frequency=None, solver=None, check_model=True, data_dir=None):
+def run_network_scenario(client, scenario_id, template_id, output_frequency=None, solver=None, check_model=True, data_dir=None):
 
-    runner = PywrHydraRunner.from_network_id(client, network_id, scenario_id,
+    runner = PywrHydraRunner.from_scenario_id(client, scenario_id,
                                              template_id=template_id,
                                              output_resample_freq=output_frequency)
 
     pywr_data = runner.load_pywr_model(solver=solver)
+
+    network_id = runner.data.id
 
     if data_dir is not None:
         save_pywr_file(pywr_data, data_dir, network_id, scenario_id)
