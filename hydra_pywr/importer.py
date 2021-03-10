@@ -5,6 +5,7 @@ from .template import PYWR_PROTECTED_NODE_KEYS, pywr_template_name, load_templat
 from .core import BasePywrHydra, data_type_from_field
 from pywr.nodes import NodeMeta
 from hydra_pywr_common import data_type_from_component_type, data_type_from_parameter_value, PywrParameter
+from hydra_base.exceptions import HydraError
 import logging
 log = logging.getLogger(__name__)
 
@@ -31,6 +32,11 @@ class PywrHydraImporter(BasePywrHydra):
         #maps the name of an attribute to its dimension (if it has one)
         self.attr_dimension_map = {}
         self.attr_name_map = self.make_attr_name_map()
+        self.attribute_name_id_map = {}
+
+        #If any node types in the input file are not available in the current
+        #environment (custom pywr nodes) then either log a warning and use default or throw an exception.
+        self.ignore_type_errors = False
 
         self.next_node_id = -1
 
@@ -72,7 +78,9 @@ class PywrHydraImporter(BasePywrHydra):
 
         log.info("Units map created")
 
-    def import_data(self, project_id, projection=None):
+    def import_data(self, project_id, projection=None, ignore_type_errors=False):
+
+        self.ignore_type_errors = ignore_type_errors
 
         self.make_attr_unit_map()
 
@@ -83,11 +91,10 @@ class PywrHydraImporter(BasePywrHydra):
         response_attributes = self.client.add_attributes(attributes)
 
         # Convert to a simple dict for local processing.
-        # TODO change this variable name to map or lookup
-        attribute_ids = {a.name.lower(): a.id for a in response_attributes}
+        self.attribute_name_id_map = {a.name.lower(): a.id for a in response_attributes}
 
         # Now we try to create the network
-        network = self.add_network_request_data(attribute_ids, project_id, projection=projection)
+        network = self.add_network_request_data(project_id, projection=projection)
         hydra_network = self.client.add_network(network)
 
         # Get the added scenario_id. There should only be one scenario
@@ -130,7 +137,7 @@ class PywrHydraImporter(BasePywrHydra):
             for attr in self.attributes_from_component_dict(key):
                 yield attr
 
-    def add_network_request_data(self, attribute_ids, project_id, projection=None):
+    def add_network_request_data(self, project_id, projection=None):
         """ Return a dictionary of the data required for adding a network to Hydra. """
 
         # Get the network type
@@ -145,18 +152,18 @@ class PywrHydraImporter(BasePywrHydra):
 
         # TODO add tables and scenarios.
 
-        nodes, links, resource_scenarios = self.convert_nodes_and_edges(attribute_ids)
+        nodes, links, resource_scenarios = self.convert_nodes_and_edges()
 
         network_attributes = []
         for component_key in ('recorders', 'parameters'):
-            generator = self.generate_component_resource_scenarios(component_key, attribute_ids, encode_to_json=True)
+            generator = self.generate_component_resource_scenarios(component_key, encode_to_json=True)
             for resource_attribute, resource_scenario in generator:
                 network_attributes.append(resource_attribute)
                 resource_scenarios.append(resource_scenario)
 
         # TODO timestepper data is on the scenario.
         for component_key in ('metadata', 'timestepper'):
-            generator = self.generate_component_resource_scenarios(component_key, attribute_ids, encode_to_json=False)
+            generator = self.generate_component_resource_scenarios(component_key, encode_to_json=False)
             for resource_attribute, resource_scenario in generator:
                 network_attributes.append(resource_attribute)
                 resource_scenarios.append(resource_scenario)
@@ -164,7 +171,7 @@ class PywrHydraImporter(BasePywrHydra):
         if 'scenarios' in self.data:
             resource_attribute, resource_scenario = self._make_dataset_resource_attribute_and_scenario('scenarios',
                                                                                                        {'scenarios': self.data['scenarios']},
-                                                                                'PYWR_SCENARIOS', attribute_ids['scenarios'],
+                                                                                'PYWR_SCENARIOS', self.attribute_name_id_map['scenarios'],
                                                                                 encode_to_json=True)
             network_attributes.append(resource_attribute)
             resource_scenarios.append(resource_scenario)
@@ -172,7 +179,7 @@ class PywrHydraImporter(BasePywrHydra):
         if 'scenario_combinations' in self.data:
             resource_attribute, resource_scenario = self._make_dataset_resource_attribute_and_scenario('scenario_combinations',
                                                                                                        {'scenario_combinations': self.data['scenario_combinations']},
-                                                                                'PYWR_SCENARIO_COMBINATIONS', attribute_ids['scenario_combinations'],
+                                                                                'PYWR_SCENARIO_COMBINATIONS', self.attribute_name_id_map['scenario_combinations'],
                                                                                 encode_to_json=True)
             network_attributes.append(resource_attribute)
             resource_scenarios.append(resource_scenario)
@@ -221,7 +228,16 @@ class PywrHydraImporter(BasePywrHydra):
 
         for node in nodes:
             node_type = node['type'].lower()
-            node_klass = NodeMeta.node_registry[node_type]
+            node_klass = NodeMeta.node_registry.get(node_type)
+            if node_klass is None:
+                msg = f"Node type {node_type} not recognised."
+                if self.ignore_type_errors is False:
+                    raise HydraError(msg)
+                log.warning(msg + "Attempting to add default values.")
+                for name in node.keys():
+                    if name not in PYWR_PROTECTED_NODE_KEYS:
+                        attributes.add(name)
+                continue
             schema = node_klass.Schema()
 
             # Create an attribute for each field in the schema.
@@ -260,10 +276,15 @@ class PywrHydraImporter(BasePywrHydra):
             if name == template_type['name']:
                 if resource_type is None or template_type['resource_type'] == resource_type:
                     return template_type
+        msg = 'Template does not contain node of type "{}".'.format(name)
+        if self.ignore_type_errors:
+            log.warning(msg)
+            return {}
+        else:
+            raise HydraError(msg)
 
-        raise ValueError('Template does not contain node of type "{}".'.format(name))
 
-    def convert_nodes_and_edges(self, attribute_ids):
+    def convert_nodes_and_edges(self):
         """ Convert a tuple of (nodes, links) of Hydra data based on the given Pywr data. """
 
         pywr_nodes = self.data['nodes']
@@ -294,11 +315,11 @@ class PywrHydraImporter(BasePywrHydra):
             # Pywr keeps a registry of lower case node types.
             pywr_node_type = pywr_node['type'].lower()
             node_template_type = self._get_template_type_by_name(pywr_node_type, 'NODE')
-            node_template_type_id = node_template_type['id']
+            node_template_type_id = node_template_type.get('id')
 
             # Now make the attributes
             resource_attributes = []
-            for resource_attribute, resource_scenario in self.generate_node_resource_scenarios(pywr_node, attribute_ids):
+            for resource_attribute, resource_scenario in self.generate_node_resource_scenarios(pywr_node):
                 resource_attributes.append(resource_attribute)
                 hydra_resource_scenarios.append(resource_scenario)
 
@@ -332,7 +353,7 @@ class PywrHydraImporter(BasePywrHydra):
                 'x': x,  # TODO add some tests with coordinates.
                 'y': y,
                 'attributes': resource_attributes,
-                'types': [{'id': node_template_type_id}]
+                'types': [{'id': node_template_type_id}] if node_template_type_id else None
             }
 
             hydra_nodes.append(hydra_node)
@@ -340,7 +361,7 @@ class PywrHydraImporter(BasePywrHydra):
 
         # All Pywr edges have the same type
         edge_template_type = self._get_template_type_by_name('edge', 'LINK')
-        edge_template_type_id = edge_template_type['id']
+        edge_template_type_id = edge_template_type.get('id')
 
         for pywr_edge in pywr_edges:
 
@@ -359,41 +380,56 @@ class PywrHydraImporter(BasePywrHydra):
                 'node_1_id': find_node_id(node_1_name),
                 'node_2_id': find_node_id(node_2_name),
                 'attributes': [],  # Links have no resource attributes
-                'types': [{'id': edge_template_type_id}]
+                'types': [{'id': edge_template_type_id}] if edge_template_type_id else None
             }
             hydra_links.append(hydra_link)
             link_id -= 1
 
         return hydra_nodes, hydra_links, hydra_resource_scenarios
 
-    def generate_node_resource_scenarios(self, pywr_node, attribute_ids):
+    def generate_node_resource_scenarios(self, pywr_node):
 
-        for ra, rs in self.generate_node_schema_resource_scenarios(pywr_node, attribute_ids):
+        for ra, rs in self.generate_node_schema_resource_scenarios(pywr_node):
             yield ra, rs
 
         for component_key in ('parameters', 'recorders'):
             for ra, rs in self.generate_node_component_resource_scenarios(pywr_node, component_key,
-                                                                          attribute_ids, encode_to_json=True):
+                                                                          encode_to_json=True):
                 yield ra, rs
 
-    def generate_node_schema_resource_scenarios(self, pywr_node, attribute_ids):
+    def generate_node_schema_resource_scenarios(self, pywr_node):
         """ Generate resource attribute, resource scenario and datasets for a Pywr node.
 
         """
         node_name = pywr_node['name']
         node_type = pywr_node['type'].lower()
-        node_klass = NodeMeta.node_registry[node_type]
-        schema = node_klass.Schema()
+        node_klass = NodeMeta.node_registry.get(node_type)
+
+        msg = f"Node type {node_klass} not recognised."
+
+        if node_klass is None and self.ignore_type_errors is False:
+            raise HydraError(msg)
+
+        if node_klass is None:
+            log.warning(msg + " Using 'descriptor' as default data type")
+            fields = dict((n, 'descriptor') for n in pywr_node.keys())
+        else:
+            schema = node_klass.Schema()
+            fields = schema.fields
 
         # Create an attribute for each field in the schema.
-        for name, field in schema.fields.items():
+        for name, field in fields.items():
             if name not in pywr_node:
                 continue  # Skip missing fields
 
             if name in PYWR_PROTECTED_NODE_KEYS:
                 continue
             # Non-protected keys represent data that must be added to Hydra.
-            data_type = data_type_from_field(field)
+            if isinstance(field, str):
+                data_type = field #the default field if it can't find the class
+            else:
+                data_type = data_type_from_field(field)
+
             if data_type == PywrParameter.tag.lower():
                 # If the field is defined as general parameter then the actual
                 # type might be something more specific.
@@ -411,7 +447,7 @@ class PywrHydraImporter(BasePywrHydra):
 
             # Key is the attribute name. The attributes need to already by added to the
             # database and hence have a valid id.
-            attribute_id = attribute_ids[name]
+            attribute_id = self.attribute_name_id_map[name]
 
             unit_id = self.attr_unit_map.get(attribute_id)
 
@@ -423,7 +459,7 @@ class PywrHydraImporter(BasePywrHydra):
                                                                      encode_to_json=True)
 
     def generate_node_component_resource_scenarios(self, pywr_node, component_key,
-                                                   attribute_ids, **kwargs):
+                                                   **kwargs):
 
         try:
             components = self.data[component_key]
@@ -442,7 +478,7 @@ class PywrHydraImporter(BasePywrHydra):
 
             # This the attribute corresponding to the component.
             # It should have a positive id and already be entered in the hydra database.
-            attribute_id = attribute_ids[attribute_name.lower()]
+            attribute_id = self.attribute_name_id_map[attribute_name.lower()]
 
             unit_id = self.attr_unit_map.get(attribute_id)
 
@@ -487,7 +523,7 @@ class PywrHydraImporter(BasePywrHydra):
                 'dimension_id' : self.attr_dimension_map.get(attribute_name)
             })
 
-    def generate_component_resource_scenarios(self, component_key, attribute_ids, **kwargs):
+    def generate_component_resource_scenarios(self, component_key, **kwargs):
         """ Convert from Pywr components to resource attributes and resource scenarios.
 
         This function is intended to be used to convert Pywr components
@@ -532,7 +568,7 @@ class PywrHydraImporter(BasePywrHydra):
 
             # This the attribute corresponding to the component.
             # It should have a positive id and already be entered in the hydra database.
-            attribute_id = attribute_ids[attribute_name.lower()]
+            attribute_id = self.attribute_name_id_map[attribute_name.lower()]
 
             attribute_data = {'attribute_name':attribute_name,
                               'data':{component_name:component_data},

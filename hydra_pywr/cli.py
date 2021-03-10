@@ -55,7 +55,8 @@ def cli(obj, username, password, hostname, session):
 @click.option('--run/--no-run', default=False)
 @click.option('--solver', type=str, default=None)
 @click.option('--check-model/--no-check-model', default=True)
-def import_json(obj, filename, project_id, user_id, template_id, projection, run, solver, check_model, *args):
+@click.option('--ignore-type-errors', is_flag=True, default=False)
+def import_json(obj, filename, project_id, user_id, template_id, projection, run, solver, check_model, ignore_type_errors, *args):
     """ Import a Pywr JSON file into Hydra. """
     click.echo(f'Beginning import of "{filename}"! Project ID: {project_id}')
 
@@ -70,7 +71,7 @@ def import_json(obj, filename, project_id, user_id, template_id, projection, run
 
     client = get_logged_in_client(obj, user_id=user_id)
     importer = PywrHydraImporter.from_client(client, filename, template_id)
-    network_id, scenario_id = importer.import_data(project_id, projection=projection)
+    network_id, scenario_id = importer.import_data(project_id, projection=projection, ignore_type_errors=ignore_type_errors)
 
     click.echo(f'Successfully imported "{filename}"! Network ID: {network_id}, Scenario ID: {scenario_id}')
 
