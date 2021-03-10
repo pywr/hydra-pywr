@@ -86,15 +86,14 @@ def import_json(obj, filename, project_id, user_id, template_id, projection, run
     allow_extra_args=True))
 @click.pass_obj
 @click.option('--data-dir', default='/tmp')
-@click.option('-n', '--network-id', type=int, default=None)
 @click.option('-s', '--scenario-id', type=int, default=None)
 @click.option('-u', '--user-id', type=int, default=None)
 @click.option('--json-indent', type=int, default=2)
 @click.option('--json-sort-keys/--no-json-sort-keys', default=False)
-def export_json(obj, data_dir, network_id, scenario_id, user_id, json_sort_keys, json_indent):
+def export_json(obj, data_dir, scenario_id, user_id, json_sort_keys, json_indent):
     """ Export a Pywr JSON from Hydra. """
     client = get_logged_in_client(obj, user_id=user_id)
-    exporter = PywrHydraExporter.from_scenario_id(client, network_id, scenario_id)
+    exporter = PywrHydraExporter.from_scenario_id(client, scenario_id)
 
     network_id = exporter.data.id
 
@@ -118,7 +117,6 @@ def export_json(obj, data_dir, network_id, scenario_id, user_id, json_sort_keys,
     ignore_unknown_options=True,
     allow_extra_args=True))
 @click.pass_obj
-@click.option('-n', '--network-id', type=int, default=None)
 @click.option('-s', '--scenario-id', type=int, default=None)
 @click.option('-t', '--template-id', type=int, default=None)
 @click.option('-u', '--user-id', type=int, default=None)
@@ -126,7 +124,7 @@ def export_json(obj, data_dir, network_id, scenario_id, user_id, json_sort_keys,
 @click.option('--solver', type=str, default=None)
 @click.option('--check-model/--no-check-model', default=True)
 @click.option('--data-dir', default=None)
-def run(obj, network_id, scenario_id, template_id, user_id, output_frequency, solver, check_model, data_dir):
+def run(obj, scenario_id, template_id, user_id, output_frequency, solver, check_model, data_dir):
     """ Export, run and save a Pywr model from Hydra. """
     client = get_logged_in_client(obj, user_id=user_id)
 
@@ -196,11 +194,10 @@ def step_model(obj, network_id, scenario_id, child_scenario_ids, user_id):
     ignore_unknown_options=True,
     allow_extra_args=True))
 @click.pass_obj
-@click.option('-n', '--network-id', type=int, default=None)
 @click.option('-s', '--scenario-id', type=int, default=None)
 @click.option('--child-scenario-ids', type=int, default=None, multiple=True)
 @click.option('-u', '--user-id', type=int, default=None)
-def apply_initial_volumes_to_other_networks(obj, network_id, scenario_id, child_scenario_ids, user_id):
+def apply_initial_volumes_to_other_networks(obj, scenario_id, child_scenario_ids, user_id):
     client = get_logged_in_client(obj, user_id=user_id)
     utils.apply_final_volumes_as_initial_volumes(client, scenario_id, child_scenario_ids)
 
@@ -210,7 +207,6 @@ def apply_initial_volumes_to_other_networks(obj, network_id, scenario_id, child_
     ignore_unknown_options=True,
     allow_extra_args=True))
 @click.pass_obj
-@click.option('-n', '--network-id', type=int, default=None)
 @click.option('-s', '--scenario-id', type=int, default=None)
 @click.option('--child-scenario-ids', type=int, default=None, multiple=True)
 @click.option('--filename', type=click.Path(file_okay=True, dir_okay=False))
@@ -220,7 +216,7 @@ def apply_initial_volumes_to_other_networks(obj, network_id, scenario_id, child_
 @click.option('--data-type', type=str, default='PYWR_DATAFRAME')
 @click.option('--create-new/--no-create-new', default=False)
 @click.option('-u', '--user-id', type=int, default=None)
-def step_game(obj, network_id, scenario_id, child_scenario_ids, filename, attribute_name, index_col,
+def step_game(obj, scenario_id, child_scenario_ids, filename, attribute_name, index_col,
               column_name, data_type, create_new, user_id):
     client = get_logged_in_client(obj, user_id=user_id)
 
