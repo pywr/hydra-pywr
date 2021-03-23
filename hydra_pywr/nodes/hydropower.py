@@ -7,8 +7,9 @@ from pywr.parameters._hydropower import HydropowerTargetParameter
 from pywr.recorders import HydropowerRecorder, NumpyArrayLevelRecorder, NumpyArrayNodeRecorder
 from pywr.schema import NodeSchema, fields
 from pywr.domains.river import Catchment
+from pywr.parameters import load_parameter
 import numpy as np
-import pandas
+import pandas as pd
 import marshmallow
 from ..parameters import MonthlyArrayIndexedParameter
 from . import DataFrameField
@@ -137,11 +138,13 @@ class Reservoir(Storage):
         #are specified, then weather will be used (to simplify logic because
         #the the other way around requires checking that both rainfall & evaporation
         #are set
+
         weather = DataFrameField()
-        rainfall = DataFrameField()
-        evaporation = DataFrameField()
         weather_cost = fields.ParameterReferenceField(required=False)
+
+        rainfall = fields.ParameterReferenceField(required=False)
         rainfall_cost = fields.ParameterReferenceField(required=False)
+        evaporation = fields.ParameterReferenceField(required=False)
         evaporation_cost = fields.ParameterReferenceField(required=False)
 
     def __init__(self, model, name, **kwargs):
@@ -153,18 +156,19 @@ class Reservoir(Storage):
         weather_cost = kwargs.pop('weather_cost', -999)
         evaporation_cost = kwargs.pop('evaporation_cost', -999)
         rainfall_cost = kwargs.pop('rainfall_cost', -999)
-
-        super().__init__(model, name, **kwargs)
-        if bathymetry is not None:
-            self._set_bathymetry(bathymetry)
-
         # Assume rainfall/evap is mm/day
         # Need to convert:
         #   Mm2 -> m2
         #   mm/day -> m/day
         #   m3/day -> Mm3/day
         # TODO allow this to be configured
-        self.const = ConstantParameter(model, 1e6 * 1e-3 * 1e-6)
+        const = kwargs.pop('const', 1e6 * 1e-3 * 1e-6)
+
+        super().__init__(model, name, **kwargs)
+        if bathymetry is not None:
+            self._set_bathymetry(bathymetry)
+
+        self.const = ConstantParameter(model, const)
 
         self.rainfall_node = None
         self.rainfall_recorder = None
@@ -174,11 +178,9 @@ class Reservoir(Storage):
             self._make_weather_nodes(model, weather, weather_cost)
         else:
             if evaporation is not None:
-                colname = evaporation.columns[0]
-                self._make_evaporation_node(model, evaporation[colname], evaporation_cost)
+                self._make_evaporation_node(model, evaporation, evaporation_cost)
             if rainfall is not None:
-                colname = rainfall.columns[0]
-                self._make_rainfall_node(model, rainfall[colname], rainfall_cost)
+                self._make_rainfall_node(model, rainfall, rainfall_cost)
 
     def _set_bathymetry(self, values):
         volumes = values['volume'].astype(np.float64)
@@ -209,8 +211,12 @@ class Reservoir(Storage):
         if not isinstance(self.area, Parameter):
             raise ValueError('Evaporation nodes can only be created if an area Parameter is given.')
 
-        evaporation = evaporation.astype(np.float64)
-        evaporation_param = MonthlyProfileParameter(model, evaporation)
+        if isinstance(evaporation, str):
+            ##Assume that if it's a string, it's a parameter reference
+            evaporation_param = load_parameter(model, evaporation)
+        else:
+            evaporation = evaporation.astype(np.float64)
+            evaporation_param = MonthlyProfileParameter(model, evaporation)
 
         evaporation_flow_param = AggregatedParameter(model, [evaporation_param, self.const, self.area],
                                                      agg_func='product')
@@ -230,8 +236,14 @@ class Reservoir(Storage):
         if not isinstance(self.area, Parameter):
             raise ValueError('Weather nodes can only be created if an area Parameter is given.')
 
-        rainfall = rainfall.astype(np.float64)
-        rainfall_param = MonthlyProfileParameter(model, rainfall)
+        if isinstance(rainfall, str):
+
+            ##Assume that if it's a string, it's a parameter reference
+            rainfall_param = load_parameter(model, rainfall)
+        else:
+            #assume it's a dataframe
+            rainfall = rainfall.astype(np.float64)
+            rainfall_param = MonthlyProfileParameter(model, rainfall)
 
         # Create the flow parameters multiplying area by rate of rainfall/evap
         rainfall_flow_param = AggregatedParameter(model, [rainfall_param, self.const, self.area],
