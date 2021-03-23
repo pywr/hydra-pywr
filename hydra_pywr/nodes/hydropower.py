@@ -177,10 +177,8 @@ class Reservoir(Storage):
         if weather is not None:
             self._make_weather_nodes(model, weather, weather_cost)
         else:
-            if evaporation is not None:
-                self._make_evaporation_node(model, evaporation, evaporation_cost)
-            if rainfall is not None:
-                self._make_rainfall_node(model, rainfall, rainfall_cost)
+            self._make_evaporation_node(model, evaporation, evaporation_cost)
+            self._make_rainfall_node(model, rainfall, rainfall_cost)
 
     def _set_bathymetry(self, values):
         volumes = values['volume'].astype(np.float64)
@@ -211,12 +209,16 @@ class Reservoir(Storage):
         if not isinstance(self.area, Parameter):
             raise ValueError('Evaporation nodes can only be created if an area Parameter is given.')
 
-        if isinstance(evaporation, str):
-            ##Assume that if it's a string, it's a parameter reference
-            evaporation_param = load_parameter(model, evaporation)
-        else:
+        if evaporation is None:
+            try:
+                evaporation_param = load_parameter(model, f'__{self.name}__:evaporation')
+            except KeyError:
+                raise Exception(f"Please speficy an evaporation or a weather on node {self.name}")
+        elif isinstance(evaporation, pd.DataFrame) or isinstance(evaporation, pd.Series):
             evaporation = evaporation.astype(np.float64)
             evaporation_param = MonthlyProfileParameter(model, evaporation)
+        else:
+            evaporation_param = evaporation
 
         evaporation_flow_param = AggregatedParameter(model, [evaporation_param, self.const, self.area],
                                                      agg_func='product')
@@ -236,14 +238,17 @@ class Reservoir(Storage):
         if not isinstance(self.area, Parameter):
             raise ValueError('Weather nodes can only be created if an area Parameter is given.')
 
-        if isinstance(rainfall, str):
-
-            ##Assume that if it's a string, it's a parameter reference
-            rainfall_param = load_parameter(model, rainfall)
-        else:
+        if rainfall is None:
+            try:
+                rainfall_param = load_parameter(model, f'__{self.name}__:rainfall')
+            except KeyError:
+                raise Exception(f"Please speficy a rainfall or a weather on node {self.name}")
+        elif isinstance(rainfall, pd.DataFrame) or isinstance(rainfall, pd.Series):
             #assume it's a dataframe
             rainfall = rainfall.astype(np.float64)
             rainfall_param = MonthlyProfileParameter(model, rainfall)
+        else:
+            rainfall_param = rainfall
 
         # Create the flow parameters multiplying area by rate of rainfall/evap
         rainfall_flow_param = AggregatedParameter(model, [rainfall_param, self.const, self.area],
