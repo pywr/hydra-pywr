@@ -149,7 +149,18 @@ class Reservoir(Storage):
 
     def __init__(self, model, name, **kwargs):
 
+        #bathymetry can be specified as a single dataframe or as 3 individual
+        #dataframes
         bathymetry = kwargs.pop('bathymetry', None)
+        #bathymetry -- these are used if the combined 'bathymetry' dataframe is not set
+        #NOTE: These will only appear as not NOne if they are not specified as
+        #parameters. i.e. if they are specified as parameters, their value needs to be
+        #extracted using the load_parameter() function
+        volume = kwargs.pop('volume', None)
+        level = kwargs.pop('level', None)
+        area = kwargs.pop('area', None)
+
+
         weather = kwargs.pop('weather', None)
         evaporation = kwargs.pop('evaporation', None)
         rainfall = kwargs.pop('rainfall', None)
@@ -165,8 +176,8 @@ class Reservoir(Storage):
         const = kwargs.pop('const', 1e6 * 1e-3 * 1e-6)
 
         super().__init__(model, name, **kwargs)
-        if bathymetry is not None:
-            self._set_bathymetry(bathymetry)
+
+        self._set_bathymetry(model, bathymetry, volume, level, area)
 
         self.const = ConstantParameter(model, const)
 
@@ -180,10 +191,30 @@ class Reservoir(Storage):
             self._make_evaporation_node(model, evaporation, evaporation_cost)
             self._make_rainfall_node(model, rainfall, rainfall_cost)
 
-    def _set_bathymetry(self, values):
-        volumes = values['volume'].astype(np.float64)
-        levels = values['level'].astype(np.float64)
-        areas = values['area'].astype(np.float64)
+    def _set_bathymetry(self, model, bathymetry, volume=None, level=None, area=None):
+        if bathymetry is not None:
+            volumes = bathymetry['volume'].astype(np.float64)
+            levels = bathymetry['level'].astype(np.float64)
+            areas = bathymetry['area'].astype(np.float64)
+        elif volume is not None and level is not None and area is not None:
+            #cater for when they are not specified as parameters, eg they are
+            #scalars or standard dataframes
+            volumes = volume
+            levels = level
+            areas = area
+        else:
+            try:
+                volumes = load_parameter(model, f'__{self.name}__:volume')
+            except KeyError:
+                raise Exception(f"Please speficy a bathymetry or volume on node {self.name}")
+            try:
+                areas = load_parameter(model, f'__{self.name}__:area')
+            except KeyError:
+                raise Exception(f"Please speficy a bathymetry or area on node {self.name}")
+            try:
+                levels = load_parameter(model, f'__{self.name}__:level')
+            except KeyError:
+                raise Exception(f"Please speficy a bathymetry or level on node {self.name}")
 
         self.level = InterpolatedVolumeParameter(self.model, self, volumes, levels)
         self.area = InterpolatedVolumeParameter(self.model, self, volumes, areas)
