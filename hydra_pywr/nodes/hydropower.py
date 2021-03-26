@@ -14,6 +14,9 @@ import marshmallow
 from ..parameters import MonthlyArrayIndexedParameter
 from . import DataFrameField
 
+import logging
+log = logging.getLogger(__name__)
+
 
 class LinearStorageReleaseControl(Link):
     """A specialised node that provides a default max_flow based on a release rule.
@@ -206,18 +209,24 @@ class Reservoir(Storage):
             try:
                 volumes = load_parameter(model, f'__{self.name}__:volume')
             except KeyError:
-                raise Exception(f"Please speficy a bathymetry or volume on node {self.name}")
+                log.warning(f"Please specify a bathymetry or volume on node {self.name}")
+                volumes = None
             try:
                 areas = load_parameter(model, f'__{self.name}__:area')
             except KeyError:
-                raise Exception(f"Please speficy a bathymetry or area on node {self.name}")
+                log.warning(f"Please specify a bathymetry or area on node {self.name}")
+                areas = None
             try:
                 levels = load_parameter(model, f'__{self.name}__:level')
             except KeyError:
-                raise Exception(f"Please speficy a bathymetry or level on node {self.name}")
+                log.warning(f"Please specify a bathymetry or level on node {self.name}")
+                levels = None
 
-        self.level = InterpolatedVolumeParameter(self.model, self, volumes, levels)
-        self.area = InterpolatedVolumeParameter(self.model, self, volumes, areas)
+        if volumes is not None and levels is not None:
+            self.level = InterpolatedVolumeParameter(self.model, self, volumes, levels)
+
+        if volumes is not None and areas is not None:
+            self.area = InterpolatedVolumeParameter(self.model, self, volumes, areas)
 
         # Record the level
         # TODO Pywr is missing an equivalent area recorder.
@@ -238,13 +247,15 @@ class Reservoir(Storage):
     def _make_evaporation_node(self, model, evaporation, cost):
 
         if not isinstance(self.area, Parameter):
-            raise ValueError('Evaporation nodes can only be created if an area Parameter is given.')
+            log.warning('Evaporation nodes can only be created if an area Parameter is given.')
+            return
 
         if evaporation is None:
             try:
                 evaporation_param = load_parameter(model, f'__{self.name}__:evaporation')
             except KeyError:
-                raise Exception(f"Please speficy an evaporation or a weather on node {self.name}")
+                log.warning(f"Please speficy an evaporation or a weather on node {self.name}")
+                return
         elif isinstance(evaporation, pd.DataFrame) or isinstance(evaporation, pd.Series):
             evaporation = evaporation.astype(np.float64)
             evaporation_param = MonthlyProfileParameter(model, evaporation)
@@ -267,13 +278,15 @@ class Reservoir(Storage):
     def _make_rainfall_node(self, model, rainfall, cost):
 
         if not isinstance(self.area, Parameter):
-            raise ValueError('Weather nodes can only be created if an area Parameter is given.')
+            log.warning('Weather nodes can only be created if an area Parameter is given.')
+            return
 
         if rainfall is None:
             try:
                 rainfall_param = load_parameter(model, f'__{self.name}__:rainfall')
             except KeyError:
-                raise Exception(f"Please speficy a rainfall or a weather on node {self.name}")
+                log.warning(f"Please speficy a rainfall or a weather on node {self.name}")
+                return
         elif isinstance(rainfall, pd.DataFrame) or isinstance(rainfall, pd.Series):
             #assume it's a dataframe
             rainfall = rainfall.astype(np.float64)
