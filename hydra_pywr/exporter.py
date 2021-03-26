@@ -27,7 +27,7 @@ class PywrHydraExporter(BasePywrHydra):
         self.attributes = attributes
         self.client = client
         self.template = template
-        
+
         self.type_id_map = {}
         for tt in self.template.templatetypes:
             self.type_id_map[tt.id] = tt
@@ -45,7 +45,7 @@ class PywrHydraExporter(BasePywrHydra):
 
     @classmethod
     def from_scenario_id(cls, client, scenario_id, template_id=None, **kwargs):
-        scenario = client.get_scenario(scenario_id, include_data=True, include_results=False)
+        scenario = client.get_scenario(scenario_id, include_data=True, include_results=False, include_metadata=False, include_attr=False)
         # Fetch the network
         network = client.get_network(scenario.network_id, include_data=False, include_results=False, template_id=template_id)
 
