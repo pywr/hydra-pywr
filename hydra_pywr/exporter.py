@@ -10,6 +10,11 @@ import jinja2
 from collections import defaultdict
 from .rules import exec_rules
 
+from hydra_pywr_common.types.model import(
+    PywrNode,
+    PywrParameter
+)
+
 import logging
 log = logging.getLogger(__name__)
 
@@ -221,6 +226,12 @@ class PywrHydraExporter(BasePywrHydra):
             if pywr_node_type is None:
                 raise ValueError('Template does not contain node of type "{}".'.format(pywr_node_type))
 
+            # ***
+            #print(PywrParameter.parameter_type_map)
+            self.build_node_and_references(node, pywr_node_type)
+            #exit(55)
+            # ***
+
             pywr_node_attrs, parameters, recorders = self._generate_component_attributes(node, pywr_node_type)
             pywr_node.update(pywr_node_attrs)
 
@@ -230,7 +241,45 @@ class PywrHydraExporter(BasePywrHydra):
                     pywr_node['position'] = {}
                 pywr_node['position'].update({'geographic': [node['x'], node['y']]})
 
+            #import pudb; pudb.set_trace()
             yield pywr_node, parameters, recorders
+
+
+    def build_node_and_references(self, nodedata, pywr_node_type):
+        pywr_node = {'type': pywr_node_type}
+        parameters = {}
+        recorders = {}
+
+        for resource_attribute in nodedata['attributes']:
+            attribute = self.attributes[resource_attribute['attr_id']]
+            try:
+                resource_scenario = self._get_resource_scenario(resource_attribute['id'])
+            except ValueError:
+                continue  # No data associated with this attribute.
+
+            if resource_attribute['attr_is_var'] == 'Y':
+                continue
+
+            attribute_name = attribute['name']
+            dataset = resource_scenario['dataset']
+            dataset_type = dataset['type']
+            value = dataset['value']
+            #print(attribute)
+            #print(value)
+            try:
+                #print(f"value: {value} ({type(value)}")
+                typedval = json.loads(value)
+            except json.decoder.JSONDecodeError as e:
+                #print(f"*** JSON PARSE ERROR *** {nodedata['name']}:{attribute_name} = {value} ({dataset_type})")
+                #print(e)
+                typedval = value
+            nodedata[attribute_name] = typedval
+
+        nodedata["type"] = pywr_node_type
+        dev_node = PywrNode.NodeFactory(nodedata)
+        print(dev_node)
+        print(dev_node.__dict__)
+
 
     def generate_pywr_edges(self):
         """ Generator returning a Pywr tuple for each link/edge in the network. """
@@ -385,6 +434,7 @@ class PywrHydraExporter(BasePywrHydra):
             value = dataset['value']
 
             hydra_type = typemap[dataset_type.upper()]
+
 
             if attribute_name in schema.fields:
                 #TODO: This is repeated. fix.
