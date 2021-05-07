@@ -10,6 +10,7 @@ from . import utils
 from hydra_client.click import hydra_app, make_plugins, write_plugins
 import pandas
 
+from hydra_pywr_common.types.network import PywrNetwork
 
 def get_client(hostname, **kwargs):
     return JSONConnection(app_name='Pywr Hydra App', db_url=hostname, **kwargs)
@@ -98,6 +99,19 @@ def export_json(obj, data_dir, scenario_id, user_id, json_sort_keys, json_indent
     network_id = exporter.data.id
 
     data = exporter.get_pywr_data()
+
+    print(exporter.nodes)
+    print('='*46)
+    print(exporter.edges)
+    print('='*46)
+    print(exporter.parameters)
+    print('='*46)
+    print(exporter.recorders)
+
+    pnet = PywrNetwork(data)    # data is ducktype 'Reader' obj due to six attrs
+    print(pnet.parameters)
+    exit(55)
+
     title = data['metadata']['title']
 
     #check if the output folder exists and create it if not

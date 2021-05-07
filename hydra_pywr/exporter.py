@@ -12,13 +12,27 @@ from .rules import exec_rules
 
 from hydra_pywr_common.types.model import(
     PywrNode,
-    PywrParameter
+    PywrParameter as DevPywrParameter,
+    PywrEdge
 )
+
+from hydra_pywr_common.types.fragments.network import(
+    Timestepper,
+    Metadata
+)
+
+from hydra_pywr_common.types.parameters import *
+from hydra_pywr_common.types.recorders import *
+
+import pudb
+
 
 import logging
 log = logging.getLogger(__name__)
 
 COST_ALIASES = ['allocation penalty', 'allocation_penalty', 'Allocation Penalty']
+EXCLUDE_HYDRA_ATTRS = ("id", "status", "cr_date", "network_id", "x", "y",
+                       "types", "attributes", "layout", "network")
 
 class PatternContext(object):
     """ Container for arbitrary attributes in pattern rendering. """
@@ -44,6 +58,11 @@ class PywrHydraExporter(BasePywrHydra):
         self._parameter_recorder_flags = {}
         self._inline_parameter_recorder_flags = defaultdict(dict)
         self._node_recorder_flags = {}
+
+        self.nodes = {}
+        self.edges = {}
+        self.parameters = {}
+        self.recorders = {}
 
         self._pattern_templates = None
 
@@ -112,6 +131,16 @@ class PywrHydraExporter(BasePywrHydra):
         # First find any patterns and create jinja2 templates for them.
         self.create_parameter_pattern_templates()
 
+        """
+        pgroup_data = {}
+        for pkey, pvalue in self.generate_group_data("parameters", decode_from_json=True):
+            print(pkey, pvalue)
+            pgroup_data[pkey] = pvalue
+
+        print(pgroup_data)
+        exit(77)
+        """
+
         # TODO see proposed changes to metadata and timestepper data.
         for group_name in ('metadata', 'timestepper', 'recorders', 'parameters'):
             # Recorders and parameters are JSON encoded.
@@ -155,6 +184,8 @@ class PywrHydraExporter(BasePywrHydra):
                 pywr_data['recorders'].update(recorders)
         pywr_data['nodes'] = nodes
 
+        self.edges = self.build_edges()
+
         edges = []
         for edge, (node, parameters, recorders) in self.generate_pywr_edges():
             edges.append(edge)
@@ -173,7 +204,9 @@ class PywrHydraExporter(BasePywrHydra):
 
         pywr_data['edges'] = edges
 
-        return pywr_data
+        self.timestepper, self.metadata = self.build_network_attrs()
+        return self
+        #return pywr_data
 
     def _get_all_resource_attributes(self):
         """
@@ -227,8 +260,10 @@ class PywrHydraExporter(BasePywrHydra):
                 raise ValueError('Template does not contain node of type "{}".'.format(pywr_node_type))
 
             # ***
-            #print(PywrParameter.parameter_type_map)
             self.build_node_and_references(node, pywr_node_type)
+            #print(DevPywrParameter.parameter_type_map)
+            #import pudb; pudb.set_trace()
+            #self.build_parameters()
             #exit(55)
             # ***
 
@@ -241,7 +276,6 @@ class PywrHydraExporter(BasePywrHydra):
                     pywr_node['position'] = {}
                 pywr_node['position'].update({'geographic': [node['x'], node['y']]})
 
-            #import pudb; pudb.set_trace()
             yield pywr_node, parameters, recorders
 
 
@@ -276,9 +310,102 @@ class PywrHydraExporter(BasePywrHydra):
             nodedata[attribute_name] = typedval
 
         nodedata["type"] = pywr_node_type
-        dev_node = PywrNode.NodeFactory(nodedata)
+        node_attr_data = {a:v for a,v in nodedata.items() if a not in EXCLUDE_HYDRA_ATTRS}
+        dev_node = PywrNode.NodeFactory(node_attr_data)
+
+        if dev_node.name == "Delta_Cotton":
+            print(dev_node.parameters)
+            print(dev_node.max_flow.__dict__)
+            #exit(55)
+            #pudb.set_trace()
+            #pass
+        if dev_node.name == "link_48":
+            print(dev_node)
+            print(dev_node.recorders)
+            print(dev_node.__dict__)
+
         print(dev_node)
         print(dev_node.__dict__)
+        print(dev_node.parameters)
+        print(dev_node.recorders)
+
+        self.nodes[dev_node.name] = dev_node
+        self.parameters.update(dev_node.parameters)
+        self.recorders.update(dev_node.recorders)
+
+        print()
+
+
+    def build_edges(self):
+        edges = {}
+
+        for hydra_edge in self.data["links"]:
+            src_hydra_node = self.hydra_node_lookup[hydra_edge["node_1_id"]]
+            dest_hydra_node = self.hydra_node_lookup[hydra_edge["node_2_id"]]
+            # Retrieve nodes from PywrNode store to verify presence
+            src_node = self.nodes[src_hydra_node["name"]]
+            dest_node = self.nodes[dest_hydra_node["name"]]
+
+            edge = PywrEdge((src_node.name, dest_node.name))  # NB Call ctor directly with tuple here, no factory
+            edges[edge.name] = edge
+
+            print(edge)
+            print(edge.__dict__)
+            print()
+
+        return edges
+
+
+    def build_network_attrs(self):
+        """ TimeStepper and Metadata instances """
+
+        print(self.data.keys())
+
+        timestep = {}
+        ts_keys = ("start", "end", "timestep")
+
+        for attr in self.data["attributes"]:
+            attr_group, *subs = attr.name.split('.')
+            if attr_group != "timestepper":
+                continue
+            resource_scenario = self._get_resource_scenario(attr.id)
+            dataset = resource_scenario["dataset"]
+            #ts_key = attr.name.split('.')[-1]
+            ts_key = subs[-1]
+            timestep[ts_key] = dataset["value"]
+
+            """
+            print(resource_scenario)
+            print(attr)
+            print(f"{attr.name}: {dataset['value']}")
+            """
+            print()
+
+        print(timestep)
+        ts_inst = Timestepper(timestep)
+        print(ts_inst)
+        print(ts_inst.__dict__)
+        print(ts_inst.start, ts_inst.end, ts_inst.timestep)
+
+        """ Metadata """
+        metadata = {"title": self.data['name'],
+                    "description": self.data['description']
+                   }
+        for attr_name in self.data["attributes"]:
+            attr_group, *subs = attr.name.split('.')
+            if attr_group != "metadata":
+                continue
+            resource_scenario = self._get_resource_scenario(attr.id)
+            dataset = resource_scenario["dataset"]
+            meta_key = subs[-1]
+            metadata[meta_key] = dataset["value"]
+
+        meta_inst = Metadata(metadata)
+        print(meta_inst)
+        print(meta_inst.__dict__)
+        print(meta_inst.title, meta_inst.description)
+
+        return ts_inst, meta_inst
 
 
     def generate_pywr_edges(self):
