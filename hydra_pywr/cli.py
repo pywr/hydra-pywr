@@ -11,6 +11,7 @@ from hydra_client.click import hydra_app, make_plugins, write_plugins
 import pandas
 
 from hydra_pywr_common.types.network import PywrNetwork
+from hydra_pywr_common.lib.writers import PywrJsonWriter
 
 def get_client(hostname, **kwargs):
     return JSONConnection(app_name='Pywr Hydra App', db_url=hostname, **kwargs)
@@ -110,6 +111,18 @@ def export_json(obj, data_dir, scenario_id, user_id, json_sort_keys, json_indent
 
     pnet = PywrNetwork(data)    # data is ducktype 'Reader' obj due to six attrs
     print(pnet.parameters)
+    tn = [*pnet.nodes.values()][0]
+    print(tn.pywr_json)
+    print(tn.parameters)
+    output_nodes = filter(lambda n: n.key == "output", pnet.nodes.values())
+    delta_cotton = [*output_nodes][0]
+    print(delta_cotton.pywr_json)
+    print(delta_cotton.parameters)
+    print()
+    print(pnet.timestepper.__dict__)
+
+    writer = PywrJsonWriter(pnet)
+    print(writer.as_json())
     exit(55)
 
     title = data['metadata']['title']

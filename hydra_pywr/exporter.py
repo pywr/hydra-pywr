@@ -323,6 +323,12 @@ class PywrHydraExporter(BasePywrHydra):
             print(dev_node)
             print(dev_node.recorders)
             print(dev_node.__dict__)
+            print(node_attr_data)
+        if dev_node.name == "YattaThika3A":
+            print(dev_node)
+            print(dev_node.recorders)
+            print(dev_node.__dict__)
+            print(node_attr_data)
 
         print(dev_node)
         print(dev_node.__dict__)
