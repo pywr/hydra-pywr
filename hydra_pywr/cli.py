@@ -118,11 +118,16 @@ def export_json(obj, data_dir, scenario_id, user_id, json_sort_keys, json_indent
     delta_cotton = [*output_nodes][0]
     print(delta_cotton.pywr_json)
     print(delta_cotton.parameters)
+    print(delta_cotton.__dict__)
+    print(delta_cotton.position)
     print()
     print(pnet.timestepper.__dict__)
 
     writer = PywrJsonWriter(pnet)
-    print(writer.as_json())
+    #print(writer.as_json())
+    output = writer.as_dict()
+    with open("/tmp/writer.json", mode='w') as fp:
+        json.dump(output, fp, sort_keys=json_sort_keys, indent=2)
     exit(55)
 
     title = data['metadata']['title']

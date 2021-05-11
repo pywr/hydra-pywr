@@ -32,7 +32,7 @@ log = logging.getLogger(__name__)
 
 COST_ALIASES = ['allocation penalty', 'allocation_penalty', 'Allocation Penalty']
 EXCLUDE_HYDRA_ATTRS = ("id", "status", "cr_date", "network_id", "x", "y",
-                       "types", "attributes", "layout", "network")
+                       "types", "attributes", "layout", "network", "description")
 
 class PatternContext(object):
     """ Container for arbitrary attributes in pattern rendering. """
@@ -311,6 +311,10 @@ class PywrHydraExporter(BasePywrHydra):
 
         nodedata["type"] = pywr_node_type
         node_attr_data = {a:v for a,v in nodedata.items() if a not in EXCLUDE_HYDRA_ATTRS}
+        position = { "geographic": [ nodedata.get("x",0), nodedata.get("y",0) ] }
+        node_attr_data["position"] = position
+        node_attr_data["comment"] = nodedata.get("description", "")
+
         dev_node = PywrNode.NodeFactory(node_attr_data)
 
         if dev_node.name == "Delta_Cotton":
@@ -329,6 +333,7 @@ class PywrHydraExporter(BasePywrHydra):
             print(dev_node.recorders)
             print(dev_node.__dict__)
             print(node_attr_data)
+            print(nodedata)
 
         print(dev_node)
         print(dev_node.__dict__)
