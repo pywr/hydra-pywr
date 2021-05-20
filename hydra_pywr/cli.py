@@ -11,7 +11,10 @@ from hydra_client.click import hydra_app, make_plugins, write_plugins
 import pandas
 
 from hydra_pywr_common.types.network import PywrNetwork
-from hydra_pywr_common.lib.writers import PywrJsonWriter
+from hydra_pywr_common.lib.writers import(
+    PywrJsonWriter,
+    PywrHydraWriter
+)
 
 def get_client(hostname, **kwargs):
     return JSONConnection(app_name='Pywr Hydra App', db_url=hostname, **kwargs)
@@ -80,6 +83,37 @@ def import_json(obj, filename, project_id, user_id, template_id, projection, run
     if run:
         run_network_scenario(client, network_id, scenario_id, template_id,
                              solver=solver, check_model=check_model)
+
+@hydra_app(category='import', name='Import Pywr JSON')
+@cli.command(name='import_new', context_settings=dict(
+    ignore_unknown_options=True,
+    allow_extra_args=True))
+@click.pass_obj
+@click.option('--filename', type=click.Path(file_okay=True, dir_okay=False, exists=True))
+@click.option('-p', '--project-id', type=int)
+@click.option('-u', '--user-id', type=int, default=None)
+@click.option('--template-id', type=int)
+@click.option('--projection', type=str, default=None)
+@click.option('--run/--no-run', default=False)
+@click.option('--solver', type=str, default=None)
+@click.option('--check-model/--no-check-model', default=True)
+@click.option('--ignore-type-errors', is_flag=True, default=False)
+def import_json_new(obj, filename, project_id, user_id, template_id, projection, run, solver, check_model, ignore_type_errors, *args):
+    """ Import a Pywr JSON file into Hydra. """
+    click.echo(f'Beginning import of "{filename}" to Project ID: {project_id}')
+
+    if  filename is None:
+        raise Exception("No file specified")
+
+    if project_id is None:
+        raise Exception("No project specified")
+
+    if template_id is None:
+        raise Exception("No template specified")
+
+    pnet = PywrNetwork.from_source_file(filename)
+    hwriter = PywrHydraWriter(pnet, user_id=user_id, template_id=template_id, project_id=project_id)
+    hwriter.build_hydra_network(projection)
 
 
 @hydra_app(category='export', name='Export to Pywr JSON')

@@ -10,8 +10,10 @@ import jinja2
 from collections import defaultdict
 from .rules import exec_rules
 
-from hydra_pywr_common.types.model import(
-    PywrNode,
+from hydra_pywr_common.types.nodes import(
+    PywrNode
+)
+from hydra_pywr_common.types.base import(
     PywrParameter as DevPywrParameter,
     PywrEdge
 )

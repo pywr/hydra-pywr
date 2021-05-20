@@ -113,7 +113,7 @@ class PywrHydraImporter(BasePywrHydra):
             for typeattr in templatetype.typeattrs:
                 attr = self.client.get_attribute_by_id(typeattr.attr_id)
                 attr_name_map[attr.name] = attr
-                #populate the dimensioin mapping
+                # Populate the dimension mapping
                 self.attr_dimension_map[attr.name] = attr.dimension_id
 
         return attr_name_map
