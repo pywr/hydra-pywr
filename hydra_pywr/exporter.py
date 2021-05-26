@@ -20,7 +20,8 @@ from hydra_pywr_common.types.base import(
 
 from hydra_pywr_common.types.fragments.network import(
     Timestepper,
-    Metadata
+    Metadata,
+    Table
 )
 
 from hydra_pywr_common.types.parameters import *
@@ -206,7 +207,7 @@ class PywrHydraExporter(BasePywrHydra):
 
         pywr_data['edges'] = edges
 
-        self.timestepper, self.metadata = self.build_network_attrs()
+        self.timestepper, self.metadata, self.tables = self.build_network_attrs()
         return self
         #return pywr_data
 
@@ -315,14 +316,21 @@ class PywrHydraExporter(BasePywrHydra):
         node_attr_data = {a:v for a,v in nodedata.items() if a not in EXCLUDE_HYDRA_ATTRS}
         position = { "geographic": [ nodedata.get("x",0), nodedata.get("y",0) ] }
         node_attr_data["position"] = position
-        node_attr_data["comment"] = nodedata.get("description", "")
+        if "comment" in node_attr_data:
+            del node_attr_data["comment"]
+        if "description" in nodedata:
+            node_attr_data["comment"] = nodedata.get("description")
 
         dev_node = PywrNode.NodeFactory(node_attr_data)
 
-        if dev_node.name == "Delta_Cotton":
-            print(dev_node.parameters)
-            print(dev_node.max_flow.__dict__)
-            #exit(55)
+        #if dev_node.name == "Delta_Cotton":
+        """
+        if dev_node.name == "4GF_79":
+            print(f"{dev_node.parameters=}")
+            print(f"{dev_node.__dict__=}")
+            #print(f"{dev_node.max_flow.__dict__=}")
+            print(f"{node_attr_data=}")
+            print(f"{nodedata=}")
             #pudb.set_trace()
             #pass
         if dev_node.name == "link_48":
@@ -336,17 +344,22 @@ class PywrHydraExporter(BasePywrHydra):
             print(dev_node.__dict__)
             print(node_attr_data)
             print(nodedata)
+        if dev_node.name == "Affinity Transfer":
+            print(f"{dev_node=}")
+            print(f"{dev_node.recorders=}")
+            print(f"{dev_node.__dict__=}")
+            print(f"{node_attr_data=}")
+            print(f"{nodedata=}")
+        """
 
-        print(dev_node)
-        print(dev_node.__dict__)
-        print(dev_node.parameters)
-        print(dev_node.recorders)
+        #print(dev_node)
+        #print(dev_node.__dict__)
+        #print(dev_node.parameters)
+        #print(dev_node.recorders)
 
         self.nodes[dev_node.name] = dev_node
         self.parameters.update(dev_node.parameters)
         self.recorders.update(dev_node.recorders)
-
-        print()
 
 
     def build_edges(self):
@@ -362,17 +375,11 @@ class PywrHydraExporter(BasePywrHydra):
             edge = PywrEdge((src_node.name, dest_node.name))  # NB Call ctor directly with tuple here, no factory
             edges[edge.name] = edge
 
-            print(edge)
-            print(edge.__dict__)
-            print()
-
         return edges
 
 
     def build_network_attrs(self):
         """ TimeStepper and Metadata instances """
-
-        print(self.data.keys())
 
         timestep = {}
         ts_keys = ("start", "end", "timestep")
@@ -392,19 +399,26 @@ class PywrHydraExporter(BasePywrHydra):
             print(attr)
             print(f"{attr.name}: {dataset['value']}")
             """
-            print()
 
-        print(timestep)
+        ts_val = timestep.get("timestep",1)
+        try:
+            tv = int(float(ts_val))
+        except ValueError:
+            tv = ts_val
+        timestep["timestep"] = tv
         ts_inst = Timestepper(timestep)
+        """
+        print(timestep)
         print(ts_inst)
         print(ts_inst.__dict__)
-        print(ts_inst.start, ts_inst.end, ts_inst.timestep)
+        print(ts_inst.start.value, ts_inst.end.value, ts_inst.timestep.value, type(ts_inst.timestep.value))
+        """
 
         """ Metadata """
         metadata = {"title": self.data['name'],
                     "description": self.data['description']
                    }
-        for attr_name in self.data["attributes"]:
+        for attr in self.data["attributes"]:
             attr_group, *subs = attr.name.split('.')
             if attr_group != "metadata":
                 continue
@@ -414,11 +428,25 @@ class PywrHydraExporter(BasePywrHydra):
             metadata[meta_key] = dataset["value"]
 
         meta_inst = Metadata(metadata)
-        print(meta_inst)
-        print(meta_inst.__dict__)
-        print(meta_inst.title, meta_inst.description)
+        #print(meta_inst)
+        #print(meta_inst.__dict__)
+        #print(meta_inst.title, meta_inst.description)
 
-        return ts_inst, meta_inst
+        """ Tables """
+        tables_data = defaultdict(dict)
+        tables = {}
+        for attr in self.data["attributes"]:
+            if not attr.name.startswith("tbl_"):
+                continue
+            table_name, table_attr = attr.name[4:].split('.')
+            resource_scenario = self._get_resource_scenario(attr.id)
+            dataset = resource_scenario["dataset"]
+            tables_data[table_name][table_attr] = dataset["value"]
+
+        for tname, tdata in tables_data.items():
+            tables[tname] = Table(tdata)
+
+        return ts_inst, meta_inst, tables
 
 
     def generate_pywr_edges(self):

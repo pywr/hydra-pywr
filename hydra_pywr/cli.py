@@ -135,16 +135,8 @@ def export_json(obj, data_dir, scenario_id, user_id, json_sort_keys, json_indent
 
     data = exporter.get_pywr_data()
 
-    print(exporter.nodes)
-    print('='*46)
-    print(exporter.edges)
-    print('='*46)
-    print(exporter.parameters)
-    print('='*46)
-    print(exporter.recorders)
-
-    pnet = PywrNetwork(data)    # data is ducktype 'Reader' obj due to six attrs
-    print(pnet.parameters)
+    pnet = PywrNetwork(data)    # data is ducktype 'Reader' obj due to seven attrs
+    """
     tn = [*pnet.nodes.values()][0]
     print(tn.pywr_json)
     print(tn.parameters)
@@ -156,13 +148,13 @@ def export_json(obj, data_dir, scenario_id, user_id, json_sort_keys, json_indent
     print(delta_cotton.position)
     print()
     print(pnet.timestepper.__dict__)
+    """
 
     writer = PywrJsonWriter(pnet)
-    #print(writer.as_json())
     output = writer.as_dict()
     with open("/tmp/writer.json", mode='w') as fp:
         json.dump(output, fp, sort_keys=json_sort_keys, indent=2)
-    exit(55)
+    exit(55)    # NB
 
     title = data['metadata']['title']
 
