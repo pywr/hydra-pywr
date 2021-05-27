@@ -4,7 +4,6 @@ import os
 from hydra_client.connection import JSONConnection
 from .exporter import PywrHydraExporter
 from .runner import PywrHydraRunner
-from .importer import PywrHydraImporter
 from .template import register_template, unregister_template, migrate_network_template, TemplateExistsError
 from . import utils
 from hydra_client.click import hydra_app, make_plugins, write_plugins
@@ -61,43 +60,6 @@ def cli(obj, username, password, hostname, session):
 @click.option('--solver', type=str, default=None)
 @click.option('--check-model/--no-check-model', default=True)
 @click.option('--ignore-type-errors', is_flag=True, default=False)
-def import_json(obj, filename, project_id, user_id, template_id, projection, run, solver, check_model, ignore_type_errors, *args):
-    """ Import a Pywr JSON file into Hydra. """
-    click.echo(f'Beginning import of "{filename}"! Project ID: {project_id}')
-
-    if  filename is None:
-        raise Exception("No file specified")
-
-    if project_id is None:
-        raise Exception("No project specified")
-
-    if template_id is None:
-        raise Exception("No template specified")
-
-    client = get_logged_in_client(obj, user_id=user_id)
-    importer = PywrHydraImporter.from_client(client, filename, template_id)
-    network_id, scenario_id = importer.import_data(project_id, projection=projection, ignore_type_errors=ignore_type_errors)
-
-    click.echo(f'Successfully imported "{filename}"! Network ID: {network_id}, Scenario ID: {scenario_id}')
-
-    if run:
-        run_network_scenario(client, network_id, scenario_id, template_id,
-                             solver=solver, check_model=check_model)
-
-@hydra_app(category='import', name='Import Pywr JSON')
-@cli.command(name='import_new', context_settings=dict(
-    ignore_unknown_options=True,
-    allow_extra_args=True))
-@click.pass_obj
-@click.option('--filename', type=click.Path(file_okay=True, dir_okay=False, exists=True))
-@click.option('-p', '--project-id', type=int)
-@click.option('-u', '--user-id', type=int, default=None)
-@click.option('--template-id', type=int)
-@click.option('--projection', type=str, default=None)
-@click.option('--run/--no-run', default=False)
-@click.option('--solver', type=str, default=None)
-@click.option('--check-model/--no-check-model', default=True)
-@click.option('--ignore-type-errors', is_flag=True, default=False)
 def import_json_new(obj, filename, project_id, user_id, template_id, projection, run, solver, check_model, ignore_type_errors, *args):
     """ Import a Pywr JSON file into Hydra. """
     click.echo(f'Beginning import of "{filename}" to Project ID: {project_id}')
@@ -133,41 +95,18 @@ def export_json(obj, data_dir, scenario_id, user_id, json_sort_keys, json_indent
 
     network_id = exporter.data.id
 
-    data = exporter.get_pywr_data()
+    data = exporter.get_pywr_data_new()
 
-    pnet = PywrNetwork(data)    # data is ducktype 'Reader' obj due to seven attrs
-    """
-    tn = [*pnet.nodes.values()][0]
-    print(tn.pywr_json)
-    print(tn.parameters)
-    output_nodes = filter(lambda n: n.key == "output", pnet.nodes.values())
-    delta_cotton = [*output_nodes][0]
-    print(delta_cotton.pywr_json)
-    print(delta_cotton.parameters)
-    print(delta_cotton.__dict__)
-    print(delta_cotton.position)
-    print()
-    print(pnet.timestepper.__dict__)
-    """
-
+    pnet = PywrNetwork(data)
     writer = PywrJsonWriter(pnet)
     output = writer.as_dict()
-    with open("/tmp/writer.json", mode='w') as fp:
+
+    outfile = os.path.join(data_dir, f"{pnet.title}.json")
+    outfile = "/tmp/writer.json"
+    with open(outfile, mode='w') as fp:
         json.dump(output, fp, sort_keys=json_sort_keys, indent=2)
-    exit(55)    # NB
 
-    title = data['metadata']['title']
-
-    #check if the output folder exists and create it if not
-    if not os.path.isdir(data_dir):
-        #exist_ok sets unix the '-p' functionality to create the whole path
-        os.makedirs(data_dir, exist_ok=True)
-
-    filename = os.path.join(data_dir, f'{title}.json')
-    with open(filename, mode='w') as fh:
-        json.dump(data, fh, sort_keys=json_sort_keys, indent=json_indent)
-
-    click.echo(f'Successfully exported "{filename}"! Network ID: {network_id}, Scenario ID: {scenario_id}')
+    click.echo(f"Network: {network_id}, Scenario: {scenario_id} exported to `{outfile}`")
 
 
 @hydra_app(category='model', name='Run Pywr')
