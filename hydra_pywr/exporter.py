@@ -76,7 +76,7 @@ class PywrHydraExporter():
         return cls(client, network, attributes, template, **kwargs)
 
 
-    def get_pywr_data_new(self):
+    def get_pywr_data(self):
         self.generate_pywr_nodes()
         self.edges = self.build_edges()
         self.timestepper, self.metadata, self.tables = self.build_network_attrs()

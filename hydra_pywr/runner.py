@@ -9,6 +9,9 @@ from pywr.recorders import NumpyArrayNodeRecorder, NumpyArrayStorageRecorder, Nu
     NumpyArrayParameterRecorder
 from pywr.recorders.progress import ProgressRecorder
 from .template import PYWR_ARRAY_RECORDER_ATTRIBUTES
+from hydra_pywr_common.types.network import PywrNetwork
+from hydra_pywr_common.lib.writers import PywrJsonWriter
+
 import os
 import logging
 log = logging.getLogger(__name__)
@@ -56,7 +59,11 @@ class PywrHydraRunner(PywrHydraExporter):
 
     def load_pywr_model(self, solver=None):
         """ Create a Pywr model from the exported data. """
-        pywr_data = self.get_pywr_data()
+        data = self.get_pywr_data()
+        pnet = PywrNetwork(data)
+        writer = PywrJsonWriter(pnet)
+        pywr_data = writer.as_dict()
+
         model = Model.load(pywr_data, solver=solver)
         self.model = model
 

@@ -60,7 +60,7 @@ def cli(obj, username, password, hostname, session):
 @click.option('--solver', type=str, default=None)
 @click.option('--check-model/--no-check-model', default=True)
 @click.option('--ignore-type-errors', is_flag=True, default=False)
-def import_json_new(obj, filename, project_id, user_id, template_id, projection, run, solver, check_model, ignore_type_errors, *args):
+def import_json(obj, filename, project_id, user_id, template_id, projection, run, solver, check_model, ignore_type_errors, *args):
     """ Import a Pywr JSON file into Hydra. """
     click.echo(f'Beginning import of "{filename}" to Project ID: {project_id}')
 
@@ -95,14 +95,13 @@ def export_json(obj, data_dir, scenario_id, user_id, json_sort_keys, json_indent
 
     network_id = exporter.data.id
 
-    data = exporter.get_pywr_data_new()
+    data = exporter.get_pywr_data()
 
     pnet = PywrNetwork(data)
     writer = PywrJsonWriter(pnet)
     output = writer.as_dict()
 
-    outfile = os.path.join(data_dir, f"{pnet.title}.json")
-    outfile = "/tmp/writer.json"
+    outfile = os.path.join(data_dir, f"{pnet.title.replace(' ', '_')}.json")
     with open(outfile, mode='w') as fp:
         json.dump(output, fp, sort_keys=json_sort_keys, indent=2)
 
