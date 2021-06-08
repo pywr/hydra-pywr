@@ -149,14 +149,9 @@ class PywrHydraExporter():
             dataset = resource_scenario['dataset']
             dataset_type = dataset['type']
             value = dataset['value']
-            #print(attribute)
-            #print(value)
             try:
-                #print(f"value: {value} ({type(value)}")
                 typedval = json.loads(value)
             except json.decoder.JSONDecodeError as e:
-                #print(f"*** JSON PARSE ERROR *** {nodedata['name']}:{attribute_name} = {value} ({dataset_type})")
-                #print(e)
                 typedval = value
             nodedata[attribute_name] = typedval
 
@@ -171,31 +166,6 @@ class PywrHydraExporter():
 
         dev_node = PywrNode.NodeFactory(node_attr_data)
 
-        """
-        if dev_node.name == "4GF_79":
-            print(f"{dev_node.parameters=}")
-            print(f"{dev_node.__dict__=}")
-            #print(f"{dev_node.max_flow.__dict__=}")
-            print(f"{node_attr_data=}")
-            print(f"{nodedata=}")
-        if dev_node.name == "link_48":
-            print(dev_node)
-            print(dev_node.recorders)
-            print(dev_node.__dict__)
-            print(node_attr_data)
-        if dev_node.name == "YattaThika3A":
-            print(dev_node)
-            print(dev_node.recorders)
-            print(dev_node.__dict__)
-            print(node_attr_data)
-            print(nodedata)
-        if dev_node.name == "Affinity Transfer":
-            print(f"{dev_node=}")
-            print(f"{dev_node.recorders=}")
-            print(f"{dev_node.__dict__=}")
-            print(f"{node_attr_data=}")
-            print(f"{nodedata=}")
-        """
         self.nodes[dev_node.name] = dev_node
         self.parameters.update(dev_node.parameters)
         self.recorders.update(dev_node.recorders)
@@ -233,11 +203,6 @@ class PywrHydraExporter():
             ts_key = subs[-1]
             timestep[ts_key] = dataset["value"]
 
-            """
-            print(resource_scenario)
-            print(attr)
-            print(f"{attr.name}: {dataset['value']}")
-            """
 
         ts_val = timestep.get("timestep",1)
         try:
@@ -246,12 +211,6 @@ class PywrHydraExporter():
             tv = ts_val
         timestep["timestep"] = tv
         ts_inst = Timestepper(timestep)
-        """
-        print(timestep)
-        print(ts_inst)
-        print(ts_inst.__dict__)
-        print(ts_inst.start.value, ts_inst.end.value, ts_inst.timestep.value, type(ts_inst.timestep.value))
-        """
 
         """ Metadata """
         metadata = {"title": self.data['name'],
@@ -267,9 +226,6 @@ class PywrHydraExporter():
             metadata[meta_key] = dataset["value"]
 
         meta_inst = Metadata(metadata)
-        #print(meta_inst)
-        #print(meta_inst.__dict__)
-        #print(meta_inst.title, meta_inst.description)
 
         """ Tables """
         tables_data = defaultdict(dict)
