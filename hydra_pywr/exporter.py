@@ -38,7 +38,6 @@ class PywrHydraExporter():
             self.type_id_map[tt.id] = tt
 
         self.attr_unit_map = {}
-        #Lookup of ID to hydra node
         self.hydra_node_lookup = {}
 
         self._parameter_recorder_flags = {}
@@ -131,9 +130,6 @@ class PywrHydraExporter():
 
 
     def build_node_and_references(self, nodedata, pywr_node_type):
-        pywr_node = {'type': pywr_node_type}
-        parameters = {}
-        recorders = {}
 
         for resource_attribute in nodedata['attributes']:
             attribute = self.attributes[resource_attribute['attr_id']]
