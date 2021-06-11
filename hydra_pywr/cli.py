@@ -64,7 +64,7 @@ def import_json(obj, filename, project_id, user_id, template_id, projection, run
     """ Import a Pywr JSON file into Hydra. """
     click.echo(f'Beginning import of "{filename}" to Project ID: {project_id}')
 
-    if  filename is None:
+    if filename is None:
         raise Exception("No file specified")
 
     if project_id is None:

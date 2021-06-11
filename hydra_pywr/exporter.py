@@ -11,7 +11,8 @@ from hydra_pywr_common.types.base import(
 from hydra_pywr_common.types.fragments.network import(
     Timestepper,
     Metadata,
-    Table
+    Table,
+    Scenario
 )
 
 from hydra_pywr_common.types.parameters import *
@@ -45,9 +46,11 @@ class PywrHydraExporter():
         self._node_recorder_flags = {}
 
         self.nodes = {}
-        self.edges = {}
+        self.edges = []
         self.parameters = {}
         self.recorders = {}
+        self.tables = {}
+        self.scenarios = []
 
         self._pattern_templates = None
 
@@ -78,7 +81,8 @@ class PywrHydraExporter():
     def get_pywr_data(self):
         self.generate_pywr_nodes()
         self.edges = self.build_edges()
-        self.timestepper, self.metadata, self.tables = self.build_network_attrs()
+        #self.timestepper, self.metadata, self.tables = self.build_network_attrs()
+        self.timestepper, self.metadata, self.scenarios = self.build_integrated_network_attrs()
         return self
 
 
@@ -181,6 +185,38 @@ class PywrHydraExporter():
             edges[edge.name] = edge
 
         return edges
+
+
+    def build_integrated_network_attrs(self):
+        water_attr = self.get_attr_by_name("water_data")
+        resource_scenario = self._get_resource_scenario(water_attr.id)
+        dataset = resource_scenario["dataset"]
+        data = json.loads(dataset["value"])
+        timestep = data["timestepper"]
+
+        ts_val = timestep.get("timestep",1)
+        try:
+            tv = int(float(ts_val))
+        except ValueError:
+            tv = ts_val
+        timestep["timestep"] = tv
+        ts_inst = Timestepper(timestep)
+
+        metadata = data["metadata"]
+        meta_inst = Metadata(metadata)
+
+        scenarios = data["scenarios"]
+        scen_insts = [ Scenario(s) for s in scenarios ]
+
+        return ts_inst, meta_inst, scen_insts
+
+
+    def get_attr_by_name(self, name):
+        for attr in self.data["attributes"]:
+            if attr.name == name:
+                return attr
+
+        raise KeyError(f"No attr named '{name}'")
 
 
     def build_network_attrs(self):
