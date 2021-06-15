@@ -14,7 +14,7 @@ from hydra_pywr_common.types.fragments.network import(
     Table,
     Scenario
 )
-
+from hydra_pywr_common.types.fragments.config import IntegratedConfig
 from hydra_pywr_common.types.parameters import *
 from hydra_pywr_common.types.recorders import *
 
@@ -27,9 +27,10 @@ EXCLUDE_HYDRA_ATTRS = ("id", "status", "cr_date", "network_id", "x", "y",
 
 
 class PywrHydraExporter():
-    def __init__(self, client, data, attributes, template):
+    def __init__(self, client, data, scenario_id, attributes, template):
         super().__init__()
         self.data = data
+        self.scenario_id = scenario_id
         self.attributes = attributes
         self.client = client
         self.template = template
@@ -56,7 +57,7 @@ class PywrHydraExporter():
 
 
     @classmethod
-    def from_scenario_id(cls, client, scenario_id, template_id=None, **kwargs):
+    def from_scenario_id(cls, client, scenario_id, template_id=None, index=0, **kwargs):
         scenario = client.get_scenario(scenario_id, include_data=True, include_results=False, include_metadata=False, include_attr=False)
         # Fetch the network
         network = client.get_network(scenario.network_id, include_data=False, include_results=False, template_id=template_id)
@@ -71,18 +72,23 @@ class PywrHydraExporter():
 
         if template_id is not None:
             template = client.get_template(template_id)
-        elif len(network.types) == 1:
-            template = client.get_template(network.types[0].template_id)
+        #elif len(network.types) == 1:
+        else:
+            template = client.get_template(network.types[index].template_id)
 
 
-        return cls(client, network, attributes, template, **kwargs)
+        return cls(client, network, scenario_id, attributes, template, **kwargs)
 
 
-    def get_pywr_data(self):
+    def get_pywr_data(self, domain=None):
         self.generate_pywr_nodes()
         self.edges = self.build_edges()
-        #self.timestepper, self.metadata, self.tables = self.build_network_attrs()
-        self.timestepper, self.metadata, self.scenarios = self.build_integrated_network_attrs()
+
+        if domain:
+            self.timestepper, self.metadata, self.scenarios = self.build_integrated_network_attrs(domain)
+        else:
+            self.timestepper, self.metadata, self.tables = self.build_network_attrs()
+
         return self
 
 
@@ -126,11 +132,19 @@ class PywrHydraExporter():
             # Get the type for this node from the template
             pywr_node_type = None
             for node_type in node['types']:
-                pywr_node_type = self.type_id_map[node_type['id']]['name']
-            if pywr_node_type is None:
-                raise ValueError('Template does not contain node of type "{}".'.format(pywr_node_type))
+                try:
+                    pywr_node_type = self.type_id_map[node_type['id']]['name']
+                except KeyError:
+                    # Skip as not in this template...
+                    continue
 
-            self.build_node_and_references(node, pywr_node_type)
+            #if pywr_node_type is None:
+            #    raise ValueError('Template does not contain node of type "{}".'.format(pywr_node_type))
+
+
+            # Skip as not in this template...
+            if pywr_node_type:
+                self.build_node_and_references(node, pywr_node_type)
 
 
     def build_node_and_references(self, nodedata, pywr_node_type):
@@ -178,8 +192,12 @@ class PywrHydraExporter():
             src_hydra_node = self.hydra_node_lookup[hydra_edge["node_1_id"]]
             dest_hydra_node = self.hydra_node_lookup[hydra_edge["node_2_id"]]
             # Retrieve nodes from PywrNode store to verify presence
-            src_node = self.nodes[src_hydra_node["name"]]
-            dest_node = self.nodes[dest_hydra_node["name"]]
+            try:
+                src_node = self.nodes[src_hydra_node["name"]]
+                dest_node = self.nodes[dest_hydra_node["name"]]
+            except KeyError:
+                # Not in this template...
+                continue
 
             edge = PywrEdge((src_node.name, dest_node.name))  # NB Call ctor directly with tuple here, no factory
             edges[edge.name] = edge
@@ -187,9 +205,10 @@ class PywrHydraExporter():
         return edges
 
 
-    def build_integrated_network_attrs(self):
-        water_attr = self.get_attr_by_name("water_data")
-        resource_scenario = self._get_resource_scenario(water_attr.id)
+    def build_integrated_network_attrs(self, domain):
+        domain_data_key = f"{domain}_data"
+        domain_attr = self.get_attr_by_name(domain_data_key)
+        resource_scenario = self._get_resource_scenario(domain_attr.id)
         dataset = resource_scenario["dataset"]
         data = json.loads(dataset["value"])
         timestep = data["timestepper"]
@@ -209,6 +228,20 @@ class PywrHydraExporter():
         scen_insts = [ Scenario(s) for s in scenarios ]
 
         return ts_inst, meta_inst, scen_insts
+
+
+    def get_integrated_config(self, config_key="config"):
+        config_attr = self.client.get_attribute_by_name_and_dimension(config_key, None)
+        ra = self.client.get_resource_attributes("network", self.data.id)
+        ra_id = None
+        for r in ra:
+            if r["attr_id"] == config_attr["id"]:
+                ra_id = r["id"]
+
+        data = self.client.get_resource_scenario(ra_id, self.scenario_id, get_parent_data=False)
+        attr_data = json.loads(data["dataset"]["value"])
+
+        return IntegratedConfig(attr_data)
 
 
     def get_attr_by_name(self, name):

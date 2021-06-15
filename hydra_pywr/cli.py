@@ -9,10 +9,15 @@ from . import utils
 from hydra_client.click import hydra_app, make_plugins, write_plugins
 import pandas
 
-from hydra_pywr_common.types.network import PywrNetwork
+from hydra_pywr_common.types.network import(
+    PywrNetwork,
+    PywrIntegratedNetwork
+)
+
 from hydra_pywr_common.lib.writers import(
     PywrJsonWriter,
-    PywrHydraWriter
+    PywrHydraWriter,
+    PywrIntegratedJsonWriter
 )
 
 def get_client(hostname, **kwargs):
@@ -95,13 +100,51 @@ def export_json(obj, data_dir, scenario_id, user_id, json_sort_keys, json_indent
 
     network_id = exporter.data.id
 
-    data = exporter.get_pywr_data()
+    data = exporter.get_pywr_data("energy")
 
     pnet = PywrNetwork(data)
     writer = PywrJsonWriter(pnet)
     output = writer.as_dict()
 
     outfile = os.path.join(data_dir, f"{pnet.title.replace(' ', '_')}.json")
+    with open(outfile, mode='w') as fp:
+        json.dump(output, fp, sort_keys=json_sort_keys, indent=2)
+
+    click.echo(f"Network: {network_id}, Scenario: {scenario_id} exported to `{outfile}`")
+
+@hydra_app(category='export', name='Export to IntegratedPywrJSON')
+@cli.command(name='integratedexport', context_settings=dict(
+    ignore_unknown_options=True,
+    allow_extra_args=True))
+@click.pass_obj
+@click.option('--data-dir', default='/tmp')
+@click.option('-s', '--scenario-id', type=int, default=None)
+@click.option('-u', '--user-id', type=int, default=None)
+@click.option('--json-indent', type=int, default=2)
+@click.option('--json-sort-keys/--no-json-sort-keys', default=False)
+def export_json(obj, data_dir, scenario_id, user_id, json_sort_keys, json_indent):
+    """ Export an integrated Pywr Water/Energy Network from Hydra to Pynsim json. """
+    client = get_logged_in_client(obj, user_id=user_id)
+    w_exporter = PywrHydraExporter.from_scenario_id(client, scenario_id, index=0)
+    e_exporter = PywrHydraExporter.from_scenario_id(client, scenario_id, index=1)
+
+    network_id = w_exporter.data.id
+
+    water_data = w_exporter.get_pywr_data("water")
+    water_net = PywrNetwork(water_data)
+    energy_data = e_exporter.get_pywr_data("energy")
+    energy_net = PywrNetwork(energy_data)
+
+    config = w_exporter.get_integrated_config()
+    pin = PywrIntegratedNetwork(water_net, energy_net, config)
+    writer = PywrIntegratedJsonWriter(pin)
+    #writer = PywrJsonWriter(pnet)
+    output = writer.as_dict()
+    dests = writer.write_as_pynsim()
+    for cat,filename in dests.items():
+        click.echo(f"{cat} output written to {filename}")
+
+    outfile = os.path.join(data_dir, "combined_export.json")
     with open(outfile, mode='w') as fp:
         json.dump(output, fp, sort_keys=json_sort_keys, indent=2)
 
