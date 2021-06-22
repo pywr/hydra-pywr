@@ -176,7 +176,6 @@ def integrated_export(obj, data_dir, scenario_id, user_id, json_sort_keys):
     writer = PywrIntegratedJsonWriter(pin)
     output = writer.as_dict()
     dests = writer.write_as_pynsim()
-    breakpoint()
 
     for engine in dests["engines"]:
         click.echo(f"{engine} output written to {dests[engine]['file']}")
@@ -195,16 +194,15 @@ def integrated_export(obj, data_dir, scenario_id, user_id, json_sort_keys):
 @cli.command(name="integrated-run", context_settings=dict(
     ignore_unknown_options=True,
     allow_extra_args=True))
-@click.pass_obj
+@click.pass_context
 @click.option('-s', '--scenario-id', type=int, default=None)
-@click.option('-t', '--template-id', type=int, default=None)
 @click.option('-u', '--user-id', type=int, default=None)
 @click.option('--output-frequency', type=str, default=None)
 @click.option('--solver', type=str, default=None)
 @click.option('--check-model/--no-check-model', default=True)
 @click.option('--data-dir', default=None)
-def integrated_run(obj, scenario_id, template_id, user_id, output_frequency, solver, check_model, data_dir):
-    dests = integrated_export(obj, data_dir, scenario_id, user_id, json_sort_keys)
+def integrated_run(ctx, scenario_id, user_id, output_frequency, solver, check_model, data_dir):
+    dests = ctx.invoke(integrated_export, user_id=user_id, scenario_id=scenario_id)
     pynsim_config = dests["config"]
     imr = IntegratedModelRunner(pynsim_config)
     imr.run_subprocess()
