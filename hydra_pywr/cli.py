@@ -22,7 +22,10 @@ from hydra_pywr_common.lib.writers import(
     IntegratedOutputWriter
 )
 
-from hydra_pywr_common.lib.runners import IntegratedModelRunner
+from hydra_pywr_common.lib.runners import(
+    IntegratedModelRunner,
+    write_output
+)
 
 def get_client(hostname, **kwargs):
     return JSONConnection(app_name='Pywr Hydra App', db_url=hostname, **kwargs)
@@ -112,7 +115,6 @@ def integrated_import_combinedjson(obj, filename, project_id, user_id, water_tem
     pin = PywrIntegratedNetwork.from_combined_file(filename)
     writer = PywrHydraIntegratedWriter(pin, user_id=user_id, water_template_id=water_template_id, energy_template_id=energy_template_id, project_id=project_id)
     writer.build_hydra_integrated_network(projection=projection)
-    breakpoint()
     writer.add_network_to_hydra()
 
     click.echo(f"Imported {filename} to Project ID: {project_id}")
@@ -208,9 +210,10 @@ def integrated_run(ctx, scenario_id, user_id, output_frequency, solver, check_mo
     imr.run_subprocess()
 
     for engine in dests["engines"]:
-        h5output = dests[engine]["file"]
+        h5output = f"results/{engine}_Outputs.h5"
+        write_output(f"Importing results for {engine} engine from {h5output}...")
         template_id = dests[engine]["template_id"]
-        iow = IntegratedOutputWriter(scenario_id, template_id, h5output, engine, user_id=2)
+        iow = IntegratedOutputWriter(scenario_id, template_id, h5output, engine, user_id=user_id)
         iow.build_hydra_output()
 
 
