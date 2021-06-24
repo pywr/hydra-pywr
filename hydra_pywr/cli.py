@@ -217,6 +217,28 @@ def integrated_run(ctx, scenario_id, user_id, output_frequency, solver, check_mo
         iow.build_hydra_output()
 
 
+@cli.command(name="combine-integrated-inputs")
+@click.option('-c', '--config-file', type=str, required=True)
+@click.option('-w', '--water-file', type=str, required=True)
+@click.option('-e', '--energy-file', type=str, required=True)
+@click.option('-o', '--output-file', type=str, default="combined.json")
+@click.option('-i', '--inline-parameters', type=bool, default=True)
+def combine_integrated_inputs(config_file, water_file, energy_file, output_file, inline_parameters):
+    """ Combines separate integrated model definition files into a single json
+        file for import into hwi.
+        Optionally reads csv or csv.gz input urls of dataframes and expands
+        these in the json with `--inline-parameters`
+    """
+    from hydra_pywr_common.lib.utils import combine_integrated_model_inputs
+
+    output = combine_integrated_model_inputs(config_file, water_file, energy_file, inline_parameters)
+
+    with open(output_file, 'w') as fp:
+        json.dump(output, fp, indent=2)
+
+    click.echo(f"Combined integrated model written to {output_file}")
+
+
 @hydra_app(category='model', name='Run Pywr')
 @cli.command(context_settings=dict(
     ignore_unknown_options=True,
