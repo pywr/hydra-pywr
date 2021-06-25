@@ -357,7 +357,8 @@ class PywrHydraExporter(BasePywrHydra):
 
     def _generate_component_attributes(self, component, pywr_node_type):
 
-        node_klass = NodeMeta.node_registry[pywr_node_type]
+        node_klass = NodeMeta.node_registry[pywr_node_type.lower()]
+
         schema = node_klass.Schema()
 
         pywr_node = {'type': pywr_node_type}
