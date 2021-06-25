@@ -27,6 +27,8 @@ from pywr.domains.river import *
 from pywr import recorders
 from pywr import parameters
 
+import hydra_pywr
+
 from .nodes import DataFrameField
 
 LOG = logging.getLogger('hydra_pywr')
@@ -55,3 +57,9 @@ def exec_rules(rules):
         except Exception as e:
             LOG.exception(e)
             LOG.critical("Unable to execute rule %s. Error was: %s", rule.name, e)
+
+    #Now find any classes that have been added, and add them to the module's
+    #dict so they can be accessed by pywr
+    for k, v in locals().items():
+        if isinstance(v, type):
+            hydra_pywr.rules.__dict__[k] = v
