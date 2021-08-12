@@ -88,6 +88,7 @@ def import_json(obj, filename, project_id, user_id, template_id, projection, run
     pnet = PywrNetwork.from_source_file(filename)
     hwriter = PywrHydraWriter(pnet, user_id=user_id, template_id=template_id, project_id=project_id)
     hwriter.build_hydra_network(projection)
+    hwriter.add_network_to_hydra()
 
 
 @hydra_app(category='import', name='Import Integrate Pynsim JSON from combined file')
@@ -137,7 +138,7 @@ def export_json(obj, data_dir, scenario_id, user_id, json_sort_keys, json_indent
 
     network_id = exporter.data.id
 
-    data = exporter.get_pywr_data("energy")
+    data = exporter.get_pywr_data()
 
     pnet = PywrNetwork(data)
     writer = PywrJsonWriter(pnet)
@@ -181,6 +182,8 @@ def integrated_export(obj, data_dir, scenario_id, user_id, json_sort_keys):
 
     for engine in dests["engines"]:
         click.echo(f"{engine} output written to {dests[engine]['file']}")
+
+    click.echo(f"pynsim config written to {dests['config']}")
 
     outfile = os.path.join(data_dir, "combined_export.json")
     with open(outfile, mode='w') as fp:
