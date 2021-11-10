@@ -88,6 +88,7 @@ def import_json(obj, filename, project_id, user_id, template_id, projection, run
     pnet = PywrNetwork.from_source_file(filename)
     hwriter = PywrHydraWriter(pnet, user_id=user_id, template_id=template_id, project_id=project_id)
     hwriter.build_hydra_network(projection)
+    hwriter.add_network_to_hydra()
 
 
 @hydra_app(category='import', name='Import Integrate Pynsim JSON from combined file')
@@ -115,7 +116,6 @@ def integrated_import_combinedjson(obj, filename, project_id, user_id, water_tem
     pin = PywrIntegratedNetwork.from_combined_file(filename)
     writer = PywrHydraIntegratedWriter(pin, user_id=user_id, water_template_id=water_template_id, energy_template_id=energy_template_id, project_id=project_id)
     writer.build_hydra_integrated_network(projection=projection)
-    breakpoint()
     writer.add_network_to_hydra()
 
     click.echo(f"Imported {filename} to Project ID: {project_id}")
@@ -138,7 +138,7 @@ def export_json(obj, data_dir, scenario_id, user_id, json_sort_keys, json_indent
 
     network_id = exporter.data.id
 
-    data = exporter.get_pywr_data("energy")
+    data = exporter.get_pywr_data()
 
     pnet = PywrNetwork(data)
     writer = PywrJsonWriter(pnet)
@@ -183,6 +183,8 @@ def integrated_export(obj, data_dir, scenario_id, user_id, json_sort_keys):
     for engine in dests["engines"]:
         click.echo(f"{engine} output written to {dests[engine]['file']}")
 
+    click.echo(f"pynsim config written to {dests['config']}")
+
     outfile = os.path.join(data_dir, "combined_export.json")
     with open(outfile, mode='w') as fp:
         json.dump(output, fp, sort_keys=json_sort_keys, indent=2)
@@ -214,8 +216,30 @@ def integrated_run(ctx, scenario_id, user_id, output_frequency, solver, check_mo
         h5output = f"results/{engine}_Outputs.h5"
         write_output(f"Importing results for {engine} engine from {h5output}...")
         template_id = dests[engine]["template_id"]
-        iow = IntegratedOutputWriter(scenario_id, template_id, h5output, engine, user_id=2)
+        iow = IntegratedOutputWriter(scenario_id, template_id, h5output, engine, user_id=user_id)
         iow.build_hydra_output()
+
+
+@cli.command(name="combine-integrated-inputs")
+@click.option('-c', '--config-file', type=str, required=True)
+@click.option('-w', '--water-file', type=str, required=True)
+@click.option('-e', '--energy-file', type=str, required=True)
+@click.option('-o', '--output-file', type=str, default="combined.json")
+@click.option('-i', '--inline-parameters', type=bool, default=True)
+def combine_integrated_inputs(config_file, water_file, energy_file, output_file, inline_parameters):
+    """ Combines separate integrated model definition files into a single json
+        file for import into hwi.
+        Optionally reads csv or csv.gz input urls of dataframes and expands
+        these in the json with `--inline-parameters`
+    """
+    from hydra_pywr_common.lib.utils import combine_integrated_model_inputs
+
+    output = combine_integrated_model_inputs(config_file, water_file, energy_file, inline_parameters)
+
+    with open(output_file, 'w') as fp:
+        json.dump(output, fp, indent=2)
+
+    click.echo(f"Combined integrated model written to {output_file}")
 
 
 @hydra_app(category='model', name='Run Pywr')
