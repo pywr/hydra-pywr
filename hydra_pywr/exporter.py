@@ -1,29 +1,36 @@
 import json
-from past.builtins import basestring
-from .template import PYWR_SPLIT_LINK_TYPES, PYWR_EDGE_LINK_NAME, PYWR_CONSTRAINED_EDGE_LINK_NAME
-from .core import BasePywrHydra
-from hydra_pywr_common import PywrParameter, PywrRecorder, PywrParameterPattern, PywrParameterPatternReference,\
-    PywrNodeOutput, PywrScenarios, PywrScenarioCombinations
-from pywr.nodes import NodeMeta
-from hydra_base.lib.HydraTypes.Registry import typemap
-import jinja2
 from collections import defaultdict
-from .rules import exec_rules
+
+from hydra_pywr_common.types.nodes import(
+    PywrNode
+)
+from hydra_pywr_common.types.base import(
+    PywrEdge
+)
+
+from hydra_pywr_common.types.fragments.network import(
+    Timestepper,
+    Metadata,
+    Table,
+    Scenario
+)
+from hydra_pywr_common.types.fragments.config import IntegratedConfig
+from hydra_pywr_common.types.parameters import *
+from hydra_pywr_common.types.recorders import *
 
 import logging
 log = logging.getLogger(__name__)
 
 COST_ALIASES = ['allocation penalty', 'allocation_penalty', 'Allocation Penalty']
-
-class PatternContext(object):
-    """ Container for arbitrary attributes in pattern rendering. """
-    pass
+EXCLUDE_HYDRA_ATTRS = ("id", "status", "cr_date", "network_id", "x", "y",
+                       "types", "attributes", "layout", "network", "description")
 
 
-class PywrHydraExporter(BasePywrHydra):
-    def __init__(self, client, data, attributes, template):
+class PywrHydraExporter():
+    def __init__(self, client, data, scenario_id, attributes, template):
         super().__init__()
         self.data = data
+        self.scenario_id = scenario_id
         self.attributes = attributes
         self.client = client
         self.template = template
@@ -33,18 +40,24 @@ class PywrHydraExporter(BasePywrHydra):
             self.type_id_map[tt.id] = tt
 
         self.attr_unit_map = {}
-        #Lookup of ID to hydra node
         self.hydra_node_lookup = {}
 
         self._parameter_recorder_flags = {}
         self._inline_parameter_recorder_flags = defaultdict(dict)
         self._node_recorder_flags = {}
 
+        self.nodes = {}
+        self.edges = []
+        self.parameters = {}
+        self.recorders = {}
+        self.tables = {}
+        self.scenarios = []
+
         self._pattern_templates = None
 
 
     @classmethod
-    def from_scenario_id(cls, client, scenario_id, template_id=None, **kwargs):
+    def from_scenario_id(cls, client, scenario_id, template_id=None, index=0, **kwargs):
         scenario = client.get_scenario(scenario_id, include_data=True, include_results=False, include_metadata=False, include_attr=False)
         # Fetch the network
         network = client.get_network(scenario.network_id, include_data=False, include_results=False, template_id=template_id)
@@ -55,120 +68,29 @@ class PywrHydraExporter(BasePywrHydra):
         attributes = client.get_attributes()
         attributes = {attr.id: attr for attr in attributes}
 
-
-        rules = client.get_resource_rules('NETWORK', scenario.network_id)
-
-        network.rules = rules
-
         template = None
 
         if template_id is not None:
             template = client.get_template(template_id)
-        elif len(network.types) == 1:
-            template = client.get_template(network.types[0].template_id)
+        #elif len(network.types) == 1:
+        else:
+            template = client.get_template(network.types[index].template_id)
 
 
-        # We also need the template to get the node types
-        #template = client.get_template_by_name(pywr_template_name())
-        return cls(client, network, attributes, template, **kwargs)
+        return cls(client, network, scenario_id, attributes, template, **kwargs)
 
-    def make_attr_unit_map(self):
-        """
-            Create a mapping between an attribute ID and its unit, as defined
-            in the template
-        """
-        for templatetype in self.template.templatetypes:
-            for typeattr in templatetype.typeattrs:
-                self.attr_unit_map[typeattr.attr_id] = typeattr.unit_id
 
-    def get_type_map(self, resource):
-        """
-        for a given resource (node, link, group) get the type id:name map for it
-        ex: node.types = [{id: 1, name: type1}, {id: 11, name: type11}
-        returns:
-            {
-             1: type1
-             11: type11
-            }
-        """
-        type_map = {}
+    def get_pywr_data(self, domain=None):
+        self.generate_pywr_nodes()
+        self.edges = self.build_edges()
 
-        for t in resource.get('types', []):
-            type_map[t['id']] = self.type_id_map[t['id']]['name']
+        if domain:
+            self.timestepper, self.metadata, self.scenarios = self.build_integrated_network_attrs(domain)
+        else:
+            self.timestepper, self.metadata, self.tables = self.build_network_attrs()
 
-        return type_map
+        return self
 
-    def get_pywr_data(self):
-
-        pywr_data = {
-            'metadata': {'title': self.data['name'], 'description': self.data['description']}
-        }
-
-        # First find any patterns and create jinja2 templates for them.
-        self.create_parameter_pattern_templates()
-
-        # TODO see proposed changes to metadata and timestepper data.
-        for group_name in ('metadata', 'timestepper', 'recorders', 'parameters'):
-            # Recorders and parameters are JSON encoded.
-            decode_from_json = group_name in ('recorders', 'parameters')
-
-            group_data = {}
-            for key, value in self.generate_group_data(group_name, decode_from_json=decode_from_json):
-                group_data[key] = value
-
-            # Only make the section if it contains data.
-            if len(group_data) > 0:
-                if group_name in pywr_data:
-                    pywr_data[group_name].update(group_data)
-                else:
-                    pywr_data[group_name] = group_data
-
-        scenarios = self.get_scenario_data()
-        if scenarios is not None:
-            pywr_data['scenarios'] = scenarios['scenarios']
-
-        #this is executed here to allow the generate_pywr_nodes access to node
-        #schema definitions.
-        self.exec_rules()
-
-        scenario_combinations = self.get_scenario_combinations_data()
-        if scenario_combinations is not None:
-            pywr_data['scenario_combinations'] = scenario_combinations['scenario_combinations']
-
-        nodes = []
-        for node, parameters, recorders in self.generate_pywr_nodes():
-            nodes.append(node)
-
-            if len(parameters) > 0:
-                if 'parameters' not in pywr_data:
-                    pywr_data['parameters'] = {}
-                pywr_data['parameters'].update(parameters)
-
-            if len(recorders) > 0:
-                if 'recorders' not in pywr_data:
-                    pywr_data['recorders'] = {}
-                pywr_data['recorders'].update(recorders)
-        pywr_data['nodes'] = nodes
-
-        edges = []
-        for edge, (node, parameters, recorders) in self.generate_pywr_edges():
-            edges.append(edge)
-            if node is not None:
-                pywr_data['nodes'].append(node)
-
-                if len(parameters) > 0:
-                    if 'parameters' not in pywr_data:
-                        pywr_data['parameters'] = {}
-                    pywr_data['parameters'].update(parameters)
-
-                if len(recorders) > 0:
-                    if 'recorders' not in pywr_data:
-                        pywr_data['recorders'] = {}
-                    pywr_data['recorders'].update(recorders)
-
-        pywr_data['edges'] = edges
-
-        return pywr_data
 
     def _get_all_resource_attributes(self):
         """
@@ -194,13 +116,6 @@ class PywrHydraExporter(BasePywrHydra):
 
         raise ValueError('No resource scenario found for resource attribute id: {}'.format(resource_attribute_id))
 
-    def exec_rules(self):
-
-        rules = [r for r in self.data['rules'] if r.status.lower() == 'a']
-
-        log.info("Exec-ing {} rules".format(len(rules)))
-
-        exec_rules(rules)
 
     def generate_pywr_nodes(self):
         """ Generator returning a Pywr dict for each node in the network. """
@@ -217,103 +132,182 @@ class PywrHydraExporter(BasePywrHydra):
             # Get the type for this node from the template
             pywr_node_type = None
             for node_type in node['types']:
-                pywr_node_type = self.type_id_map[node_type['id']]['name']
-            if pywr_node_type is None:
-                raise ValueError('Template does not contain node of type "{}".'.format(pywr_node_type))
+                try:
+                    pywr_node_type = self.type_id_map[node_type['id']]['name']
+                except KeyError:
+                    # Skip as not in this template...
+                    continue
 
-            pywr_node_attrs, parameters, recorders = self._generate_component_attributes(node, pywr_node_type)
-            pywr_node.update(pywr_node_attrs)
+            #if pywr_node_type is None:
+            #    raise ValueError('Template does not contain node of type "{}".'.format(pywr_node_type))
 
-            if node['x'] is not None and node['y'] is not None:
-                # Finally add coordinates from hydra
-                if 'position' not in pywr_node:
-                    pywr_node['position'] = {}
-                pywr_node['position'].update({'geographic': [node['x'], node['y']]})
 
-            yield pywr_node, parameters, recorders
+            # Skip as not in this template...
+            if pywr_node_type:
+                self.build_node_and_references(node, pywr_node_type)
 
-    def generate_pywr_edges(self):
-        """ Generator returning a Pywr tuple for each link/edge in the network. """
 
-        # Only make "real" edges in the Pywr model using the main link type with name PYWR_EDGE_LINK_NAME.
-        # Other link types are for virtual or data connections and should not be added to the list of Pywr edges.
-        for link in self.data['links']:
-            for link_type in link['types']:
-                link_type_name = self.type_id_map[link_type['id']]['name']
-                if link_type_name in (PYWR_EDGE_LINK_NAME, PYWR_CONSTRAINED_EDGE_LINK_NAME):
-                    break
-            else:
-                continue  # Skip this link type
+    def build_node_and_references(self, nodedata, pywr_node_type):
 
-            node_from = self.hydra_node_lookup[link['node_1_id']]
-            node_to = self.hydra_node_lookup[link['node_2_id']]
-
-            from_node_types = self.get_type_map(node_from)
-
-            node_type_names = set([nt.lower() for nt in from_node_types.values()])
-
-            if link_type_name == PYWR_EDGE_LINK_NAME:
-                #if the node type is a split link, then add the slot name to the link
-                #The target node name is used as the slot reference.
-
-                if len(set(PYWR_SPLIT_LINK_TYPES).intersection(node_type_names)) > 0:
-                    yield [node_from['name'], node_to['name'], node_to['name'], None], (None, {}, {})
-                else:
-                    yield [node_from['name'], node_to['name']], (None, {}, {})
-
-            elif link_type_name == PYWR_CONSTRAINED_EDGE_LINK_NAME:
-                pywr_node_type = 'link'
-                pywr_node = {'name': link['name']}
-
-                pywr_node_attrs, parameters, recorders = self._generate_component_attributes(link, pywr_node_type)
-                pywr_node.update(pywr_node_attrs)
-
-                # Yield the two edges and one corresponding node
-                yield [node_from['name'], pywr_node['name']], (pywr_node, parameters, recorders)
-                yield [pywr_node['name'], node_to['name']], (None, {}, {})
-
-    def generate_group_data(self, group_name, decode_from_json=False):
-        """ Generator returning a key and dict value for meta keys. """
-
-        for resource_attribute in self.data['attributes']:
-
+        for resource_attribute in nodedata['attributes']:
             attribute = self.attributes[resource_attribute['attr_id']]
-            attribute_name = attribute['name']
-
             try:
                 resource_scenario = self._get_resource_scenario(resource_attribute['id'])
             except ValueError:
+                continue  # No data associated with this attribute.
+
+            if resource_attribute['attr_is_var'] == 'Y':
                 continue
+
+            attribute_name = attribute['name']
             dataset = resource_scenario['dataset']
+            dataset_type = dataset['type']
             value = dataset['value']
+            try:
+                typedval = json.loads(value)
+            except json.decoder.JSONDecodeError as e:
+                typedval = value
+            nodedata[attribute_name] = typedval
 
-            data_type = dataset['type']
-            hydra_type = typemap[data_type.upper()]
+        nodedata["type"] = pywr_node_type
+        node_attr_data = {a:v for a,v in nodedata.items() if a not in EXCLUDE_HYDRA_ATTRS}
+        position = { "geographic": [ nodedata.get("x",0), nodedata.get("y",0) ] }
+        node_attr_data["position"] = position
+        if "comment" in node_attr_data:
+            del node_attr_data["comment"]
+        if "description" in nodedata:
+            node_attr_data["comment"] = nodedata.get("description")
 
-            if group_name == 'parameters':
-                if not issubclass(hydra_type, PywrParameter):
-                    continue
-            elif group_name == 'recorders':
-                if not issubclass(hydra_type, PywrRecorder):
-                    continue
-            else:
-                if not attribute_name.startswith('{}.'.format(group_name)):
-                    continue
-                attribute_name = attribute_name.split('.', 1)[-1]
+        dev_node = PywrNode.NodeFactory(node_attr_data)
 
-            if decode_from_json:
-                value = json.loads(value)
+        self.nodes[dev_node.name] = dev_node
+        self.parameters.update(dev_node.parameters)
+        self.recorders.update(dev_node.recorders)
 
-            # TODO check this. It should not happen as described below.
-            # Hydra opportunistically converts everything to native types
-            # Some of the Pywr data should remain as string despite looking like a float/int
-            if attribute_name == 'timestep' and group_name == 'timestepper':
-                try:
-                    value = int(value)
-                except ValueError:
-                    pass
 
-            yield attribute_name, value
+    def build_edges(self):
+        edges = {}
+
+        for hydra_edge in self.data["links"]:
+            src_hydra_node = self.hydra_node_lookup[hydra_edge["node_1_id"]]
+            dest_hydra_node = self.hydra_node_lookup[hydra_edge["node_2_id"]]
+            # Retrieve nodes from PywrNode store to verify presence
+            try:
+                src_node = self.nodes[src_hydra_node["name"]]
+                dest_node = self.nodes[dest_hydra_node["name"]]
+            except KeyError:
+                # Not in this template...
+                continue
+
+            edge = PywrEdge((src_node.name, dest_node.name))  # NB Call ctor directly with tuple here, no factory
+            edges[edge.name] = edge
+
+        return edges
+
+
+    def build_integrated_network_attrs(self, domain):
+        domain_data_key = f"{domain}_data"
+        domain_attr = self.get_attr_by_name(domain_data_key)
+        resource_scenario = self._get_resource_scenario(domain_attr.id)
+        dataset = resource_scenario["dataset"]
+        data = json.loads(dataset["value"])
+        timestep = data["timestepper"]
+
+        ts_val = timestep.get("timestep",1)
+        try:
+            tv = int(float(ts_val))
+        except ValueError:
+            tv = ts_val
+        timestep["timestep"] = tv
+        ts_inst = Timestepper(timestep)
+
+        metadata = data["metadata"]
+        meta_inst = Metadata(metadata)
+
+        scenarios = data["scenarios"]
+        scen_insts = [ Scenario(s) for s in scenarios ]
+
+        return ts_inst, meta_inst, scen_insts
+
+
+    def get_integrated_config(self, config_key="config"):
+        config_attr = self.client.get_attribute_by_name_and_dimension(config_key, None)
+        ra = self.client.get_resource_attributes("network", self.data.id)
+        ra_id = None
+        for r in ra:
+            if r["attr_id"] == config_attr["id"]:
+                ra_id = r["id"]
+
+        data = self.client.get_resource_scenario(ra_id, self.scenario_id, get_parent_data=False)
+        attr_data = json.loads(data["dataset"]["value"])
+
+        return IntegratedConfig(attr_data)
+
+
+    def get_attr_by_name(self, name):
+        for attr in self.data["attributes"]:
+            if attr.name == name:
+                return attr
+
+        raise KeyError(f"No attr named '{name}'")
+
+
+    def build_network_attrs(self):
+        """ TimeStepper and Metadata instances """
+
+        timestep = {}
+        ts_keys = ("start", "end", "timestep")
+
+        for attr in self.data["attributes"]:
+            attr_group, *subs = attr.name.split('.')
+            if attr_group != "timestepper":
+                continue
+            resource_scenario = self._get_resource_scenario(attr.id)
+            dataset = resource_scenario["dataset"]
+            #ts_key = attr.name.split('.')[-1]
+            ts_key = subs[-1]
+            timestep[ts_key] = dataset["value"]
+
+
+        ts_val = timestep.get("timestep",1)
+        try:
+            tv = int(float(ts_val))
+        except ValueError:
+            tv = ts_val
+        timestep["timestep"] = tv
+        ts_inst = Timestepper(timestep)
+
+        """ Metadata """
+        metadata = {"title": self.data['name'],
+                    "description": self.data['description']
+                   }
+        for attr in self.data["attributes"]:
+            attr_group, *subs = attr.name.split('.')
+            if attr_group != "metadata":
+                continue
+            resource_scenario = self._get_resource_scenario(attr.id)
+            dataset = resource_scenario["dataset"]
+            meta_key = subs[-1]
+            metadata[meta_key] = dataset["value"]
+
+        meta_inst = Metadata(metadata)
+
+        """ Tables """
+        tables_data = defaultdict(dict)
+        tables = {}
+        for attr in self.data["attributes"]:
+            if not attr.name.startswith("tbl_"):
+                continue
+            table_name, table_attr = attr.name[4:].split('.')
+            resource_scenario = self._get_resource_scenario(attr.id)
+            dataset = resource_scenario["dataset"]
+            tables_data[table_name][table_attr] = dataset["value"]
+
+        for tname, tdata in tables_data.items():
+            tables[tname] = Table(tdata)
+
+        return ts_inst, meta_inst, tables
+
 
     def get_scenario_data(self):
 
@@ -334,221 +328,3 @@ class PywrHydraExporter(BasePywrHydra):
 
             return json.loads(value)
         return None
-
-    def get_scenario_combinations_data(self):
-
-        for resource_attribute in self.data['attributes']:
-            attribute = self.attributes[resource_attribute['attr_id']]
-
-            try:
-                resource_scenario = self._get_resource_scenario(resource_attribute['id'])
-            except ValueError:
-                continue
-            dataset = resource_scenario['dataset']
-            value = dataset['value']
-
-            data_type = dataset['type'].lower()
-
-            if data_type != PywrScenarioCombinations.tag.lower():
-                continue
-
-            return json.loads(value)
-        return None
-
-    def _generate_component_attributes(self, component, pywr_node_type):
-
-        node_klass = NodeMeta.node_registry[pywr_node_type.lower()]
-
-        schema = node_klass.Schema()
-
-        pywr_node = {'type': pywr_node_type}
-        parameters = {}
-        recorders = {}
-
-        # Then add any corresponding attributes / data
-        for resource_attribute in component['attributes']:
-            attribute = self.attributes[resource_attribute['attr_id']]
-            try:
-                resource_scenario = self._get_resource_scenario(resource_attribute['id'])
-            except ValueError:
-                continue  # No data associated with this attribute.
-
-            if resource_attribute['attr_is_var'] == 'Y':
-                continue
-
-            attribute_name = attribute['name']
-
-            if attribute_name in COST_ALIASES:
-                attribute_name = 'cost'
-
-            dataset = resource_scenario['dataset']
-            dataset_type = dataset['type']
-            value = dataset['value']
-
-            hydra_type = typemap[dataset_type.upper()]
-
-            if attribute_name in schema.fields:
-                #TODO: This is repeated. fix.
-                if issubclass(hydra_type, PywrParameterPatternReference):
-                    # Is a pattern of parameters
-                    context = self._make_component_pattern_context(component, pywr_node_type)
-                    parameters.update(self.generate_parameters_from_patterns(value, context))
-                elif issubclass(hydra_type, PywrParameter):
-                    component_name = self.make_node_attribute_component_name(
-                        component['name'],
-                        attribute_name
-                    )
-
-                    # Must be a parameter
-                    param_value = json.loads(value)
-                    try:
-                        recorder_flags = param_value.pop('__recorder__')
-                    except (KeyError, AttributeError):
-                        pass
-                    else:
-                        self._parameter_recorder_flags[component_name] = recorder_flags
-
-                    parameters[component_name] = param_value
-
-                    value = component_name
-
-
-
-
-                # The attribute is part of the node definition
-                if isinstance(value, basestring):
-                    try:
-                        value = json.loads(value)
-                    except json.decoder.JSONDecodeError:
-                        pass
-                    else:
-                        # Check for any recorder flags "__recorder__"
-                        try:
-                            recorder_flags = value.pop('__recorder__')
-                        except (KeyError, AttributeError, TypeError):
-                            pass
-                        else:
-                            self._inline_parameter_recorder_flags[component['name']][attribute_name] = recorder_flags
-                    finally:
-                        pywr_node[attribute_name] = value
-
-                else:
-                    pywr_node[attribute_name] = value
-            else:
-                # Otherwise the attribute is either a parameter or recorder
-                # defined as a node attribute (for convenience).
-                component_name = self.make_node_attribute_component_name(
-                    component['name'],
-                    attribute_name
-                )
-                if issubclass(hydra_type, PywrNodeOutput):
-                    value = json.loads(value)
-                    try:
-                        recorder_flags = value.pop('__recorder__')
-                    except (KeyError, AttributeError):
-                        pass
-                    else:
-                        self._node_recorder_flags[component['name']] = recorder_flags
-                elif issubclass(hydra_type, PywrParameterPatternReference):
-                    # Is a pattern of parameters
-                    context = self._make_component_pattern_context(component, pywr_node_type)
-                    parameters.update(self.generate_parameters_from_patterns(value, context))
-                elif issubclass(hydra_type, PywrParameter):
-                    # Must be a parameter
-                    value = json.loads(value)
-                    try:
-                        recorder_flags = value.pop('__recorder__')
-                    except (KeyError, AttributeError):
-                        pass
-                    else:
-                        self._parameter_recorder_flags[component_name] = recorder_flags
-                    parameters[component_name] = value
-                elif issubclass(hydra_type, PywrRecorder):
-                    # Must be a recorder
-                    recorders[component_name] = json.loads(value)
-                else:
-                    pass
-                    # Any other type we do not support as a non-schema nodal attribute
-                    # raise ValueError('Hydra dataset type "{}" not supported as a non-schema'
-                    #                 ' attribute on a Pywr node.'.format(dataset_type))
-
-        return pywr_node, parameters, recorders
-
-    def create_parameter_pattern_templates(self):
-        """ Create Jinja2 templates for each parameter pattern. """
-
-        templates = {}
-
-        for resource_attribute in self.data['attributes']:
-
-            attribute = self.attributes[resource_attribute['attr_id']]
-            attribute_name = attribute['name']
-
-            try:
-                resource_scenario = self._get_resource_scenario(resource_attribute['id'])
-            except ValueError:
-                continue
-            dataset = resource_scenario['dataset']
-            value = dataset['value']
-
-            data_type = dataset['type']
-
-            if data_type.upper() != PywrParameterPattern.tag:
-                continue
-
-            pattern_template = jinja2.Template(value)
-            templates[attribute_name] = pattern_template
-
-        self._pattern_templates = templates
-
-    def _make_component_pattern_context(self, component, pywr_node_type):
-        """ Create the context for rendering parameter patterns. """
-
-        node_klass = NodeMeta.node_registry[pywr_node_type]
-        schema = node_klass.Schema()
-
-        context = PatternContext()
-        context.name = component['name']
-        context.id = component['id']
-        context.description = component['description']
-
-        data = PatternContext()
-
-        for resource_attribute in component['attributes']:
-            attribute = self.attributes[resource_attribute['attr_id']]
-            try:
-                resource_scenario = self._get_resource_scenario(resource_attribute['id'])
-            except ValueError:
-                continue  # No data associated with this attribute.
-
-            if resource_attribute['attr_is_var'] == 'Y':
-                continue
-
-            attribute_name = attribute['name']
-
-            dataset = resource_scenario['dataset']
-            dataset_type = dataset['type']
-            value = dataset['value']
-
-            hydra_type = typemap[dataset_type.upper()]
-            if issubclass(hydra_type, (PywrParameter, PywrRecorder)):
-                # Ignore Pywr parameter definitions
-                continue
-
-            if isinstance(value, basestring):
-                try:
-                    value = json.loads(value)
-                except json.decoder.JSONDecodeError:
-                    pass
-
-            setattr(data, attribute_name, value)
-        context.data = data
-        return context
-
-    def generate_parameters_from_patterns(self, pattern_name, context):
-
-        template = self._pattern_templates[pattern_name]
-        # TODO make this work for non-node types
-        data = template.render(node=context)
-        parameters = json.loads(data)
-        return parameters
