@@ -1,15 +1,11 @@
 """ Module to generate a Hydra template from Pywr.
 """
-# TODO import the other domains
-#from pywr_dcopf.core import *
 from pywr.domains.river import *
-from pywr.nodes import NodeMeta, Node, Storage
 from pywr.recorders import NumpyArrayNodeRecorder, NumpyArrayStorageRecorder
 import pywr
 import os
 import json
 import copy
-from .core import data_type_from_field
 from hydra_base.exceptions import HydraError
 
 PYWR_EDGE_LINK_NAME = 'edge'
@@ -60,99 +56,6 @@ def pywr_template_name(config_name):
     """ The name of the Hydra template for Pywr. """
     return 'Pywr {} template (version: {})'.format(config_name, pywr.__version__)
 
-
-def generate_pywr_attributes():
-
-    attribute_names = set()
-
-    # First add the attributes for the timestepper section
-    for name in PYWR_TIMESTEPPER_ATTRIBUTES:
-        if name not in attribute_names:
-            yield {
-                'name': 'timestepper.{}'.format(name),
-            }
-
-    # Now add the constant attributes defined here.
-    for name in PYWR_OUTPUT_ATTRIBUTES:
-        if name not in attribute_names:
-            yield {
-                'name': name,
-            }
-            attribute_names.add(name)
-
-    # Now add those from the Pywr schemas
-    for node_name, node_klass in NodeMeta.node_registry.items():
-        schema = node_klass.Schema()
-
-        for name, field in schema.fields.items():
-            if name in PYWR_PROTECTED_NODE_KEYS:
-                continue
-
-            if name not in attribute_names:
-                yield {
-                    'name': name,
-                }
-                attribute_names.add(name)
-
-
-def generate_pywr_node_templates(attribute_ids, whitelist=None, blacklist=None):
-
-    for node_name, node_klass in NodeMeta.node_registry.items():
-        if node_klass == Node:
-            # Don't add the basic abstract node from Pywr.
-            continue
-
-        # Skip non-whitelisted or blacklisted nodes
-        if whitelist is not None:
-            if node_name.lower() not in whitelist:
-                continue
-        if blacklist is not None:
-            if node_name.lower() in blacklist:
-                continue
-
-        schema = node_klass.Schema()
-
-        # Create an attribute for each field in the schema.
-        type_attributes = []
-        for name, field in schema.fields.items():
-            if name in PYWR_PROTECTED_NODE_KEYS:
-                continue
-
-            data_type = data_type_from_field(field)
-
-            type_attributes.append({
-                'attr_id': attribute_ids[name],
-                'data_type': data_type,
-                'description': '',
-            })
-
-            # TODO add default data if there is a default value in the field
-
-        # Create an output attribute for each node
-        if issubclass(node_klass, Node):
-            output_attribute_name = 'simulated_flow'
-        elif issubclass(node_klass, Storage):
-            output_attribute_name = 'simulated_volume'
-        else:
-            output_attribute_name = None
-
-        if output_attribute_name is not None:
-            type_attributes.append({
-                'attr_id': attribute_ids[output_attribute_name],
-                'description': '',
-                'data_type': 'dataframe',
-                'is_var': 'Y'
-            })
-
-        # Now create the layout
-        layout = get_layout(node_klass)
-
-        yield {
-            'name': node_name,
-            'resource_type': 'NODE',
-            'typeattrs': type_attributes,
-            'layout': layout,
-        }
 
 
 def generate_pywr_template(attribute_ids, default_data_set_ids, config):

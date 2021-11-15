@@ -4,12 +4,28 @@ import os
 from hydra_client.connection import JSONConnection
 from .exporter import PywrHydraExporter
 from .runner import PywrHydraRunner
-from .importer import PywrHydraImporter
 from .template import register_template, unregister_template, migrate_network_template, TemplateExistsError
 from . import utils
 from hydra_client.click import hydra_app, make_plugins, write_plugins
 import pandas
 
+from hydra_pywr_common.types.network import(
+    PywrNetwork,
+    PywrIntegratedNetwork
+)
+
+from hydra_pywr_common.lib.writers import(
+    PywrJsonWriter,
+    PywrHydraWriter,
+    PywrHydraIntegratedWriter,
+    PywrIntegratedJsonWriter,
+    IntegratedOutputWriter
+)
+
+from hydra_pywr_common.lib.runners import(
+    IntegratedModelRunner,
+    write_output
+)
 
 def get_client(hostname, **kwargs):
     return JSONConnection(app_name='Pywr Hydra App', db_url=hostname, **kwargs)
@@ -58,9 +74,9 @@ def cli(obj, username, password, hostname, session):
 @click.option('--ignore-type-errors', is_flag=True, default=False)
 def import_json(obj, filename, project_id, user_id, template_id, projection, run, solver, check_model, ignore_type_errors, *args):
     """ Import a Pywr JSON file into Hydra. """
-    click.echo(f'Beginning import of "{filename}"! Project ID: {project_id}')
+    click.echo(f'Beginning import of "{filename}" to Project ID: {project_id}')
 
-    if  filename is None:
+    if filename is None:
         raise Exception("No file specified")
 
     if project_id is None:
@@ -69,15 +85,40 @@ def import_json(obj, filename, project_id, user_id, template_id, projection, run
     if template_id is None:
         raise Exception("No template specified")
 
-    client = get_logged_in_client(obj, user_id=user_id)
-    importer = PywrHydraImporter.from_client(client, filename, template_id)
-    network_id, scenario_id = importer.import_data(project_id, projection=projection, ignore_type_errors=ignore_type_errors)
+    pnet = PywrNetwork.from_source_file(filename)
+    hwriter = PywrHydraWriter(pnet, user_id=user_id, template_id=template_id, project_id=project_id)
+    hwriter.build_hydra_network(projection)
+    hwriter.add_network_to_hydra()
 
-    click.echo(f'Successfully imported "{filename}"! Network ID: {network_id}, Scenario ID: {scenario_id}')
 
-    if run:
-        run_network_scenario(client, network_id, scenario_id, template_id,
-                             solver=solver, check_model=check_model)
+@hydra_app(category='import', name='Import Integrate Pynsim JSON from combined file')
+@cli.command(name='integrated-import', context_settings=dict(
+    ignore_unknown_options=True,
+    allow_extra_args=True))
+@click.pass_obj
+@click.option('--filename', type=click.Path(file_okay=True, dir_okay=False, exists=True))
+@click.option('-p', '--project-id', type=int)
+@click.option('-u', '--user-id', type=int, default=None)
+@click.option('--water-template-id', type=int)
+@click.option('--energy-template-id', type=int)
+@click.option('--projection', type=str, default=None)
+def integrated_import_combinedjson(obj, filename, project_id, user_id, water_template_id, energy_template_id, projection, *args):
+    """ Import a Pynsim combined JSON file into Hydra. """
+    if filename is None:
+        raise Exception("No file specified")
+
+    if project_id is None:
+        raise Exception("No project specified")
+
+    if not (water_template_id and energy_template_id):
+        raise Exception("No template specified")
+
+    pin = PywrIntegratedNetwork.from_combined_file(filename)
+    writer = PywrHydraIntegratedWriter(pin, user_id=user_id, water_template_id=water_template_id, energy_template_id=energy_template_id, project_id=project_id)
+    writer.build_hydra_integrated_network(projection=projection)
+    writer.add_network_to_hydra()
+
+    click.echo(f"Imported {filename} to Project ID: {project_id}")
 
 
 @hydra_app(category='export', name='Export to Pywr JSON')
@@ -98,18 +139,107 @@ def export_json(obj, data_dir, scenario_id, user_id, json_sort_keys, json_indent
     network_id = exporter.data.id
 
     data = exporter.get_pywr_data()
-    title = data['metadata']['title']
 
-    #check if the output folder exists and create it if not
-    if not os.path.isdir(data_dir):
-        #exist_ok sets unix the '-p' functionality to create the whole path
-        os.makedirs(data_dir, exist_ok=True)
+    pnet = PywrNetwork(data)
+    writer = PywrJsonWriter(pnet)
+    output = writer.as_dict()
 
-    filename = os.path.join(data_dir, f'{title}.json')
-    with open(filename, mode='w') as fh:
-        json.dump(data, fh, sort_keys=json_sort_keys, indent=json_indent)
+    outfile = os.path.join(data_dir, f"{pnet.title.replace(' ', '_')}.json")
+    with open(outfile, mode='w') as fp:
+        json.dump(output, fp, sort_keys=json_sort_keys, indent=2)
 
-    click.echo(f'Successfully exported "{filename}"! Network ID: {network_id}, Scenario ID: {scenario_id}')
+    click.echo(f"Network: {network_id}, Scenario: {scenario_id} exported to `{outfile}`")
+
+@hydra_app(category='export', name='Export to IntegratedPywrJSON')
+@cli.command(name='integrated-export', context_settings=dict(
+    ignore_unknown_options=True,
+    allow_extra_args=True))
+@click.pass_obj
+@click.option('--data-dir', default='/tmp')
+@click.option('-s', '--scenario-id', type=int, default=None)
+@click.option('-u', '--user-id', type=int, default=None)
+@click.option('--json-sort-keys/--no-json-sort-keys', default=False)
+def integrated_export(obj, data_dir, scenario_id, user_id, json_sort_keys):
+    """ Export an integrated Pywr Water/Energy Network from Hydra to Pynsim json. """
+    client = get_logged_in_client(obj, user_id=user_id)
+    w_exporter = PywrHydraExporter.from_scenario_id(client, scenario_id, index=0)
+    e_exporter = PywrHydraExporter.from_scenario_id(client, scenario_id, index=1)
+
+    network_id = w_exporter.data.id
+
+    water_data = w_exporter.get_pywr_data("water")
+    water_template_id = w_exporter.template["id"]
+    water_net = PywrNetwork(water_data)
+    energy_data = e_exporter.get_pywr_data("energy")
+    energy_template_id = e_exporter.template["id"]
+    energy_net = PywrNetwork(energy_data)
+
+    config = w_exporter.get_integrated_config()
+    pin = PywrIntegratedNetwork(water_net, energy_net, config)
+    writer = PywrIntegratedJsonWriter(pin)
+    output = writer.as_dict()
+    dests = writer.write_as_pynsim()
+
+    for engine in dests["engines"]:
+        click.echo(f"{engine} output written to {dests[engine]['file']}")
+
+    click.echo(f"pynsim config written to {dests['config']}")
+
+    outfile = os.path.join(data_dir, "combined_export.json")
+    with open(outfile, mode='w') as fp:
+        json.dump(output, fp, sort_keys=json_sort_keys, indent=2)
+
+    click.echo(f"Network: {network_id}, Scenario: {scenario_id} exported to `{outfile}`")
+    dests["water"]["template_id"] = water_template_id
+    dests["energy"]["template_id"] = energy_template_id
+    return dests
+
+
+@hydra_app(category='model', name='Run Integrated Model')
+@cli.command(name="integrated-run", context_settings=dict(
+    ignore_unknown_options=True,
+    allow_extra_args=True))
+@click.pass_context
+@click.option('-s', '--scenario-id', type=int, default=None)
+@click.option('-u', '--user-id', type=int, default=None)
+@click.option('--output-frequency', type=str, default=None)
+@click.option('--solver', type=str, default=None)
+@click.option('--check-model/--no-check-model', default=True)
+@click.option('--data-dir', default=None)
+def integrated_run(ctx, scenario_id, user_id, output_frequency, solver, check_model, data_dir):
+    dests = ctx.invoke(integrated_export, user_id=user_id, scenario_id=scenario_id)
+    pynsim_config = dests["config"]
+    imr = IntegratedModelRunner(pynsim_config)
+    imr.run_subprocess()
+
+    for engine in dests["engines"]:
+        h5output = f"results/{engine}_Outputs.h5"
+        write_output(f"Importing results for {engine} engine from {h5output}...")
+        template_id = dests[engine]["template_id"]
+        iow = IntegratedOutputWriter(scenario_id, template_id, h5output, engine, user_id=user_id)
+        iow.build_hydra_output()
+
+
+@cli.command(name="combine-integrated-inputs")
+@click.option('-c', '--config-file', type=str, required=True)
+@click.option('-w', '--water-file', type=str, required=True)
+@click.option('-e', '--energy-file', type=str, required=True)
+@click.option('-o', '--output-file', type=str, default="combined.json")
+@click.option('-i', '--inline-parameters', type=bool, default=True)
+def combine_integrated_inputs(config_file, water_file, energy_file, output_file, inline_parameters):
+    """ Combines separate integrated model definition files into a single json
+        file for import into hwi.
+        Optionally reads csv or csv.gz input urls of dataframes and expands
+        these in the json with `--inline-parameters`
+    """
+    from hydra_pywr_common.lib.utils import combine_integrated_model_inputs
+
+    output = combine_integrated_model_inputs(config_file, water_file, energy_file, inline_parameters)
+
+    with open(output_file, 'w') as fp:
+        json.dump(output, fp, indent=2)
+
+    click.echo(f"Combined integrated model written to {output_file}")
 
 
 @hydra_app(category='model', name='Run Pywr')
