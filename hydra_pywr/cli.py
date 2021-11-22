@@ -270,12 +270,15 @@ def run_network_scenario(client, scenario_id, template_id, output_frequency=None
                                              template_id=template_id,
                                              output_resample_freq=output_frequency)
 
-    pywr_data = runner.load_pywr_model(solver=solver)
+    runner.export_pywr_data()
 
     network_id = runner.data.id
 
     if data_dir is not None:
-        save_pywr_file(pywr_data, data_dir, network_id, scenario_id)
+        model_json_path = save_pywr_file(runner.pywr_data, data_dir, network_id, scenario_id)
+        runner.load_pywr_model_from_file(model_json_path)
+    else:
+        runner.load_pywr_model(solver=solver)
 
     runner.run_pywr_model(check=check_model)
     runner.save_pywr_results()
@@ -302,7 +305,7 @@ def save_pywr_file(data, data_dir, network_id=None, scenario_id=None):
         json.dump(data, fh, sort_keys=True, indent=2)
 
     click.echo(f'Successfully exported "{filename}"! Network ID: {network_id}, Scenario ID: {scenario_id}')
-
+    return filename
 
 @hydra_app(category='network_utility', name='Step model')
 @cli.command(context_settings=dict(

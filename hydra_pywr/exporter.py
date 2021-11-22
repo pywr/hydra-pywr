@@ -1,5 +1,12 @@
 import json
+
 from collections import defaultdict
+
+from hydra_base.lib.HydraTypes.Registry import typemap as hydra_typemap
+
+from hydra_pywr_common.datatypes import PywrParameter
+
+from hydra_pywr_common.types import PywrDataReference
 
 from hydra_pywr_common.types.nodes import(
     PywrNode
@@ -14,6 +21,9 @@ from hydra_pywr_common.types.fragments.network import(
     Table,
     Scenario
 )
+
+from .core import BasePywrHydra
+
 from hydra_pywr_common.types.fragments.config import IntegratedConfig
 from hydra_pywr_common.types.parameters import *
 from hydra_pywr_common.types.recorders import *
@@ -26,7 +36,7 @@ EXCLUDE_HYDRA_ATTRS = ("id", "status", "cr_date", "network_id", "x", "y",
                        "types", "attributes", "layout", "network", "description")
 
 
-class PywrHydraExporter():
+class PywrHydraExporter(BasePywrHydra):
     def __init__(self, client, data, scenario_id, attributes, template):
         super().__init__()
         self.data = data
@@ -45,6 +55,9 @@ class PywrHydraExporter():
         self._parameter_recorder_flags = {}
         self._inline_parameter_recorder_flags = defaultdict(dict)
         self._node_recorder_flags = {}
+
+        self.timestepper = None
+        self.metadata = None
 
         self.nodes = {}
         self.edges = []
@@ -84,7 +97,7 @@ class PywrHydraExporter():
         self.generate_pywr_nodes()
         self.edges = self.build_edges()
 
-        if domain:
+        if domain is not None:
             self.timestepper, self.metadata, self.scenarios = self.build_integrated_network_attrs(domain)
         else:
             self.timestepper, self.metadata, self.tables = self.build_network_attrs()
@@ -170,8 +183,8 @@ class PywrHydraExporter():
             nodedata[attribute_name] = typedval
 
         nodedata["type"] = pywr_node_type
-        node_attr_data = {a:v for a,v in nodedata.items() if a not in EXCLUDE_HYDRA_ATTRS}
-        position = { "geographic": [ nodedata.get("x",0), nodedata.get("y",0) ] }
+        node_attr_data = {a:v for a, v in nodedata.items() if a not in EXCLUDE_HYDRA_ATTRS}
+        position = {"geographic": [ nodedata.get("x",0), nodedata.get("y",0) ]}
         node_attr_data["position"] = position
         if "comment" in node_attr_data:
             del node_attr_data["comment"]
@@ -269,7 +282,7 @@ class PywrHydraExporter():
             timestep[ts_key] = dataset["value"]
 
 
-        ts_val = timestep.get("timestep",1)
+        ts_val = timestep.get("timestep", 1)
         try:
             tv = int(float(ts_val))
         except ValueError:
@@ -305,6 +318,14 @@ class PywrHydraExporter():
 
         for tname, tdata in tables_data.items():
             tables[tname] = Table(tdata)
+
+        """ Parameters """
+        for attr in self.data["attributes"]:
+            resource_scenario = self._get_resource_scenario(attr.id)
+            dataset = resource_scenario["dataset"]
+            dataset_type = hydra_typemap[dataset.type.upper()]
+            if issubclass(dataset_type, PywrParameter):
+                self.parameters[dataset.name] = PywrDataReference.ReferenceFactory(dataset.name, dataset.value)
 
         return ts_inst, meta_inst, tables
 

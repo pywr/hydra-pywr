@@ -23,6 +23,7 @@ class PywrHydraRunner(PywrHydraExporter):
         self.output_resample_freq = kwargs.pop('output_resample_freq', None)
         super(PywrHydraRunner, self).__init__(*args, **kwargs)
         self.model = None
+        self.pywr_data = None
         self._df_recorders = None
         self._non_df_recorders = None
 
@@ -36,7 +37,7 @@ class PywrHydraRunner(PywrHydraExporter):
     def _copy_scenario(self):
         # Now construct a scenario object
         scenario = self.data.scenarios[0]
-        new_scenario = {k: v for k, v in scenario.items() if k is not 'resourcescenarios'}
+        new_scenario = {k: v for k, v in scenario.items() if k != 'resourcescenarios'}
 
         new_scenario['resourcescenarios'] = []
         return new_scenario
@@ -57,17 +58,25 @@ class PywrHydraRunner(PywrHydraExporter):
         # Now delete them all
         self.client.delete_resource_scenarios(scenario['id'], ra_to_delete, quiet=True)
 
-    def load_pywr_model(self, solver=None):
-        """ Create a Pywr model from the exported data. """
+    def export_pywr_data(self):
+        """
+        Export the pywr data to json
+        """
         data = self.get_pywr_data()
         pnet = PywrNetwork(data)
         writer = PywrJsonWriter(pnet)
-        pywr_data = writer.as_dict()
+        self.pywr_data = writer.as_dict()
 
-        model = Model.load(pywr_data, solver=solver)
-        self.model = model
+    def load_pywr_model(self, solver=None):
+        """ Run Pywr model from the exported data using the model in self.pywr_data """
+        log.info("Running pywr model from memory")
+        self.model = Model.load(self.pywr_data, solver=solver)
 
-        return pywr_data
+    def load_pywr_model_from_file(self, pywr_model_path, solver=None):
+        """ Rum a Pywr model from the exported data using a json file as specified
+        in the pywr_model_path """
+        log.info("Running pywr model from file %s", pywr_model_path)
+        self.model = Model.load(pywr_model_path, solver=solver)
 
     def run_pywr_model(self, check=True):
         """ Run a Pywr model from the exported data.
@@ -430,7 +439,3 @@ class PywrHydraRunner(PywrHydraExporter):
                 self.attr_dimension_map[attr.name] = attr.dimension_id
 
         return attr_name_map
-
-
-
-
