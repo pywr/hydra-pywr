@@ -4,7 +4,9 @@ from collections import defaultdict
 
 from hydra_base.lib.HydraTypes.Registry import typemap as hydra_typemap
 
-from hydra_pywr_common.datatypes import PywrParameter
+from hydra_pywr.template import PYWR_SPLIT_LINK_TYPES
+
+from hydra_pywr_common.datatypes import PywrParameter, PywrRecorder
 
 from hydra_pywr_common.types import PywrDataReference
 
@@ -38,7 +40,9 @@ EXCLUDE_HYDRA_ATTRS = ("id", "status", "cr_date", "network_id", "x", "y",
 
 class PywrHydraExporter(BasePywrHydra):
     def __init__(self, client, data, scenario_id, attributes, template):
+
         super().__init__()
+
         self.data = data
         self.scenario_id = scenario_id
         self.attributes = attributes
@@ -184,7 +188,7 @@ class PywrHydraExporter(BasePywrHydra):
 
         nodedata["type"] = pywr_node_type
         node_attr_data = {a:v for a, v in nodedata.items() if a not in EXCLUDE_HYDRA_ATTRS}
-        position = {"geographic": [ nodedata.get("x",0), nodedata.get("y",0) ]}
+        position = {"geographic": [nodedata.get("x",0), nodedata.get("y",0)]}
         node_attr_data["position"] = position
         if "comment" in node_attr_data:
             del node_attr_data["comment"]
@@ -198,12 +202,18 @@ class PywrHydraExporter(BasePywrHydra):
         self.recorders.update(dev_node.recorders)
 
 
+    def normalise(self, name):
+        return name.lower().replace("_", "").replace(" ", "")
+
     def build_edges(self):
         edges = {}
 
         for hydra_edge in self.data["links"]:
             src_hydra_node = self.hydra_node_lookup[hydra_edge["node_1_id"]]
             dest_hydra_node = self.hydra_node_lookup[hydra_edge["node_2_id"]]
+
+            from_node_types = self.get_type_map(src_hydra_node)
+            node_type_names = set([nt.lower() for nt in from_node_types.values()])
             # Retrieve nodes from PywrNode store to verify presence
             try:
                 src_node = self.nodes[src_hydra_node["name"]]
@@ -212,11 +222,39 @@ class PywrHydraExporter(BasePywrHydra):
                 # Not in this template...
                 continue
 
-            edge = PywrEdge((src_node.name, dest_node.name))  # NB Call ctor directly with tuple here, no factory
+
+            if len(set(PYWR_SPLIT_LINK_TYPES).intersection(node_type_names)) > 0:
+                #This is a split link, which has 4 entries, the third one bing the name
+                #of the source node and the last one being None,
+                slot_name = dest_node.name
+                for s in src_node.slot_names.get_value():
+                    #TODO: THis is a massive hack. How wan we identify the correct slot
+                    #names if they are not node names in the model???
+                    if self.normalise(s).endswith(self.normalise(dest_node.name)):
+                        slot_name = s
+                edge = PywrEdge((src_node.name, dest_node.name, slot_name, None))
+            else:
+                edge = PywrEdge((src_node.name, dest_node.name))  # NB Call ctor directly with tuple here, no factory
             edges[edge.name] = edge
 
         return edges
 
+    def get_type_map(self, resource):
+        """
+        for a given resource (node, link, group) get the type id:name map for it
+        ex: node.types = [{id: 1, name: type1}, {id: 11, name: type11}
+        returns:
+            {
+             1: type1
+             11: type11
+            }
+        """
+        type_map = {}
+
+        for t in resource.get('types', []):
+            type_map[t['id']] = self.type_id_map[t['id']]['name']
+
+        return type_map
 
     def build_integrated_network_attrs(self, domain):
         domain_data_key = f"{domain}_data"
@@ -325,7 +363,15 @@ class PywrHydraExporter(BasePywrHydra):
             dataset = resource_scenario["dataset"]
             dataset_type = hydra_typemap[dataset.type.upper()]
             if issubclass(dataset_type, PywrParameter):
-                self.parameters[dataset.name] = PywrDataReference.ReferenceFactory(dataset.name, dataset.value)
+                self.parameters[dataset.name] = PywrDataReference.ReferenceFactory(attr.name, dataset.value)
+
+        """ Recorders """
+        for attr in self.data["attributes"]:
+            resource_scenario = self._get_resource_scenario(attr.id)
+            dataset = resource_scenario["dataset"]
+            dataset_type = hydra_typemap[dataset.type.upper()]
+            if issubclass(dataset_type, PywrRecorder):
+                self.recorders[attr.name] = PywrDataReference.ReferenceFactory(attr.name, dataset.value)
 
         return ts_inst, meta_inst, tables
 

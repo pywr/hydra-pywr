@@ -1,13 +1,14 @@
 import click
 import json
 import os
+import pandas
 from hydra_client.connection import JSONConnection
 from .exporter import PywrHydraExporter
 from .runner import PywrHydraRunner
 from .template import register_template, unregister_template, migrate_network_template, TemplateExistsError
 from . import utils
 from hydra_client.click import hydra_app, make_plugins, write_plugins
-import pandas
+from pywr.model import Model
 
 from hydra_pywr_common.types.network import(
     PywrNetwork,
@@ -26,6 +27,8 @@ from hydra_pywr_common.lib.runners import(
     IntegratedModelRunner,
     write_output
 )
+
+from .nodes import *
 
 def get_client(hostname, **kwargs):
     return JSONConnection(app_name='Pywr Hydra App', db_url=hostname, **kwargs)
@@ -285,6 +288,18 @@ def run_network_scenario(client, scenario_id, template_id, output_frequency=None
 
     click.echo(f'Pywr model run success! Network ID: {network_id}, Scenario ID: {scenario_id}')
 
+@hydra_app(category='model', name='Run Pywr Json File')
+@cli.command(context_settings=dict(
+    ignore_unknown_options=True,
+    allow_extra_args=True))
+@click.argument('filename', default=None)
+def run_file(filename):
+    """ Run pywr on the specified file """
+
+    model = Model.load(filename)
+    model.setup()
+    model.run()
+    click.echo(f'Pywr model run success!')
 
 def save_pywr_file(data, data_dir, network_id=None, scenario_id=None):
     """
