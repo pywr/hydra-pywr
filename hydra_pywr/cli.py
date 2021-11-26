@@ -3,7 +3,7 @@ import json
 import os
 from hydra_client.connection import JSONConnection
 from .exporter import PywrHydraExporter
-from .runner import PywrHydraRunner
+from .runner import PywrHydraRunner, PywrFileRunner
 from .template import register_template, unregister_template, migrate_network_template, TemplateExistsError
 from . import utils
 from hydra_client.click import hydra_app, make_plugins, write_plugins
@@ -240,6 +240,20 @@ def combine_integrated_inputs(config_file, water_file, energy_file, output_file,
         json.dump(output, fp, indent=2)
 
     click.echo(f"Combined integrated model written to {output_file}")
+
+
+@cli.command(name="run-file", context_settings=dict(
+    ignore_unknown_options=True,
+    allow_extra_args=True))
+@click.pass_obj
+@click.argument("filename", type=click.Path(file_okay=True, dir_okay=False, exists=True))
+@click.option('--output-frequency', type=str, default=None)
+@click.option('--solver', type=str, default=None)
+@click.option('--check-model/--no-check-model', default=False)
+def run_file(obj, filename, output_frequency, solver, check_model):
+    pfr = PywrFileRunner("energy")
+    pfr.load_pywr_model_from_file(filename)
+    pfr.run_pywr_model()
 
 
 @hydra_app(category='model', name='Run Pywr')

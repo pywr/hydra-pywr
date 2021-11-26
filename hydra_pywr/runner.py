@@ -17,6 +17,67 @@ import logging
 log = logging.getLogger(__name__)
 
 
+class PywrFileRunner():
+    def __init__(self, domain):
+        self.model = None
+        self._df_recorders = None
+        self._non_df_recorders = None
+        self.domain = domain
+
+
+    def load_pywr_model_from_file(self, filename, solver=None):
+        if self.domain == "energy":
+            from pywr_dcopf import core
+            solver = "glpk-dcopf"
+
+        pnet = PywrNetwork.from_source_file(filename)
+        writer = PywrJsonWriter(pnet)
+        pywr_data = writer.as_dict()
+
+        model = Model.load(pywr_data, solver=solver)
+        self.model = model
+        return pywr_data
+
+
+    def run_pywr_model(self, check=True):
+        if self.domain == "energy":
+            from pywr_dcopf import core
+
+        model = self.model
+
+        # Add a progress recorder to monitor the run.
+        ProgressRecorder(model)
+
+        # Add recorders for monitoring the simulated timeseries of nodes
+        ##self._add_node_flagged_recorders(model)
+        # Add recorders for parameters that are flagged
+        ##self._add_parameter_flagged_recorders(model)
+
+        df_recorders = []
+        non_df_recorders = []
+        for recorder in model.recorders:
+            if hasattr(recorder, 'to_dataframe'):
+                df_recorders.append(recorder)
+            else:
+                non_df_recorders.append(recorder)
+
+        # Force a setup regardless of whether the model has been run or setup before
+        model.setup()
+
+        max_scenarios = os.environ.get('HYDRA_PYWR_MAX_SCENARIOS', None)
+        if max_scenarios is not None:
+            nscenarios = len(model.scenarios.combinations)
+            if nscenarios > max_scenarios:
+                raise RuntimeError(f'Number of scenarios ({nscenarios}) exceeds the maximum limit of {max_scenarios}.')
+
+        # Now run the model.
+        run_stats = model.run()
+
+        # Save these for later
+        self._df_recorders = df_recorders
+        self._non_df_recorders = non_df_recorders
+
+
 class PywrHydraRunner(PywrHydraExporter):
     """ An extension to `PywrHydraExporter` that adds methods for running a Pywr model. """
     def __init__(self, *args, **kwargs):
@@ -36,7 +97,7 @@ class PywrHydraRunner(PywrHydraExporter):
     def _copy_scenario(self):
         # Now construct a scenario object
         scenario = self.data.scenarios[0]
-        new_scenario = {k: v for k, v in scenario.items() if k is not 'resourcescenarios'}
+        new_scenario = {k: v for k, v in scenario.items() if k != 'resourcescenarios'}
 
         new_scenario['resourcescenarios'] = []
         return new_scenario
@@ -69,11 +130,15 @@ class PywrHydraRunner(PywrHydraExporter):
 
         return pywr_data
 
-    def run_pywr_model(self, check=True):
+
+    def run_pywr_model(self, check=True, domain="water"):
         """ Run a Pywr model from the exported data.
 
         If no model has been loaded (see `load_pywr_model`) then a load is attempted.
         """
+        if domain == "energy":
+            from pywr_dcopf import core
+
         if self.model is None:
             self.load_pywr_model(solver='glpk-edge')
 
