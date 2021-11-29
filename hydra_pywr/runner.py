@@ -80,9 +80,10 @@ class PywrFileRunner():
 
 class PywrHydraRunner(PywrHydraExporter):
     """ An extension to `PywrHydraExporter` that adds methods for running a Pywr model. """
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, domain="water", **kwargs):
         self.output_resample_freq = kwargs.pop('output_resample_freq', None)
         super(PywrHydraRunner, self).__init__(*args, **kwargs)
+        self.domain = domain
         self.model = None
         self._df_recorders = None
         self._non_df_recorders = None
@@ -120,11 +121,23 @@ class PywrHydraRunner(PywrHydraExporter):
 
     def load_pywr_model(self, solver=None):
         """ Create a Pywr model from the exported data. """
+
+        domain_solvers = {
+            "water": "glpk-edge",
+            "energy": "glpk-dcopf"
+        }
+
+        if self.domain == "energy":
+            from pywr_dcopf import core
+
+        solver = domain_solvers[self.domain]
+
         data = self.get_pywr_data()
         pnet = PywrNetwork(data)
         writer = PywrJsonWriter(pnet)
         pywr_data = writer.as_dict()
-
+        from pprint import pprint
+        pprint(pywr_data)
         model = Model.load(pywr_data, solver=solver)
         self.model = model
 
@@ -136,11 +149,17 @@ class PywrHydraRunner(PywrHydraExporter):
 
         If no model has been loaded (see `load_pywr_model`) then a load is attempted.
         """
+
+        domain_solvers = {
+            "water": "glpk-edge",
+            "energy": "glpk-dcopf"
+        }
+
         if domain == "energy":
             from pywr_dcopf import core
 
         if self.model is None:
-            self.load_pywr_model(solver='glpk-edge')
+            self.load_pywr_model(solver=domain_solvers[domain])
 
         model = self.model
 
@@ -160,9 +179,11 @@ class PywrHydraRunner(PywrHydraExporter):
             else:
                 non_df_recorders.append(recorder)
 
+        """
         if check:
             # Check the model
             model.check()
+        """
 
         # Force a setup regardless of whether the model has been run or setup before
         model.setup()
@@ -243,6 +264,7 @@ class PywrHydraRunner(PywrHydraExporter):
         return attribute_name
 
     def _add_node_flagged_recorders(self, model):
+        from pywr_dcopf.core import Generator, Load, Line, Battery
 
         for node in model.nodes:
             try:
@@ -255,8 +277,8 @@ class PywrHydraRunner(PywrHydraExporter):
                     continue
 
                 if flag == 'timeseries':
-                    #if isinstance(node, (Node, Generator, Load, Line)):
-                    if isinstance(node, (Node)):
+                    if isinstance(node, (Node, Generator, Load, Line)):
+                    #if isinstance(node, (Node)):
                         name = '__{}__:{}'.format(node.name, 'simulated_flow')
                         NumpyArrayNodeRecorder(model, node, name=name)
                     elif isinstance(node, (Storage)):
@@ -495,6 +517,35 @@ class PywrHydraRunner(PywrHydraExporter):
                 self.attr_dimension_map[attr.name] = attr.dimension_id
 
         return attr_name_map
+
+    def _make_dataset_resource_scenario(self, name, value, data_type, resource_attribute_id,
+                                        unit_id=None, encode_to_json=False, metadata={}):
+        """ A helper method to make a dataset, resource attribute and resource scenario. """
+        import json
+
+        if data_type.lower() in ("descriptor", "scalar"):
+            encode_to_json = False
+
+        metadata['json_encoded'] = encode_to_json
+
+        # Create a dataset representing the value
+        dataset = {
+            'name': name,
+            'value': json.dumps(value) if encode_to_json is True else value,
+            "hidden": "N",
+            "type": data_type,
+            "unit_id": unit_id,
+            "metadata": json.dumps(metadata)
+        }
+
+        # Create a resource scenario linking the dataset to the scenario
+        resource_scenario = {
+            'resource_attr_id': resource_attribute_id,
+            'dataset': dataset
+        }
+
+        # Finally return resource attribute and resource scenario
+        return resource_scenario
 
 
 

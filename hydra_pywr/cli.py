@@ -282,7 +282,7 @@ def run_network_scenario(client, scenario_id, template_id, output_frequency=None
 
     runner = PywrHydraRunner.from_scenario_id(client, scenario_id,
                                              template_id=template_id,
-                                             output_resample_freq=output_frequency)
+                                             output_resample_freq=output_frequency, domain="energy")
 
     pywr_data = runner.load_pywr_model(solver=solver)
 
