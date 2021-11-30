@@ -16,6 +16,17 @@ import os
 import logging
 log = logging.getLogger(__name__)
 
+try:
+    from volta import customized_recorders, customized_parameters
+    from integrated_framework_update.engines.custom_recorders import *
+except:
+    log.info("Unable to import model-specific recorders and parameters.")
+
+
+domain_solvers = {
+    "water": "glpk-edge",
+    "energy": "glpk-dcopf"
+}
 
 class PywrFileRunner():
     def __init__(self, domain):
@@ -28,13 +39,12 @@ class PywrFileRunner():
     def load_pywr_model_from_file(self, filename, solver=None):
         if self.domain == "energy":
             from pywr_dcopf import core
-            solver = "glpk-dcopf"
 
         pnet = PywrNetwork.from_source_file(filename)
         writer = PywrJsonWriter(pnet)
         pywr_data = writer.as_dict()
 
-        model = Model.load(pywr_data, solver=solver)
+        model = Model.load(pywr_data, solver=domain_solvers[self.domain])
         self.model = model
         return pywr_data
 
@@ -80,6 +90,7 @@ class PywrFileRunner():
 
 class PywrHydraRunner(PywrHydraExporter):
     """ An extension to `PywrHydraExporter` that adds methods for running a Pywr model. """
+
     def __init__(self, *args, domain="water", **kwargs):
         self.output_resample_freq = kwargs.pop('output_resample_freq', None)
         super(PywrHydraRunner, self).__init__(*args, **kwargs)
@@ -122,10 +133,6 @@ class PywrHydraRunner(PywrHydraExporter):
     def load_pywr_model(self, solver=None):
         """ Create a Pywr model from the exported data. """
 
-        domain_solvers = {
-            "water": "glpk-edge",
-            "energy": "glpk-dcopf"
-        }
 
         if self.domain == "energy":
             from pywr_dcopf import core
@@ -136,8 +143,6 @@ class PywrHydraRunner(PywrHydraExporter):
         pnet = PywrNetwork(data)
         writer = PywrJsonWriter(pnet)
         pywr_data = writer.as_dict()
-        from pprint import pprint
-        pprint(pywr_data)
         model = Model.load(pywr_data, solver=solver)
         self.model = model
 
@@ -149,11 +154,6 @@ class PywrHydraRunner(PywrHydraExporter):
 
         If no model has been loaded (see `load_pywr_model`) then a load is attempted.
         """
-
-        domain_solvers = {
-            "water": "glpk-edge",
-            "energy": "glpk-dcopf"
-        }
 
         if domain == "energy":
             from pywr_dcopf import core
@@ -264,7 +264,11 @@ class PywrHydraRunner(PywrHydraExporter):
         return attribute_name
 
     def _add_node_flagged_recorders(self, model):
-        from pywr_dcopf.core import Generator, Load, Line, Battery
+        if self.domain == "energy":
+            from pywr_dcopf.core import Generator, Load, Line, Battery
+            node_classes = (Node, Generator, Load, Line)
+        else:
+            node_classes = (Node,)
 
         for node in model.nodes:
             try:
@@ -277,8 +281,8 @@ class PywrHydraRunner(PywrHydraExporter):
                     continue
 
                 if flag == 'timeseries':
-                    if isinstance(node, (Node, Generator, Load, Line)):
-                    #if isinstance(node, (Node)):
+                    #if isinstance(node, (Node, Generator, Load, Line)):
+                    if isinstance(node, node_classes):
                         name = '__{}__:{}'.format(node.name, 'simulated_flow')
                         NumpyArrayNodeRecorder(model, node, name=name)
                     elif isinstance(node, (Storage)):

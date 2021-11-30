@@ -247,11 +247,12 @@ def combine_integrated_inputs(config_file, water_file, energy_file, output_file,
     allow_extra_args=True))
 @click.pass_obj
 @click.argument("filename", type=click.Path(file_okay=True, dir_okay=False, exists=True))
+@click.option('--domain', type=str, default="water")
 @click.option('--output-frequency', type=str, default=None)
 @click.option('--solver', type=str, default=None)
 @click.option('--check-model/--no-check-model', default=False)
-def run_file(obj, filename, output_frequency, solver, check_model):
-    pfr = PywrFileRunner("energy")
+def run_file(obj, filename, domain, output_frequency, solver, check_model):
+    pfr = PywrFileRunner(domain)
     pfr.load_pywr_model_from_file(filename)
     pfr.run_pywr_model()
 
@@ -264,25 +265,27 @@ def run_file(obj, filename, output_frequency, solver, check_model):
 @click.option('-s', '--scenario-id', type=int, default=None)
 @click.option('-t', '--template-id', type=int, default=None)
 @click.option('-u', '--user-id', type=int, default=None)
+@click.option('--domain', type=str, default="water")
 @click.option('--output-frequency', type=str, default=None)
 @click.option('--solver', type=str, default=None)
 @click.option('--check-model/--no-check-model', default=True)
 @click.option('--data-dir', default=None)
-def run(obj, scenario_id, template_id, user_id, output_frequency, solver, check_model, data_dir):
+def run(obj, scenario_id, template_id, user_id, domain, output_frequency, solver, check_model, data_dir):
     """ Export, run and save a Pywr model from Hydra. """
     client = get_logged_in_client(obj, user_id=user_id)
 
     if scenario_id is None:
         raise Exception('No scenario specified')
 
-    run_network_scenario(client, scenario_id, template_id, output_frequency=output_frequency,
+    run_network_scenario(client, scenario_id, template_id, domain, output_frequency=output_frequency,
                          solver=solver, check_model=check_model, data_dir=data_dir)
 
-def run_network_scenario(client, scenario_id, template_id, output_frequency=None, solver=None, check_model=True, data_dir=None):
+def run_network_scenario(client, scenario_id, template_id, domain, output_frequency=None, solver=None, check_model=True, data_dir=None):
 
     runner = PywrHydraRunner.from_scenario_id(client, scenario_id,
                                              template_id=template_id,
-                                             output_resample_freq=output_frequency, domain="energy")
+                                             domain=domain,
+                                             output_resample_freq=output_frequency)
 
     pywr_data = runner.load_pywr_model(solver=solver)
 

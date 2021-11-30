@@ -275,8 +275,6 @@ class PywrHydraExporter():
         except ValueError:
             tv = ts_val
         timestep["timestep"] = tv
-        #from pprint import pprint
-        #pprint(self.data)
         ts_inst = Timestepper(timestep)
 
         """ Metadata """
