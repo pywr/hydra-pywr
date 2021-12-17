@@ -131,8 +131,6 @@ class PywrHydraExporter():
             if node.get('description', None) is not None:
                 pywr_node['comment'] = node['description']
 
-            breakpoint()
-
             # Get the type for this node from the template
             pywr_node_type = None
             for node_type in node['types']:
