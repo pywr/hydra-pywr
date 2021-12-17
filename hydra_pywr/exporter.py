@@ -136,11 +136,13 @@ class PywrHydraExporter():
             for node_type in node['types']:
                 try:
                     log.info(f"====\nnode: {node}")
-                    pywr_node_type = self.type_id_map[node_type['id']]['name']
                     if node_type["template_id"] != self.template["id"]:
                         continue
+                    pywr_node_type = self.type_id_map[node_type['id']]['name']
+                    break
                 except KeyError:
                     # Skip as not in this template...
+                    pywr_node_type = None
                     continue
 
             log.info(f"Found node type {pywr_node_type} for node {node['name']} with nt_id {node_type['id']} on template {self.template['id']}\n====")
