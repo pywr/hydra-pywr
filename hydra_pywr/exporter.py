@@ -134,6 +134,8 @@ class PywrHydraExporter():
             for node_type in node['types']:
                 try:
                     pywr_node_type = self.type_id_map[node_type['id']]['name']
+                    if node_type["template_id"] != self.template["id"]:
+                        continue
                 except KeyError:
                     # Skip as not in this template...
                     continue
