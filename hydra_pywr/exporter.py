@@ -54,6 +54,7 @@ class PywrHydraExporter():
         self.scenarios = []
 
         self._pattern_templates = None
+        log.info(f"{self.type_id_map}")
 
 
     @classmethod
@@ -74,6 +75,7 @@ class PywrHydraExporter():
             template = client.get_template(template_id)
         #elif len(network.types) == 1:
         else:
+            log.info(f"Retreiving template {network.types[index].template_id}")
             template = client.get_template(network.types[index].template_id)
 
 
@@ -129,10 +131,13 @@ class PywrHydraExporter():
             if node.get('description', None) is not None:
                 pywr_node['comment'] = node['description']
 
+            breakpoint()
+
             # Get the type for this node from the template
             pywr_node_type = None
             for node_type in node['types']:
                 try:
+                    log.info(f"====\nnode: {node}")
                     pywr_node_type = self.type_id_map[node_type['id']]['name']
                     if node_type["template_id"] != self.template["id"]:
                         continue
@@ -140,12 +145,15 @@ class PywrHydraExporter():
                     # Skip as not in this template...
                     continue
 
+            log.info(f"Found node type {pywr_node_type} for node {node['name']} with nt_id {node_type['id']} on template {self.template['id']}\n====")
+
             #if pywr_node_type is None:
             #    raise ValueError('Template does not contain node of type "{}".'.format(pywr_node_type))
 
 
             # Skip as not in this template...
             if pywr_node_type:
+                log.info(f"Building node {node['name']} as {pywr_node_type}...")
                 self.build_node_and_references(node, pywr_node_type)
 
 
