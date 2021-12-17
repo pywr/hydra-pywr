@@ -131,12 +131,14 @@ class PywrHydraExporter():
             if node.get('description', None) is not None:
                 pywr_node['comment'] = node['description']
 
+
             # Get the type for this node from the template
             pywr_node_type = None
-            for node_type in node['types']:
+            real_template_id = node["types"][0]["template_id"]
+            for node_type in node["types"]:
                 try:
                     log.info(f"====\nnode: {node}")
-                    if node_type["template_id"] != self.template["id"]:
+                    if real_template_id != self.template["id"]:
                         continue
                     pywr_node_type = self.type_id_map[node_type['id']]['name']
                     break
