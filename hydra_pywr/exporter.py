@@ -18,6 +18,8 @@ from hydra_pywr_common.types.fragments.config import IntegratedConfig
 from hydra_pywr_common.types.parameters import *
 from hydra_pywr_common.types.recorders import *
 
+from .rules import exec_rules
+
 import logging
 log = logging.getLogger(__name__)
 
@@ -64,6 +66,8 @@ class PywrHydraExporter():
         network = client.get_network(scenario.network_id, include_data=False, include_results=False, template_id=template_id)
 
         network.scenarios = [scenario]
+
+        network.rules = client.get_resource_rules('NETWORK', scenario.network_id)
 
         # Fetch all the attributes
         attributes = client.get_attributes()
@@ -117,6 +121,16 @@ class PywrHydraExporter():
                     return resource_scenario
 
         raise ValueError('No resource scenario found for resource attribute id: {}'.format(resource_attribute_id))
+
+
+    def exec_rules(self):
+
+
+        rules = [r for r in self.data['rules'] if r.status.lower() == 'a']
+
+        log.info("Exec-ing {} rules".format(len(rules)))
+
+        exec_rules(rules)
 
 
     def generate_pywr_nodes(self):
