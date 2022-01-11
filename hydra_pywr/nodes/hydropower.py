@@ -14,7 +14,9 @@ from pywr.parameters import (
     ScenarioWrapperParameter,
     InterpolatedVolumeParameter,
     ConstantParameter,
-    HydropowerTargetParameter
+    HydropowerTargetParameter,
+	AggregatedParameter,
+	MonthlyProfileParameter
 )
 
 from pywr.recorders import (
@@ -25,6 +27,13 @@ from pywr.parameters.control_curves import (
     ControlCurveInterpolatedParameter
 )
 
+""" Define nodes exported to `from hydra_pywr.nodes import *` """
+__all__ = (
+    "ProportionalInput",
+    "LinearStorageReleaseControl",
+    "Reservoir",
+    "Turbine"
+)
 
 class ProportionalInput(Input, metaclass=NodeMeta):
     min_proportion = 1e-6
@@ -141,6 +150,86 @@ class Reservoir(Storage, metaclass=NodeMeta):
             self.area = InterpolatedVolumeParameter(self.model, self, volumes, areas)
 
 
+    def _make_weather_nodes(self, model, weather, cost):
+
+        if not isinstance(self.area, Parameter):
+            raise ValueError('Weather nodes can only be created if an area Parameter is given.')
+
+        weather = pd.DataFrame.from_dict(weather)
+
+        rainfall = weather['rainfall'].astype(np.float64)
+        evaporation = weather['evaporation'].astype(np.float64)
+
+        self._make_evaporation_node(model, evaporation, cost)
+        self._make_rainfall_node(model, rainfall, cost)
+
+
+    def _make_evaporation_node(self, model, evaporation, cost):
+
+        if not isinstance(self.area, Parameter):
+            log.warning('Evaporation nodes be created only if an area Parameter is given.')
+            return
+
+        if evaporation is None:
+            try:
+                evaporation_param = load_parameter(model, f'__{self.name}__:evaporation')
+            except KeyError:
+                log.warning(f"Please specify evaporation or weather on node {self.name}")
+                return
+        elif isinstance(evaporation, pd.DataFrame) or isinstance(evaporation, pd.Series):
+            evaporation = evaporation.astype(np.float64)
+            evaporation_param = MonthlyProfileParameter(model, evaporation)
+        else:
+            evaporation_param = evaporation
+
+        evaporation_flow_param = AggregatedParameter(model, [evaporation_param, self.const, self.area],
+                                                     agg_func='product')
+
+        evaporation_node = Output(model, '{}.evaporation'.format(self.name), parent=self)
+        evaporation_node.max_flow = evaporation_flow_param
+        evaporation_node.cost = cost
+
+        self.connect(evaporation_node)
+        self.evaporation_node = evaporation_node
+
+        self.evaporation_recorder = NumpyArrayNodeRecorder(model, evaporation_node,
+                                                           name=f'__{evaporation_node.name}__:evaporation')
+
+    def _make_rainfall_node(self, model, rainfall, cost):
+
+        if not isinstance(self.area, Parameter):
+            log.warning('Weather nodes can be created only if an area Parameter is given.')
+            return
+
+        if rainfall is None:
+            try:
+                rainfall_param = load_parameter(model, f'__{self.name}__:rainfall')
+            except KeyError:
+                log.warning(f"Please specify rainfall or weather on node {self.name}")
+                return
+        elif isinstance(rainfall, pd.DataFrame) or isinstance(rainfall, pd.Series):
+            rainfall = rainfall.astype(np.float64)
+            rainfall_param = MonthlyProfileParameter(model, rainfall)
+        else:
+            rainfall_param = rainfall
+
+        # Create the flow parameters multiplying area by rate of rainfall/evap
+        rainfall_flow_param = AggregatedParameter(model, [rainfall_param, self.const, self.area],
+                                                  agg_func='product')
+
+        # Create the nodes to provide the flows
+        rainfall_node = Input(model, '{}.rainfall'.format(self.name), parent=self)
+        rainfall_node.max_flow = rainfall_flow_param
+        rainfall_node.cost = cost
+
+        rainfall_node.connect(self)
+        self.rainfall_node = rainfall_node
+
+        self.rainfall_recorder = NumpyArrayNodeRecorder(model, rainfall_node,
+                                                        name=f'__{rainfall_node.name}__:rainfall')
+
+
+
 class Turbine(Link, metaclass=NodeMeta):
     def __init__(self, model, name, **kwargs):
         hp_recorder_kwarg_names = ('efficiency', 'density', 'flow_unit_conversion', 'energy_unit_conversion')
@@ -151,17 +240,6 @@ class Turbine(Link, metaclass=NodeMeta):
             except KeyError:
                 pass
 
-        """  Some error here: storage_node is str...
-        self.storage_node = storage_node = kwargs.pop('storage_node', None)
-        # See if there is a level parameter on the storage node
-        if storage_node is not None:
-            breakpoint()
-            level_parameter = storage_node.level
-            if not isinstance(level_parameter, Parameter):
-                level_parameter = ConstantParameter(model, value=level_parameter)
-        else:
-            level_parameter = None
-        """
         level_parameter = None
         storage_node = kwargs.pop("storage_node", None)
 

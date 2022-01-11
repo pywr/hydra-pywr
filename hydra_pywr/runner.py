@@ -11,6 +11,7 @@ from pywr.recorders.progress import ProgressRecorder
 from .template import PYWR_ARRAY_RECORDER_ATTRIBUTES
 from hydra_pywr_common.types.network import PywrNetwork
 from hydra_pywr_common.lib.writers import PywrJsonWriter
+from hydra_pywr.nodes import *
 
 import os
 import logging
