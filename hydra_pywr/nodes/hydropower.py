@@ -27,6 +27,9 @@ from pywr.parameters.control_curves import (
     ControlCurveInterpolatedParameter
 )
 
+import logging
+log = logging.getLogger(__name__)
+
 """ Define nodes exported to `from hydra_pywr.nodes import *` """
 __all__ = (
     "ProportionalInput",
@@ -97,6 +100,9 @@ class Reservoir(Storage, metaclass=NodeMeta):
         level = kwargs.pop('level', None)
         area = kwargs.pop('area', None)
         const = kwargs.pop('const', 1e6 * 1e-3 * 1e-6)
+
+        # Pywr Storage does not expect a 'weather' kwargs, so move this to instance
+        self.weather = kwargs.pop("weather", None)
 
         super().__init__(model, name, **kwargs)
 
