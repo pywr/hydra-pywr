@@ -184,6 +184,8 @@ class PywrHydraExporter(BasePywrHydra):
             value = dataset['value']
             try:
                 typedval = json.loads(value)
+                if isinstance(typedval, dict) and typedval.get('__recorder__') is not None:
+                    self._parameter_recorder_flags[attribute_name] = typedval.pop('__recorder__')
             except json.decoder.JSONDecodeError as e:
                 typedval = value
             nodedata[attribute_name] = typedval
@@ -360,6 +362,14 @@ class PywrHydraExporter(BasePywrHydra):
             resource_scenario = self._get_resource_scenario(attr.id)
             dataset = resource_scenario["dataset"]
             dataset_type = hydra_typemap[dataset.type.upper()]
+
+            try:
+                data = json.loads(data)
+                if isinstance(data, dict) and data.get('__recorder__') is not None:
+                    self._parameter_recorder_flags[attr.name] = data.pop('__recorder__')
+            except:
+                pass
+
             if issubclass(dataset_type, PywrParameter):
                 parameter = PywrDataReference.ReferenceFactory(attr.name, dataset.value)
                 if isinstance(parameter, hydra_pywr_common.types.base.PywrRecorder): #just in case this is somehow mis-categorised
