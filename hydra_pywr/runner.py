@@ -267,7 +267,7 @@ class PywrHydraRunner(PywrHydraExporter):
     def _add_node_flagged_recorders(self, model):
         if self.domain == "energy":
             from pywr_dcopf.core import Generator, Load, Line, Battery
-            node_classes = (Node, Generator, Load, Line)
+            node_classes = (Node, Generator, Load, Line, Battery)
         else:
             node_classes = (Node,)
 

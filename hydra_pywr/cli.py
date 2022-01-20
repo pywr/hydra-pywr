@@ -257,6 +257,28 @@ def run_file(obj, filename, domain, output_frequency, solver, check_model):
     pfr.run_pywr_model()
 
 
+@cli.command(name="run-integrated-file", context_settings=dict(
+    ignore_unknown_options=True,
+    allow_extra_args=True))
+@click.pass_obj
+@click.argument("filename", type=click.Path(file_okay=True, dir_okay=False, exists=True))
+@click.option('--output-frequency', type=str, default=None)
+@click.option('--solver', type=str, default=None)
+@click.option('--check-model/--no-check-model', default=True)
+def run_integrated_file(obj, filename, output_frequency, solver, check_model):
+    with open(filename, 'r') as fp:
+        src = json.load(fp)
+    pynsim_config = src["config"]
+    for engine in pynsim_config["engines"]:
+        outfile = engine['args'][0]
+        with open(outfile, 'w') as fp:
+            json.dump(src[engine["name"]], fp, indent=2)
+            click.echo(f"{engine} output written to {outfile}")
+
+    imr = IntegratedModelRunner(pynsim_config)
+    imr.run_subprocess()
+
+
 @hydra_app(category='model', name='Run Pywr')
 @cli.command(context_settings=dict(
     ignore_unknown_options=True,
