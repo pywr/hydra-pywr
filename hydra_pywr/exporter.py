@@ -10,6 +10,8 @@ from hydra_pywr_common.datatypes import PywrParameter, PywrRecorder
 
 from hydra_pywr_common.types import PywrDataReference
 
+import hydra_pywr_common
+
 from hydra_pywr_common.types.nodes import(
     PywrNode
 )
@@ -188,12 +190,8 @@ class PywrHydraExporter(BasePywrHydra):
 
         nodedata["type"] = pywr_node_type
         node_attr_data = {a:v for a, v in nodedata.items() if a not in EXCLUDE_HYDRA_ATTRS}
-        position = {"geographic": [nodedata.get("x",0), nodedata.get("y",0)]}
+        position = {"geographic": [nodedata.get("x", 0), nodedata.get("y", 0)]}
         node_attr_data["position"] = position
-        if "comment" in node_attr_data:
-            del node_attr_data["comment"]
-        if "description" in nodedata:
-            node_attr_data["comment"] = nodedata.get("description")
 
         dev_node = PywrNode.NodeFactory(node_attr_data)
 
@@ -363,7 +361,11 @@ class PywrHydraExporter(BasePywrHydra):
             dataset = resource_scenario["dataset"]
             dataset_type = hydra_typemap[dataset.type.upper()]
             if issubclass(dataset_type, PywrParameter):
-                self.parameters[dataset.name] = PywrDataReference.ReferenceFactory(attr.name, dataset.value)
+                parameter = PywrDataReference.ReferenceFactory(attr.name, dataset.value)
+                if isinstance(parameter, hydra_pywr_common.types.base.PywrRecorder): #just in case this is somehow mis-categorised
+                    self.recorders[attr.name] = parameter
+                else:
+                    self.parameters[dataset.name] = parameter
 
         """ Recorders """
         for attr in self.data["attributes"]:
@@ -371,7 +373,11 @@ class PywrHydraExporter(BasePywrHydra):
             dataset = resource_scenario["dataset"]
             dataset_type = hydra_typemap[dataset.type.upper()]
             if issubclass(dataset_type, PywrRecorder):
-                self.recorders[attr.name] = PywrDataReference.ReferenceFactory(attr.name, dataset.value)
+                recorder = PywrDataReference.ReferenceFactory(attr.name, dataset.value)
+                if isinstance(parameter, hydra_pywr_common.types.base.PywrRecorder): #just in case this is somehow mis-categorised
+                    self.recorders[attr.name] = recorder
+                else:
+                    self.parameters[dataset.name] = recorder
 
         return ts_inst, meta_inst, tables
 
