@@ -188,9 +188,11 @@ class PywrHydraExporter(BasePywrHydra):
                     self._parameter_recorder_flags[attribute_name] = typedval.pop('__recorder__')
                 #remove the contents of the pandas_kwargs sub-dict ane put them on the parent dict
                 if isinstance(typedval, dict) and typedval.get('pandas_kwargs') is not None:
-                    for k, v in pandas_kwargs.items():
+                    print(typedval['type'])
+                    for k, v in typedval.get('pandas_kwargs').items():
                         typedval[k] = v
                     del(typedval['pandas_kwargs'])
+                    print(typedval['parse_dates'])
             except json.decoder.JSONDecodeError as e:
                 typedval = value
             nodedata[attribute_name] = typedval
@@ -363,18 +365,24 @@ class PywrHydraExporter(BasePywrHydra):
             tables[tname] = Table(tdata)
 
         """ Parameters """
+        print(self.data.keys())
         for attr in self.data["attributes"]:
             resource_scenario = self._get_resource_scenario(attr.id)
             dataset = resource_scenario["dataset"]
             dataset_type = hydra_typemap[dataset.type.upper()]
-
             try:
                 data = json.loads(data)
+                print('in the network attribute')
+                print(data.keys())
                 if isinstance(data, dict) and data.get('__recorder__') is not None:
                     self._parameter_recorder_flags[attr.name] = data.pop('__recorder__')
                 #remove the contents of the pandas_kwargs sub-dict ane put them on the parent dict
+                print('in network above instance condition')
                 if isinstance(data, dict) and data.get('pandas_kwargs') is not None:
-                    for k, v in pandas_kwargs.items():
+                    print('in network')
+                    print(data.get('pandas_kwargs'))
+                    for k, v in data.get('pandas_kwargs').items():
+                        print(k)
                         data[k] = v
                     del(data['pandas_kwargs'])
             except:
