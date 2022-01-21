@@ -186,6 +186,11 @@ class PywrHydraExporter(BasePywrHydra):
                 typedval = json.loads(value)
                 if isinstance(typedval, dict) and typedval.get('__recorder__') is not None:
                     self._parameter_recorder_flags[attribute_name] = typedval.pop('__recorder__')
+                #remove the contents of the pandas_kwargs sub-dict ane put them on the parent dict
+                if isinstance(typedval, dict) and typedval.get('pandas_kwargs') is not None:
+                    for k, v in pandas_kwargs.items():
+                        typedval[k] = v
+                    del(typedval['pandas_kwargs'])
             except json.decoder.JSONDecodeError as e:
                 typedval = value
             nodedata[attribute_name] = typedval
@@ -367,6 +372,11 @@ class PywrHydraExporter(BasePywrHydra):
                 data = json.loads(data)
                 if isinstance(data, dict) and data.get('__recorder__') is not None:
                     self._parameter_recorder_flags[attr.name] = data.pop('__recorder__')
+                #remove the contents of the pandas_kwargs sub-dict ane put them on the parent dict
+                if isinstance(data, dict) and data.get('pandas_kwargs') is not None:
+                    for k, v in pandas_kwargs.items():
+                        data[k] = v
+                    del(data['pandas_kwargs'])
             except:
                 pass
 
