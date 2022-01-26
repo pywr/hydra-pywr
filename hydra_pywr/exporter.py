@@ -188,7 +188,7 @@ class PywrHydraExporter(BasePywrHydra):
                     self._parameter_recorder_flags[attribute_name] = typedval.pop('__recorder__')
                 #remove the contents of the pandas_kwargs sub-dict ane put them on the parent dict
                 if isinstance(typedval, dict) and typedval.get('pandas_kwargs') is not None:
-                    for k, v in pandas_kwargs.items():
+                    for k, v in typedval.get('pandas_kwargs').items():
                         typedval[k] = v
                     del(typedval['pandas_kwargs'])
             except json.decoder.JSONDecodeError as e:
@@ -367,20 +367,27 @@ class PywrHydraExporter(BasePywrHydra):
             resource_scenario = self._get_resource_scenario(attr.id)
             dataset = resource_scenario["dataset"]
             dataset_type = hydra_typemap[dataset.type.upper()]
-
+            is_parameter_or_recorder = False
             try:
-                data = json.loads(data)
-                if isinstance(data, dict) and data.get('__recorder__') is not None:
+                data = json.loads(dataset.value)
+                if not isinstance(data, dict):
+                    raise ValueError("Not a dict")
+
+                if data.get('type') is not None:
+                    is_parameter_or_recorder = True
+
+                if data.get('__recorder__') is not None:
                     self._parameter_recorder_flags[attr.name] = data.pop('__recorder__')
                 #remove the contents of the pandas_kwargs sub-dict ane put them on the parent dict
-                if isinstance(data, dict) and data.get('pandas_kwargs') is not None:
-                    for k, v in pandas_kwargs.items():
+                if data.get('pandas_kwargs') is not None:
+                    for k, v in data.get('pandas_kwargs').items():
                         data[k] = v
                     del(data['pandas_kwargs'])
-            except:
+            except ValueError as e:
+                print(e)
                 pass
 
-            if issubclass(dataset_type, PywrParameter):
+            if is_parameter_or_recorder is True:
                 parameter = PywrDataReference.ReferenceFactory(attr.name, dataset.value)
                 if isinstance(parameter, hydra_pywr_common.types.base.PywrRecorder): #just in case this is somehow mis-categorised
                     self.recorders[attr.name] = parameter
@@ -394,7 +401,7 @@ class PywrHydraExporter(BasePywrHydra):
             dataset_type = hydra_typemap[dataset.type.upper()]
             if issubclass(dataset_type, PywrRecorder):
                 recorder = PywrDataReference.ReferenceFactory(attr.name, dataset.value)
-                if isinstance(parameter, hydra_pywr_common.types.base.PywrRecorder): #just in case this is somehow mis-categorised
+                if isinstance(recorder, hydra_pywr_common.types.base.PywrRecorder): #just in case this is somehow mis-categorised
                     self.recorders[attr.name] = recorder
                 else:
                     self.parameters[dataset.name] = recorder
