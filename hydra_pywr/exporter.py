@@ -385,6 +385,7 @@ class PywrHydraExporter(BasePywrHydra):
                     for k, v in data.get('pandas_kwargs').items():
                         data[k] = v
                     del(data['pandas_kwargs'])
+                dataset.value = data
             except ValueError as e:
                 print(e)
                 pass
