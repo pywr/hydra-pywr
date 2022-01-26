@@ -191,6 +191,7 @@ class PywrHydraExporter(BasePywrHydra):
                     for k, v in typedval.get('pandas_kwargs').items():
                         typedval[k] = v
                     del(typedval['pandas_kwargs'])
+                    print(typedval['parse_dates'])
             except json.decoder.JSONDecodeError as e:
                 typedval = value
             nodedata[attribute_name] = typedval
@@ -363,6 +364,7 @@ class PywrHydraExporter(BasePywrHydra):
             tables[tname] = Table(tdata)
 
         """ Parameters """
+        print(self.data.keys())
         for attr in self.data["attributes"]:
             resource_scenario = self._get_resource_scenario(attr.id)
             dataset = resource_scenario["dataset"]
