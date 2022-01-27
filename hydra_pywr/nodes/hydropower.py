@@ -44,15 +44,17 @@ class ProportionalInput(Input, metaclass=NodeMeta):
     def __init__(self, model, name, node, proportion, **kwargs):
         super().__init__(model, name, **kwargs)
 
-        self.node = node
+        self.node = model._get_node_from_ref(model, node)
+
         # Create the flow factors for the other node and self
         if proportion < self.__class__.min_proportion:
             self.max_flow = 0.0
         else:
             factors = [1, proportion]
             # Create the aggregated node to apply the factors.
+            # factors no longer accepted by ctor
             #self.aggregated_node = AggregatedNode(model, f'{name}.aggregated', [node, self], factors=factors)
-            self.aggregated_node = AggregatedNode(model, f'{name}.aggregated', [node, self])
+            self.aggregated_node = AggregatedNode(model, f'{name}.aggregated', [self.node, self])
             self.aggregated_node.factors = factors
 
 
