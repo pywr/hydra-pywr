@@ -56,14 +56,14 @@ class PywrHydraExporter():
         self.scenarios = []
 
         self._pattern_templates = None
-        log.info(f"{self.type_id_map}")
+        #log.info(f"{self.type_id_map}")
 
 
     @classmethod
     def from_scenario_id(cls, client, scenario_id, template_id=None, index=0, **kwargs):
-        scenario = client.get_scenario(scenario_id, include_data=True, include_results=False, include_metadata=False, include_attr=False)
+        scenario = client.get_scenario(scenario_id, include_data=True, include_results=True, include_metadata=False, include_attr=False)
         # Fetch the network
-        network = client.get_network(scenario.network_id, include_data=False, include_results=False, template_id=template_id)
+        network = client.get_network(scenario.network_id, include_data=True, include_results=True, template_id=template_id)
 
         network.scenarios = [scenario]
 
@@ -182,7 +182,7 @@ class PywrHydraExporter():
             except ValueError:
                 continue  # No data associated with this attribute.
 
-            if resource_attribute['attr_is_var'] == 'Y':
+            if resource_attribute['attr_is_var'] == 'Y' and attribute["name"] != "hydropowerrecorder":
                 continue
 
             attribute_name = attribute['name']
