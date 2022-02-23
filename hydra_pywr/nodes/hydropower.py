@@ -45,8 +45,7 @@ class ProportionalInput(Input, metaclass=NodeMeta):
     def __init__(self, model, name, node, proportion, **kwargs):
         super().__init__(model, name, **kwargs)
 
-        self.node = model._get_node_from_ref(model, node)
-        #self.node = model.pre_load_node(node)
+        self.node = model.pre_load_node(node)
 
         # Create the flow factors for the other node and self
         if proportion < self.__class__.min_proportion:
@@ -54,8 +53,6 @@ class ProportionalInput(Input, metaclass=NodeMeta):
         else:
             factors = [1, proportion]
             # Create the aggregated node to apply the factors.
-            # factors no longer accepted by ctor
-            #self.aggregated_node = AggregatedNode(model, f'{name}.aggregated', [node, self], factors=factors)
             self.aggregated_node = AggregatedNode(model, f'{name}.aggregated', [self.node, self])
             self.aggregated_node.factors = factors
 
@@ -66,8 +63,7 @@ class LinearStorageReleaseControl(Link, metaclass=NodeMeta):
     def __init__(self, model, name, storage_node, release_values, scenario=None, **kwargs):
 
         release_values = pd.DataFrame.from_dict(release_values)
-        storage_node = model._get_node_from_ref(model, storage_node)
-        #storage_node = model.pre_load_node(storage_node)
+        storage_node = model.pre_load_node(storage_node)
 
         if scenario is None:
             # Only one control curve should be defined. Get it explicitly
@@ -135,7 +131,6 @@ class Reservoir(Storage, metaclass=NodeMeta):
 
         super().__init__(model, name, **kwargs)
 
-        #self._set_bathymetry(model, bathymetry, volume, level, area)
         self.const = ConstantParameter(model, const)
 
         self.rainfall_node = None
@@ -310,10 +305,8 @@ class Turbine(Link, metaclass=NodeMeta):
         storage_node = kwargs.pop("storage_node", None)
 
         if storage_node is not None:
-            storage_node = model._get_node_from_ref(model, storage_node)
-            #storage_node = model.pre_load_node(storage_node)
+            storage_node = model.pre_load_node(storage_node)
             self.storage_node = storage_node
-            #if hasattr(storage_node, "level") and storage_node.level is not None:
             if hasattr(storage_node, "level") and storage_node.level is not None:
                 if not isinstance(storage_node.level, Parameter):
                     level_parameter = ConstantParameter(model, value=storage_node.level)
