@@ -266,16 +266,18 @@ def run_file(obj, filename, domain, output_frequency, solver, check_model):
 @click.option('--solver', type=str, default=None)
 @click.option('--check-model/--no-check-model', default=True)
 def run_integrated_file(obj, filename, output_frequency, solver, check_model):
+    """
     with open(filename, 'r') as fp:
         src = json.load(fp)
+
     pynsim_config = src["config"]
     for engine in pynsim_config["engines"]:
         outfile = engine['args'][0]
         with open(outfile, 'w') as fp:
             json.dump(src[engine["name"]], fp, indent=2)
             click.echo(f"{engine} output written to {outfile}")
-
-    imr = IntegratedModelRunner(pynsim_config)
+    """
+    imr = IntegratedModelRunner(filename)
     imr.run_subprocess()
 
 

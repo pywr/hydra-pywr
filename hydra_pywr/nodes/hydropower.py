@@ -10,6 +10,7 @@ from pywr.nodes import (
 )
 
 from pywr.parameters import (
+    Parameter,
     load_parameter,
     ScenarioWrapperParameter,
     InterpolatedVolumeParameter,
@@ -45,6 +46,7 @@ class ProportionalInput(Input, metaclass=NodeMeta):
         super().__init__(model, name, **kwargs)
 
         self.node = model._get_node_from_ref(model, node)
+        #self.node = model.pre_load_node(node)
 
         # Create the flow factors for the other node and self
         if proportion < self.__class__.min_proportion:
@@ -65,6 +67,7 @@ class LinearStorageReleaseControl(Link, metaclass=NodeMeta):
 
         release_values = pd.DataFrame.from_dict(release_values)
         storage_node = model._get_node_from_ref(model, storage_node)
+        #storage_node = model.pre_load_node(storage_node)
 
         if scenario is None:
             # Only one control curve should be defined. Get it explicitly
@@ -91,8 +94,32 @@ class LinearStorageReleaseControl(Link, metaclass=NodeMeta):
 
             max_flow_param = ScenarioWrapperParameter(model, scenario, curves)
 
+        self.max_flow = max_flow_param
         self.scenario = scenario
         super().__init__(model, name, max_flow=max_flow_param, **kwargs)
+
+
+    @classmethod
+    def load(cls, data, model):
+        name = data.pop("name")
+        cost = data.pop("cost", 0.0)
+        min_flow = data.pop("min_flow", None)
+
+        data.pop("type")
+        node = cls(name=name, model=model, **data)
+
+        cost = load_parameter(model, cost)
+        min_flow = load_parameter(model, min_flow)
+        if cost is None:
+            cost = 0.0
+        if min_flow is None:
+            min_flow = 0.0
+
+        node.cost = cost
+        node.min_flow = min_flow
+
+        #breakpoint()
+        return node
 
 
 class Reservoir(Storage, metaclass=NodeMeta):
@@ -108,13 +135,44 @@ class Reservoir(Storage, metaclass=NodeMeta):
 
         super().__init__(model, name, **kwargs)
 
-        self._set_bathymetry(model, bathymetry, volume, level, area)
+        #self._set_bathymetry(model, bathymetry, volume, level, area)
         self.const = ConstantParameter(model, const)
 
         self.rainfall_node = None
         self.rainfall_recorder = None
         self.evaporation_node = None
         self.evaporation_recorder = None
+
+
+    @classmethod
+    def load(cls, data, model):
+
+        bathymetry = data.pop("bathymetry", None)
+        name = data.pop("name")
+        data.pop("type")
+        node = cls(name=name, model=model, **data)
+
+        if bathymetry is not None:
+            if isinstance(bathymetry, str):
+                bathymetry = load_parameter(model, bathymetry)
+                volumes = bathymetry.dataframe['volume'].astype(np.float64)
+                levels = bathymetry.dataframe['level'].astype(np.float64)
+                areas = bathymetry.dataframe['area'].astype(np.float64)
+            else:
+                bathymetry = pd.DataFrame.from_dict(bathymetry)
+                volumes = bathymetry['volume'].astype(np.float64)
+                levels = bathymetry['level'].astype(np.float64)
+                areas = bathymetry['area'].astype(np.float64)
+
+        if volumes is not None and levels is not None:
+            node.level = InterpolatedVolumeParameter(model, node, volumes, levels)
+
+        if volumes is not None and areas is not None:
+            node.area = InterpolatedVolumeParameter(model, node, volumes, areas)
+
+        #breakpoint()
+        return node
+
 
     def _set_bathymetry(self, model, bathymetry, volume=None, level=None, area=None):
         if bathymetry is not None:
@@ -129,7 +187,6 @@ class Reservoir(Storage, metaclass=NodeMeta):
                 levels = bathymetry['level'].astype(np.float64)
                 areas = bathymetry['area'].astype(np.float64)
 
-            #breakpoint()
         elif volume is not None and level is not None and area is not None:
             volumes = volume
             levels = level
@@ -151,6 +208,7 @@ class Reservoir(Storage, metaclass=NodeMeta):
                 log.warning(f"Please specify a bathymetry or level on node {self.name}")
                 levels = None
 
+        #breakpoint()
         if volumes is not None and levels is not None:
             self.level = InterpolatedVolumeParameter(self.model, self, volumes, levels)
 
@@ -253,8 +311,14 @@ class Turbine(Link, metaclass=NodeMeta):
 
         if storage_node is not None:
             storage_node = model._get_node_from_ref(model, storage_node)
+            #storage_node = model.pre_load_node(storage_node)
+            self.storage_node = storage_node
+            #if hasattr(storage_node, "level") and storage_node.level is not None:
             if hasattr(storage_node, "level") and storage_node.level is not None:
-                level_parameter = ConstantParameter(model, value=storage_node.level)
+                if not isinstance(storage_node.level, Parameter):
+                    level_parameter = ConstantParameter(model, value=storage_node.level)
+                else:
+                    level_parameter = storage_node.level
 
         turbine_elevation = kwargs.pop('turbine_elevation', 0)
         generation_capacity = kwargs.pop('generation_capacity', 0)
@@ -277,3 +341,25 @@ class Turbine(Link, metaclass=NodeMeta):
         hp_recorder = HydropowerRecorder(model, self, water_elevation_parameter=level_parameter,
                                          turbine_elevation=turbine_elevation, **hp_kwargs)
         self.hydropower_recorder = hp_recorder
+
+    @classmethod
+    def load(cls, data, model):
+        name = data.pop("name")
+        cost = data.pop("cost", 0.0)
+        min_flow = data.pop("min_flow", None)
+
+        data.pop("type")
+        node = cls(name=name, model=model, **data)
+
+        cost = load_parameter(model, cost)
+        min_flow = load_parameter(model, min_flow)
+        if cost is None:
+            cost = 0.0
+        if min_flow is None:
+            min_flow = 0.0
+
+        node.cost = cost
+        node.min_flow = min_flow
+
+        #breakpoint()
+        return node
