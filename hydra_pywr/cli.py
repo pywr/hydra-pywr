@@ -157,8 +157,6 @@ def _export_json(obj, data_dir, scenario_id, user_id, json_sort_keys, json_inden
 
     click.echo(f"Network: {network_id}, Scenario: {scenario_id} exported to `{outfile}`")
 
-    return outfile
-
 @hydra_app(category='export', name='Export to IntegratedPywrJSON')
 @cli.command(name='integrated-export', context_settings=dict(
     ignore_unknown_options=True,
@@ -274,7 +272,6 @@ def run(obj, scenario_id, template_id, user_id, output_frequency, solver, check_
                          solver=solver, check_model=check_model, data_dir=data_dir)
 
 def run_network_scenario(client, scenario_id, template_id, output_frequency=None, solver=None, check_model=True, data_dir=None):
-
     runner = PywrHydraRunner.from_scenario_id(client, scenario_id,
                                              template_id=template_id,
                                              output_resample_freq=output_frequency)
@@ -285,7 +282,7 @@ def run_network_scenario(client, scenario_id, template_id, output_frequency=None
 
     if data_dir is not None:
         model_json_path = save_pywr_file(runner.pywr_data, data_dir, network_id, scenario_id)
-        runner.load_pywr_model_from_file(model_json_path)
+        runner.load_pywr_model_from_file(model_json_path, solver=solver)
     else:
         runner.load_pywr_model(solver=solver)
 

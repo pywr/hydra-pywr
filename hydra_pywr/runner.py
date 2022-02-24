@@ -92,9 +92,15 @@ class PywrHydraRunner(PywrHydraExporter):
         ProgressRecorder(model)
 
         # Add recorders for monitoring the simulated timeseries of nodes
-        self._add_node_flagged_recorders(model)
+        try:
+            self._add_node_flagged_recorders(model)
+        except Exception as e:
+            log.exception(e)
         # Add recorders for parameters that are flagged
-        self._add_parameter_flagged_recorders(model)
+        try:
+            self._add_parameter_flagged_recorders(model)
+        except Exception as e:
+            log.exception(e)
 
         df_recorders = []
         non_df_recorders = []
