@@ -74,6 +74,10 @@ class PywrHydraExporter(BasePywrHydra):
 
         self._pattern_templates = None
 
+        self.reference_model = None
+
+        self.excluded_node_ids = []
+
 
     @classmethod
     def from_scenario_id(cls, client, scenario_id, template_id=None, index=0, **kwargs):
@@ -99,7 +103,10 @@ class PywrHydraExporter(BasePywrHydra):
         return cls(client, network, scenario_id, attributes, template, **kwargs)
 
 
-    def get_pywr_data(self, domain=None):
+    def get_pywr_data(self, domain=None, reference_model=None):
+        if reference_model is not None:
+            self.reference_model = json.load(reference_model)
+
         self.generate_pywr_nodes()
         self.edges = self.build_edges()
 
@@ -125,30 +132,75 @@ class PywrHydraExporter(BasePywrHydra):
                 for a in o['attributes']:
                     yield a
 
-    def _get_resource_scenario(self, resource_attribute_id):
-
+    def _get_resource_scenario(self, resource_attribute, node=None):
         # TODO this just returns the first resource scenario that is found.
         for scenario in self.data['scenarios']:
             for resource_scenario in scenario['resourcescenarios']:
-                if resource_scenario['resource_attr_id'] == resource_attribute_id:
+                if resource_scenario['resource_attr_id'] == resource_attribute['id']:
                     return resource_scenario
+        name = ""
+        nodename = ""
+        if node is not None:
+            nodename = node.name
+        if hasattr(resource_attribute, 'name'):
+            name = resource_attribute.name
+        elif isinstance(resource_attribute, dict) and resource_attribute.get('name') is not None:
+            name = resource_attribute['name']
+        raise ValueError('No resource scenario found on {} {} for resource attribute: "{}" ({})'.format(
+            resource_attribute['ref_key'], nodename, name, resource_attribute['id']))
+        return None
 
-        raise ValueError('No resource scenario found for resource attribute id: {}'.format(resource_attribute_id))
+    def get_reference_node_names(self):
+        if self.reference_model is not None:
+            return [n['name'].lower() for n in self.reference_model['nodes']]
+        return []
 
+    def get_link_lookup(self):
+        """
+            compile a dict, keyed on node ID of all the links attached
+            to that node.
+        """
+        lookup = defaultdict(list)
+        for l in self.data['links']:
+            lookup[l['node_1_id']].append(l)
+            lookup[l['node_2_id']].append(l)
+        return lookup
 
     def generate_pywr_nodes(self):
         """ Generator returning a Pywr dict for each node in the network. """
+        #only export node names which match the reference model
+        reference_node_names = self.get_reference_node_names()
+
+        #a dict mapping the links attached to each node.
+        link_lookup = self.get_link_lookup()
 
         for node in self.data['nodes']:
+            if self.reference_model is not None:
+                if node['name'].lower() not in reference_node_names:
+                    continue
             # Create the basic information.
             pywr_node = {'name': node['name']}
+
+            #if any of the links in or out are red, then keep this node.
+            keep_node = False
+            if link_lookup.get(node['id']) is None:
+                #this is an unconnected node, so we need to keep it.
+                keep_node = True
+            else:
+                for l in link_lookup.get(node['id'], []):
+                    if l.layout is not None and l.layout.get('color') == 'red':
+                        keep_node = True
+            #only keep nodes which have a link connected to them which has a layout
+            # if keep_node is False:
+            #     self.excluded_node_ids.append(node['id'])
+            #     continue
 
             self.hydra_node_lookup[node['id']] = node
 
             if node.get('description', None) is not None:
                 pywr_node['comment'] = node['description']
 
-            # Get the type for this node from the template
+
             pywr_node_type = None
             for node_type in node['types']:
                 try:
@@ -157,21 +209,22 @@ class PywrHydraExporter(BasePywrHydra):
                     # Skip as not in this template...
                     continue
 
+            node_type_attribute_names = [a.attr.name for a in self.type_id_map[node_type['id']].typeattrs]
             #if pywr_node_type is None:
             #    raise ValueError('Template does not contain node of type "{}".'.format(pywr_node_type))
 
 
             # Skip as not in this template...
             if pywr_node_type:
-                self.build_node_and_references(node, pywr_node_type)
+                self.build_node_and_references(node, pywr_node_type, node_type_attribute_names)
 
 
-    def build_node_and_references(self, nodedata, pywr_node_type):
+    def build_node_and_references(self, nodedata, pywr_node_type, node_type_attribute_names):
 
         for resource_attribute in nodedata['attributes']:
             attribute = self.attributes[resource_attribute['attr_id']]
             try:
-                resource_scenario = self._get_resource_scenario(resource_attribute['id'])
+                resource_scenario = self._get_resource_scenario(resource_attribute, nodedata)
             except ValueError:
                 continue  # No data associated with this attribute.
 
@@ -191,7 +244,6 @@ class PywrHydraExporter(BasePywrHydra):
                     for k, v in typedval.get('pandas_kwargs').items():
                         typedval[k] = v
                     del(typedval['pandas_kwargs'])
-                    print(typedval['parse_dates'])
             except json.decoder.JSONDecodeError as e:
                 typedval = value
             nodedata[attribute_name] = typedval
@@ -200,7 +252,7 @@ class PywrHydraExporter(BasePywrHydra):
         node_attr_data = {a:v for a, v in nodedata.items() if a not in EXCLUDE_HYDRA_ATTRS}
         position = {"geographic": [nodedata.get("x", 0), nodedata.get("y", 0)]}
         node_attr_data["position"] = position
-
+        node_attr_data['intrinsic_attrs'] = node_type_attribute_names
         dev_node = PywrNode.NodeFactory(node_attr_data)
 
         self.nodes[dev_node.name] = dev_node
@@ -215,8 +267,20 @@ class PywrHydraExporter(BasePywrHydra):
         edges = {}
 
         for hydra_edge in self.data["links"]:
-            src_hydra_node = self.hydra_node_lookup[hydra_edge["node_1_id"]]
-            dest_hydra_node = self.hydra_node_lookup[hydra_edge["node_2_id"]]
+            src_id = hydra_edge["node_1_id"]
+            dest_id = hydra_edge["node_2_id"]
+            if self.reference_model is not None:
+                #ignore links to nodes which we are excluding
+                src_hydra_node = self.hydra_node_lookup.get(src_id)
+                dest_hydra_node = self.hydra_node_lookup.get(dest_id)
+                if src_hydra_node is None or dest_hydra_node is None:
+                    continue
+            else:
+                if src_id in self.excluded_node_ids or dest_id in self.excluded_node_ids:
+                    continue
+                src_hydra_node = self.hydra_node_lookup[src_id]
+                dest_hydra_node = self.hydra_node_lookup[dest_id]
+
 
             from_node_types = self.get_type_map(src_hydra_node)
             node_type_names = set([nt.lower() for nt in from_node_types.values()])
@@ -265,7 +329,7 @@ class PywrHydraExporter(BasePywrHydra):
     def build_integrated_network_attrs(self, domain):
         domain_data_key = f"{domain}_data"
         domain_attr = self.get_attr_by_name(domain_data_key)
-        resource_scenario = self._get_resource_scenario(domain_attr.id)
+        resource_scenario = self._get_resource_scenario(domain_attr)
         dataset = resource_scenario["dataset"]
         data = json.loads(dataset["value"])
         timestep = data["timestepper"]
@@ -319,7 +383,11 @@ class PywrHydraExporter(BasePywrHydra):
             attr_group, *subs = attr.name.split('.')
             if attr_group != "timestepper":
                 continue
-            resource_scenario = self._get_resource_scenario(attr.id)
+            try:
+                resource_scenario = self._get_resource_scenario(attr)
+            except ValueError:
+                log.warning("No value for %s", attr.name)
+                continue
             dataset = resource_scenario["dataset"]
             #ts_key = attr.name.split('.')[-1]
             ts_key = subs[-1]
@@ -342,7 +410,7 @@ class PywrHydraExporter(BasePywrHydra):
             attr_group, *subs = attr.name.split('.')
             if attr_group != "metadata":
                 continue
-            resource_scenario = self._get_resource_scenario(attr.id)
+            resource_scenario = self._get_resource_scenario(attr)
             dataset = resource_scenario["dataset"]
             meta_key = subs[-1]
             metadata[meta_key] = dataset["value"]
@@ -356,7 +424,7 @@ class PywrHydraExporter(BasePywrHydra):
             if not attr.name.startswith("tbl_"):
                 continue
             table_name, table_attr = attr.name[4:].split('.')
-            resource_scenario = self._get_resource_scenario(attr.id)
+            resource_scenario = self._get_resource_scenario(attr)
             dataset = resource_scenario["dataset"]
             tables_data[table_name][table_attr] = dataset["value"]
 
@@ -364,9 +432,12 @@ class PywrHydraExporter(BasePywrHydra):
             tables[tname] = Table(tdata)
 
         """ Parameters """
-        print(self.data.keys())
         for attr in self.data["attributes"]:
-            resource_scenario = self._get_resource_scenario(attr.id)
+            try:
+                resource_scenario = self._get_resource_scenario(attr)
+            except ValueError as e:
+                log.warning("No value found for network attribute %s", attr.name)
+                continue
             dataset = resource_scenario["dataset"]
             dataset_type = hydra_typemap[dataset.type.upper()]
             is_parameter_or_recorder = False
@@ -387,8 +458,7 @@ class PywrHydraExporter(BasePywrHydra):
                     del(data['pandas_kwargs'])
                 dataset.value = json.dumps(data)
             except ValueError as e:
-                print(e)
-                pass
+                log.warning(e)
 
             if is_parameter_or_recorder is True:
                 parameter = PywrDataReference.ReferenceFactory(attr.name, dataset.value)
@@ -399,7 +469,11 @@ class PywrHydraExporter(BasePywrHydra):
 
         """ Recorders """
         for attr in self.data["attributes"]:
-            resource_scenario = self._get_resource_scenario(attr.id)
+            try:
+                resource_scenario = self._get_resource_scenario(attr)
+            except ValueError as e:
+                log.warning("No value found for network attribute %s", attr.name)
+                continue
             dataset = resource_scenario["dataset"]
             dataset_type = hydra_typemap[dataset.type.upper()]
             if issubclass(dataset_type, PywrRecorder):
@@ -418,7 +492,7 @@ class PywrHydraExporter(BasePywrHydra):
             attribute = self.attributes[resource_attribute['attr_id']]
 
             try:
-                resource_scenario = self._get_resource_scenario(resource_attribute['id'])
+                resource_scenario = self._get_resource_scenario(resource_attribute)
             except ValueError:
                 continue
             dataset = resource_scenario['dataset']
