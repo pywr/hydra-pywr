@@ -214,9 +214,10 @@ def integrated_run(ctx, scenario_id, user_id, output_frequency, solver, check_mo
 
     for engine in dests["engines"]:
         h5output = f"{engine}_Outputs.h5"
-        write_output(f"Importing results for {engine} engine from {h5output}...")
+        h5metrics = f"{engine}_Metrics.h5"
+        write_output(f"Importing results for {engine} engine from {h5output} and {h5metrics}...")
         template_id = dests[engine]["template_id"]
-        iow = IntegratedOutputWriter(scenario_id, template_id, h5output, engine, user_id=user_id)
+        iow = IntegratedOutputWriter(scenario_id, template_id, h5output, h5metrics, engine, user_id=user_id)
         iow.build_hydra_output()
 
 
