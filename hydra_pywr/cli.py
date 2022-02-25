@@ -135,13 +135,14 @@ def integrated_import_combinedjson(obj, filename, project_id, user_id, water_tem
 @click.option('--json-indent', type=int, default=2)
 @click.option('--json-sort-keys/--no-json-sort-keys', default=False)
 @click.option('--reference-model', type=click.File('r'), default=None)
-def export_json(obj, data_dir, scenario_id, user_id, json_sort_keys, json_indent, reference_model):
+@click.option('--use-cache', is_flag=True)
+def export_json(obj, data_dir, scenario_id, user_id, json_sort_keys, json_indent, reference_model, use_cache):
     """ Export a Pywr JSON from Hydra. """
-    _export_json(obj, data_dir, scenario_id, user_id, json_sort_keys, json_indent, reference_model=reference_model)
+    _export_json(obj, data_dir, scenario_id, user_id, json_sort_keys, json_indent, reference_model=reference_model, use_cache=use_cache)
 
-def _export_json(obj, data_dir, scenario_id, user_id, json_sort_keys, json_indent, reference_model=None):
+def _export_json(obj, data_dir, scenario_id, user_id, json_sort_keys, json_indent, reference_model=None, use_cache=False):
     client = get_logged_in_client(obj, user_id=user_id)
-    exporter = PywrHydraExporter.from_scenario_id(client, scenario_id)
+    exporter = PywrHydraExporter.from_scenario_id(client, scenario_id, use_cache=use_cache)
 
     network_id = exporter.data.id
 

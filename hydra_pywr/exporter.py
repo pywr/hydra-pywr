@@ -1,8 +1,10 @@
 import json
+import os
 
 from collections import defaultdict
 
 from hydra_base.lib.HydraTypes.Registry import typemap as hydra_typemap
+from hydra_base.lib.objects import JSONObject
 
 from hydra_pywr.template import PYWR_SPLIT_LINK_TYPES
 
@@ -12,11 +14,8 @@ from hydra_pywr_common.types import PywrDataReference
 
 import hydra_pywr_common
 
-from hydra_pywr_common.types.nodes import(
-    PywrNode
-)
 from hydra_pywr_common.types.base import(
-    PywrEdge
+    PywrNode, PywrEdge
 )
 
 from hydra_pywr_common.types.fragments.network import(
@@ -41,7 +40,7 @@ EXCLUDE_HYDRA_ATTRS = ("id", "status", "cr_date", "network_id", "x", "y",
 
 
 class PywrHydraExporter(BasePywrHydra):
-    def __init__(self, client, data, scenario_id, attributes, template):
+    def __init__(self, client, data, scenario_id, attributes, template, **kwargs):
 
         super().__init__()
 
@@ -81,7 +80,14 @@ class PywrHydraExporter(BasePywrHydra):
 
     @classmethod
     def from_scenario_id(cls, client, scenario_id, template_id=None, index=0, **kwargs):
-        scenario = client.get_scenario(scenario_id, include_data=True, include_results=False, include_metadata=False, include_attr=False)
+        cache_file = f'/tmp/scenario_{scenario_id}.json'
+        if kwargs.get('use_cache') is True and os.path.exists(cache_file):
+            with open(cache_file, 'r') as f:
+                scenario = JSONObject(json.load(f))
+        else:
+            scenario = client.get_scenario(scenario_id, include_data=True, include_results=False, include_metadata=False, include_attr=False)
+            with open(cache_file, 'w') as f:
+                json.dump(scenario, f)
         # Fetch the network
         network = client.get_network(scenario.network_id, include_data=False, include_results=False, template_id=template_id)
 
