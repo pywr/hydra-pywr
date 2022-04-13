@@ -70,12 +70,13 @@ def cli(obj, username, password, hostname, session):
 @click.option('-p', '--project-id', type=int)
 @click.option('-u', '--user-id', type=int, default=None)
 @click.option('--template-id', type=int)
+@click.option('--network-name', type=str)
 @click.option('--projection', type=str, default=None)
 @click.option('--run/--no-run', default=False)
 @click.option('--solver', type=str, default=None)
 @click.option('--check-model/--no-check-model', default=True)
 @click.option('--ignore-type-errors', is_flag=True, default=False)
-def import_json(obj, filename, project_id, user_id, template_id, projection, run, solver, check_model, ignore_type_errors, *args):
+def import_json(obj, filename, project_id, user_id, template_id, network_name, projection, run, solver, check_model, ignore_type_errors, *args):
     """ Import a Pywr JSON file into Hydra. """
     click.echo(f'Beginning import of "{filename}" to Project ID: {project_id}')
 
@@ -89,7 +90,7 @@ def import_json(obj, filename, project_id, user_id, template_id, projection, run
         raise Exception("No template specified")
 
     pnet = PywrNetwork.from_source_file(filename)
-    hwriter = PywrHydraWriter(pnet, user_id=user_id, template_id=template_id, project_id=project_id)
+    hwriter = PywrHydraWriter(pnet, user_id=user_id, network_name=network_name, template_id=template_id, project_id=project_id)
     hwriter.build_hydra_network(projection)
     hwriter.add_network_to_hydra()
 
