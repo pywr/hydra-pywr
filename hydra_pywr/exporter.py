@@ -151,7 +151,7 @@ class PywrHydraExporter():
             real_template_id = node["types"][0]["template_id"]
             for node_type in node["types"]:
                 try:
-                    log.info(f"====\nnode: {node}")
+                    #log.info(f"====\nnode: {node}")
                     if real_template_id != self.template["id"]:
                         continue
                     pywr_node_type = self.type_id_map[node_type['id']]['name']
@@ -161,7 +161,7 @@ class PywrHydraExporter():
                     pywr_node_type = None
                     continue
 
-            log.info(f"Found node type {pywr_node_type} for node {node['name']} with nt_id {node_type['id']} on template {self.template['id']}\n====")
+            #log.info(f"Found node type {pywr_node_type} for node {node['name']} with nt_id {node_type['id']} on template {self.template['id']}\n====")
 
             #if pywr_node_type is None:
             #    raise ValueError('Template does not contain node of type "{}".'.format(pywr_node_type))
@@ -169,7 +169,7 @@ class PywrHydraExporter():
 
             # Skip as not in this template...
             if pywr_node_type:
-                log.info(f"Building node {node['name']} as {pywr_node_type}...")
+                #log.info(f"Building node {node['name']} as {pywr_node_type}...")
                 self.build_node_and_references(node, pywr_node_type)
 
 
