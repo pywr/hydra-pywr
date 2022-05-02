@@ -464,7 +464,7 @@ class PywrHydraExporter(BasePywrHydra):
                     del(data['pandas_kwargs'])
                 dataset.value = json.dumps(data)
             except ValueError as e:
-                log.warning(e)
+                log.warning(f"{attr.name} : {e}")
 
             if is_parameter_or_recorder is True:
                 parameter = PywrDataReference.ReferenceFactory(attr.name, dataset.value)
