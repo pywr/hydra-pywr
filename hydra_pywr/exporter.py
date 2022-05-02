@@ -119,7 +119,7 @@ class PywrHydraExporter(BasePywrHydra):
         if domain is not None:
             self.timestepper, self.metadata, self.scenarios = self.build_integrated_network_attrs(domain)
         else:
-            self.timestepper, self.metadata, self.tables = self.build_network_attrs()
+            self.timestepper, self.metadata, self.tables, self.scenarios = self.build_network_attrs()
 
         return self
 
@@ -423,6 +423,26 @@ class PywrHydraExporter(BasePywrHydra):
 
         meta_inst = Metadata(metadata)
 
+        """ Scenarios """
+        scenarios = []
+        for attr in self.data["attributes"]:
+            if attr.name == 'scenarios':
+                try:
+                    resource_scenario = self._get_resource_scenario(attr)
+                except ValueError as e:
+                    log.warning("No value found for scenario attribute")
+                    continue
+
+                try:
+                    dataset = resource_scenario["dataset"]
+                    val  = dataset['value']
+                    scenarios = json.loads(val)['scenarios']
+                except ValueError as e:
+                    log.warning("An error occurred getting data for scenarios")
+
+                continue
+
+
         """ Tables """
         tables_data = defaultdict(dict)
         tables = {}
@@ -444,6 +464,11 @@ class PywrHydraExporter(BasePywrHydra):
             except ValueError as e:
                 log.warning("No value found for network attribute %s", attr.name)
                 continue
+
+            #Ignore tables
+            if attr.name.startswith('tbl') or attr.name == 'scenarios':
+                continue
+
             dataset = resource_scenario["dataset"]
             dataset_type = hydra_typemap[dataset.type.upper()]
             is_parameter_or_recorder = False
@@ -489,7 +514,9 @@ class PywrHydraExporter(BasePywrHydra):
                 else:
                     self.parameters[dataset.name] = recorder
 
-        return ts_inst, meta_inst, tables
+
+
+        return ts_inst, meta_inst, tables, scenarios
 
 
     def get_scenario_data(self):
