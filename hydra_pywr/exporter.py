@@ -86,6 +86,36 @@ class PywrHydraExporter():
         return cls(client, network, scenario_id, attributes, template, **kwargs)
 
 
+    def write_rules(self):
+        filename = "hydra_pywr_custom_module.py"
+
+        prelude = (
+            "from pywr import recorders",
+            "from pywr import parameters",
+            "import pandas",
+            "import numpy as np",
+            "import scipy",
+            "from pywr.nodes import *",
+            "from pywr.parameters.control_curves import *",
+            "from pywr.parameters._thresholds import *",
+            "from pywr.parameters._hydropower import *",
+            "from pywr.domains.river import *"
+        )
+
+        forbidden = ("import", "eval", "exec")
+
+        with open(filename, 'w') as fp:
+            for p in prelude:
+                fp.write(f"{p}\n")
+            fp.write("\n")
+            for rule in self.data.rules:
+                for forbid in forbidden:
+                    if forbid in rule["value"]:
+                        raise PermissionError(f"Use of {forbid} statement forbidden in custom rules.")
+                fp.write(rule["value"])
+                fp.write("\n\n")
+
+
     def get_pywr_data(self, domain=None):
         self.generate_pywr_nodes()
         self.edges = self.build_edges()
@@ -94,6 +124,9 @@ class PywrHydraExporter():
             self.timestepper, self.metadata, self.scenarios = self.build_integrated_network_attrs(domain)
         else:
             self.timestepper, self.metadata, self.tables = self.build_network_attrs()
+
+        if self.data.rules:
+            self.write_rules()
 
         return self
 
