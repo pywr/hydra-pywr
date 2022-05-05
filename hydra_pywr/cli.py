@@ -141,7 +141,7 @@ def export_json(obj, data_dir, scenario_id, user_id, json_sort_keys, json_indent
     """ Export a Pywr JSON from Hydra. """
     _export_json(obj, data_dir, scenario_id, user_id, json_sort_keys, json_indent, reference_model=reference_model, use_cache=use_cache)
 
-def _export_json(obj, data_dir, scenario_id, user_id, json_sort_keys, json_indent, reference_model=None, use_cache=False):
+def _export_json(obj, data_dir, scenario_id, user_id, json_sort_keys, json_indent=2, reference_model=None, use_cache=False):
     client = get_logged_in_client(obj, user_id=user_id)
     exporter = PywrHydraExporter.from_scenario_id(client, scenario_id, use_cache=use_cache)
 
@@ -155,7 +155,7 @@ def _export_json(obj, data_dir, scenario_id, user_id, json_sort_keys, json_inden
 
     outfile = os.path.join(data_dir, f"{pnet.title.replace(' ', '_')}.json")
     with open(outfile, mode='w') as fp:
-        json.dump(output, fp, sort_keys=json_sort_keys, indent=2)
+        json.dump(output, fp, sort_keys=json_sort_keys, indent=json_indent)
 
     click.echo(f"Network: {network_id}, Scenario: {scenario_id} exported to `{outfile}`")
 
