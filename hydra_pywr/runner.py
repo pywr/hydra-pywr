@@ -234,13 +234,19 @@ class PywrHydraRunner(PywrHydraExporter):
     def _add_parameter_flagged_recorders(self, model):
 
         for parameter_name, flags in self._parameter_recorder_flags.items():
-            p = model.parameters[parameter_name]
-            if ':' in p.name:
-                recorder_name = p.name.rsplit(':', 1)
-                recorder_name[1] = 'simulated_' + recorder_name[1]
-                recorder_name = ':'.join(recorder_name)
+
+            if parameter_name in model.parameters:
+                p = model.parameters[parameter_name]
+
+                if ':' in p.name:
+                    recorder_name = p.name.rsplit(':', 1)
+                    recorder_name[1] = 'simulated_' + recorder_name[1]
+                    recorder_name = ':'.join(recorder_name)
+                else:
+                    recorder_name = 'simulated_' + p.name
             else:
-                recorder_name = 'simulated_' + p.name
+                log.critical("Parameter %s is not in the model", parameter_name)
+                continue
 
             self._add_flagged_recoder(model, p, recorder_name, flags)
 

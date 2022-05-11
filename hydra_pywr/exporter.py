@@ -256,12 +256,11 @@ class PywrHydraExporter(BasePywrHydra):
 
             attribute_name = attribute['name']
             dataset = resource_scenario['dataset']
-            dataset_type = dataset['type']
             value = dataset['value']
             try:
                 typedval = json.loads(value)
                 if isinstance(typedval, dict) and typedval.get('__recorder__') is not None:
-                    self._parameter_recorder_flags[attribute_name] = typedval.pop('__recorder__')
+                    self._parameter_recorder_flags[f"__{nodedata['name']}__:{attribute_name}"] = typedval.pop('__recorder__')
                 #remove the contents of the pandas_kwargs sub-dict ane put them on the parent dict
                 if isinstance(typedval, dict) and typedval.get('pandas_kwargs') is not None:
                     for k, v in typedval.get('pandas_kwargs').items():
@@ -276,6 +275,7 @@ class PywrHydraExporter(BasePywrHydra):
         position = {"geographic": [nodedata.get("x", 0), nodedata.get("y", 0)]}
         node_attr_data["position"] = position
         node_attr_data['intrinsic_attrs'] = node_type_attribute_names
+
         dev_node = PywrNode.NodeFactory(node_attr_data)
 
         self.nodes[dev_node.name] = dev_node
