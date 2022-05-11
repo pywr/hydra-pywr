@@ -158,7 +158,6 @@ class PywrHydraRunner(PywrHydraExporter):
         raise ValueError('No attribute with name "{}" found.'.format(name))
 
     def _get_node_from_recorder(self, recorder):
-
         node = None
         if recorder.name is not None:
             if ':' in recorder.name:
@@ -173,7 +172,10 @@ class PywrHydraRunner(PywrHydraExporter):
             try:
                 node = recorder.node
             except AttributeError:
-                node = recorder.parameter.node
+                try:
+                    node = recorder.parameter.node
+                except AttributeError:
+                    return None
         return node
 
     def _get_attribute_name_from_recorder(self, recorder):
@@ -230,6 +232,7 @@ class PywrHydraRunner(PywrHydraExporter):
                                       RuntimeWarning)
 
     def _add_parameter_flagged_recorders(self, model):
+
         for parameter_name, flags in self._parameter_recorder_flags.items():
             p = model.parameters[parameter_name]
             if ':' in p.name:
@@ -273,6 +276,7 @@ class PywrHydraRunner(PywrHydraExporter):
 
         # First add any new attributes required
         attribute_names = []
+
         for recorder in self._df_recorders:
             attribute_names.append(self._get_attribute_name_from_recorder(recorder))
         for recorder in self._non_df_recorders:
@@ -331,9 +335,9 @@ class PywrHydraRunner(PywrHydraExporter):
 
             #Use this later so we can create sensible labels and metadata
             #for when the data is back in hydra
-            is_timeseries=False
+            is_timeseries = False
             if isinstance(df.index, pandas.DatetimeIndex):
-                is_timeseries=True
+                is_timeseries = True
 
             resource_scenario = self._make_recorder_resource_scenario(recorder,
                                                                       value,
@@ -373,33 +377,43 @@ class PywrHydraRunner(PywrHydraExporter):
 
         # Now we need to ensure there is a resource attribute for all nodes and recorder attributes
 
-        try:
-            recorder_node = self._get_node_from_recorder(recorder)
-        except AttributeError:
-            return None
+        recorder_node = self._get_node_from_recorder(recorder)
 
-        try:
-            resource_attribute_id = self._get_resource_attribute_id(recorder_node.name,
-                                                                    attribute_name)
-        except ValueError:
-            for node in self.data['nodes']:
-                if node['name'] == recorder_node.name:
-                    node_id = node['id']
-                    break
-                if recorder_node.parent is not None:
-                    if node['name'] == recorder_node.parent.name:
-                        node_id = node['id']
-                        break
-            else:
-                return None
 
+        if recorder_node is None:
             # Try to get the resource attribute
-            resource_attribute = self.client.add_resource_attribute('NODE',
-                                                               node_id,
-                                                               attribute['id'],
-                                                               is_var='Y',
-                                                               error_on_duplicate=False)
+            resource_attribute = self.client.add_resource_attribute(
+                'NETWORK',
+                self.network_id,
+                attribute['id'],
+                is_var='Y',
+                error_on_duplicate=False)
             resource_attribute_id = resource_attribute['id']
+
+        else:
+            try:
+                resource_attribute_id = self._get_resource_attribute_id(recorder_node.name,
+                                                                    attribute_name)
+            except ValueError:
+                found_ra_id = False
+                resource_type = 'NODE'
+                for node in self.data['nodes']:
+                    if node['name'] == recorder_node.name:
+                        resource_id = node['id']
+                        break
+                    if recorder_node.parent is not None:
+                        if node['name'] == recorder_node.parent.name:
+                            resource_id = node['id']
+                            break
+
+                # Try to get the resource attribute
+                resource_attribute = self.client.add_resource_attribute(
+                    resource_type,
+                    resource_id,
+                    attribute['id'],
+                    is_var='Y',
+                    error_on_duplicate=False)
+                resource_attribute_id = resource_attribute['id']
 
         unit_id = self.attr_unit_map.get(attribute.id)
 

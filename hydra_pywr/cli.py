@@ -273,10 +273,13 @@ def run(obj, scenario_id, template_id, user_id, output_frequency, solver, check_
     run_network_scenario(client, scenario_id, template_id, output_frequency=output_frequency,
                          solver=solver, check_model=check_model, data_dir=data_dir)
 
-def run_network_scenario(client, scenario_id, template_id, output_frequency=None, solver=None, check_model=True, data_dir=None):
-    runner = PywrHydraRunner.from_scenario_id(client, scenario_id,
-                                             template_id=template_id,
-                                             output_resample_freq=output_frequency)
+def run_network_scenario(client, scenario_id, template_id, output_frequency=None, solver=None, check_model=True, data_dir=None, use_cache=False):
+    runner = PywrHydraRunner.from_scenario_id(
+        client,
+        scenario_id,
+        template_id=template_id,
+        output_resample_freq=output_frequency,
+        use_cache=use_cache)
 
     runner.export_pywr_data()
 
