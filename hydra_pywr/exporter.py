@@ -87,7 +87,7 @@ class PywrHydraExporter(BasePywrHydra):
             with open(cache_file, 'r') as f:
                 scenario = JSONObject(json.load(f))
         else:
-            scenario = client.get_scenario(scenario_id, include_data=True, include_results=False, include_metadata=False, include_attr=False)
+            scenario = client.get_scenario(scenario_id=scenario_id, include_data=True, include_results=False, include_metadata=False, include_attr=False)
             with open(cache_file, 'w') as f:
                 json.dump(scenario, f)
         # Fetch the network
@@ -97,7 +97,13 @@ class PywrHydraExporter(BasePywrHydra):
             with open(network_cache_file, 'r') as f:
                 network = JSONObject(json.load(f))
         else:
-            network = client.get_network(scenario.network_id, include_data=False, include_results=False, template_id=template_id)
+            network = client.get_network(
+                network_id=scenario.network_id,
+                include_data=False,
+                include_results=False,
+                template_id=template_id,
+                include_attributes=True)
+
             with open(network_cache_file, 'w') as f:
                 json.dump(JSONObject(network), f)
 
@@ -119,7 +125,7 @@ class PywrHydraExporter(BasePywrHydra):
             with open(template_cache_file, 'r') as f:
                 template = JSONObject(json.load(f))
         else:
-            template = client.get_template(template_id)
+            template = client.get_template(template_id=template_id)
             with open(template_cache_file, 'w') as f:
                 json.dump(template, f)
 
