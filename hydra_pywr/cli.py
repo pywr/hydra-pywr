@@ -2,7 +2,7 @@ import click
 import json
 import os
 import pandas
-from hydra_client.connection import RemoteJSONConnection
+from hydra_client.connection import RemoteJSONConnection, JSONConnection
 from .exporter import PywrHydraExporter
 from .runner import PywrHydraRunner
 from .template import register_template, unregister_template, migrate_network_template, TemplateExistsError
@@ -31,14 +31,26 @@ from hydra_pywr_common.lib.runners import(
 from .nodes import *
 
 def get_client(**kwargs):
-    return RemoteJSONConnection(app_name='Pywr Hydra App', **kwargs)
+    """
+        Get either a remote or direct JSON connection depending on whether
+        'user_id' is specified or 'session' is specified
+    """
+    appname = 'Pywr Hydra App'
+    if kwargs.get('user_id') is not None:
+        return JSONConnection(kwargs.get('hostname'), **kwargs)
+    else:
+        return RemoteJSONConnection(url=kwargs.get('hostname'), app_name=appname)
 
 
-def get_logged_in_client(context):
+def get_logged_in_client(context, **kwargs):
     session = context.get('session')
-    client = get_client(session_id=session)
+    user_id = kwargs.get('user_id')
+    hostname = context.get('hostname')
+    client = get_client(hostname=hostname, session_id=session, user_id=user_id)
     if client.user_id is None and session is None:
         client.login(username=context['username'], password=context['password'])
+    elif session is not None:
+        client.get_remote_session(session_id=session)
     return client
 
 
@@ -143,7 +155,7 @@ def export_json(obj, data_dir, scenario_id, user_id, json_sort_keys, json_indent
     _export_json(obj, data_dir, scenario_id, user_id, json_sort_keys, json_indent, reference_model=reference_model, use_cache=use_cache)
 
 def _export_json(obj, data_dir, scenario_id, user_id, json_sort_keys, json_indent, reference_model=None, use_cache=False):
-    client = get_logged_in_client(obj)
+    client = get_logged_in_client(obj, user_id=user_id)
 
     exporter = PywrHydraExporter.from_scenario_id(client, scenario_id, use_cache=use_cache)
 
@@ -172,7 +184,7 @@ def _export_json(obj, data_dir, scenario_id, user_id, json_sort_keys, json_inden
 @click.option('--json-sort-keys/--no-json-sort-keys', default=False)
 def integrated_export(obj, data_dir, scenario_id, user_id, json_sort_keys):
     """ Export an integrated Pywr Water/Energy Network from Hydra to Pynsim json. """
-    client = get_logged_in_client(obj)
+    client = get_logged_in_client(obj, user_id=user_id)
     w_exporter = PywrHydraExporter.from_scenario_id(client, scenario_id, index=0)
     e_exporter = PywrHydraExporter.from_scenario_id(client, scenario_id, index=1)
 
@@ -267,7 +279,7 @@ def combine_integrated_inputs(config_file, water_file, energy_file, output_file,
 @click.option('--data-dir', default=None)
 def run(obj, scenario_id, template_id, user_id, output_frequency, solver, check_model, data_dir):
     """ Export, run and save a Pywr model from Hydra. """
-    client = get_logged_in_client(obj)
+    client = get_logged_in_client(obj, user_id=user_id)
 
     if scenario_id is None:
         raise Exception('No scenario specified')
@@ -342,7 +354,7 @@ def save_pywr_file(data, data_dir, network_id=None, scenario_id=None):
 @click.option('--child-scenario-ids', type=int, default=None, multiple=True)
 @click.option('-u', '--user-id', type=int, default=None)
 def step_model(obj, network_id, scenario_id, child_scenario_ids, user_id):
-    client = get_logged_in_client(obj)
+    client = get_logged_in_client(obj, user_id=user_id)
     utils.apply_final_volumes_as_initial_volumes(client, scenario_id, child_scenario_ids)
     utils.progress_start_end_dates(client, network_id, scenario_id)
 
@@ -356,7 +368,7 @@ def step_model(obj, network_id, scenario_id, child_scenario_ids, user_id):
 @click.option('--child-scenario-ids', type=int, default=None, multiple=True)
 @click.option('-u', '--user-id', type=int, default=None)
 def apply_initial_volumes_to_other_networks(obj, scenario_id, child_scenario_ids, user_id):
-    client = get_logged_in_client(obj)
+    client = get_logged_in_client(obj, user_id=user_id)
     utils.apply_final_volumes_as_initial_volumes(client, scenario_id, child_scenario_ids)
 
 
@@ -376,7 +388,7 @@ def apply_initial_volumes_to_other_networks(obj, scenario_id, child_scenario_ids
 @click.option('-u', '--user-id', type=int, default=None)
 def step_game(obj, scenario_id, child_scenario_ids, filename, attribute_name, index_col,
               column_name, data_type, create_new, user_id):
-    client = get_logged_in_client(obj)
+    client = get_logged_in_client(obj, user_id=user_id)
 
     # Create new scenarios in each of the networks
     new_scenario_ids = list(utils.clone_scenarios(client, child_scenario_ids))
@@ -414,7 +426,7 @@ def template():
 def template_register(obj, config, update):
     """ Register a Pywr template with Hydra. """
 
-    client = get_logged_in_client(obj)
+    client = get_logged_in_client(obj, user_id=user_id)
     try:
         register_template(client, config_name=config, update=update)
     except TemplateExistsError:
@@ -426,7 +438,7 @@ def template_register(obj, config, update):
 @click.pass_obj
 def template_unregister(obj, config):
     """ Unregister a Pywr template with Hydra. """
-    client = get_logged_in_client(obj)
+    client = get_logged_in_client(obj, user_id=user_id)
     if click.confirm('Are you sure you want to remove the template? '
                      'This will invalidate any existing networks that use the template.'):
         unregister_template(client, config_name=config)
@@ -438,6 +450,6 @@ def template_unregister(obj, config):
 @click.option('--template-id', type=int, default=None)
 @click.pass_obj
 def template_migrate(obj, network_id, template_name, template_id):
-    client = get_logged_in_client(obj)
+    client = get_logged_in_client(obj, user_id=user_id)
     if click.confirm('Are you sure you want to migrate network {} to a new template?'.format(network_id)):
         migrate_network_template(client, network_id, template_name=template_name, template_id=template_id)
