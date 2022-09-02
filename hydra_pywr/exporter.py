@@ -167,6 +167,8 @@ class PywrHydraExporter(BasePywrHydra):
                     pywr_data['recorders'].update(recorders)
 
         pywr_data['edges'] = edges
+        if "parameters" in pywr_data:
+            pywr_data = unnest_parameter_key(pywr_data, "pandas_kwargs")
 
         return pywr_data
 
@@ -552,3 +554,18 @@ class PywrHydraExporter(BasePywrHydra):
         data = template.render(node=context)
         parameters = json.loads(data)
         return parameters
+
+
+def unnest_parameter_key(data, key):
+    """
+        Relocates all keys inside parameters' <key> arg
+        to the top level of that parameter and removes the
+        original <key>.
+    """
+    for param in data["parameters"].values():
+        if key in param:
+            for k, v in param[key].items():
+                param[k] = v
+            del param[key]
+
+    return data
