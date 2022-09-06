@@ -1,4 +1,4 @@
-from .exporter import PywrHydraExporter
+from .exporter import HydraToPywrNetwork as PywrHydraExporter
 import copy
 import pandas
 from pywr.model import Model
