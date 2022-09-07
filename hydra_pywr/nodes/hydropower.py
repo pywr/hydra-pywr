@@ -94,14 +94,12 @@ class LinearStorageReleaseControl(Link, metaclass=NodeMeta):
         self.scenario = scenario
         super().__init__(model, name, max_flow=max_flow_param, **kwargs)
 
-
     @classmethod
-    def load(cls, data, model):
+    def pre_load(cls, model, data):
         name = data.pop("name")
         cost = data.pop("cost", 0.0)
         min_flow = data.pop("min_flow", None)
 
-        data.pop("type")
         node = cls(name=name, model=model, **data)
 
         cost = load_parameter(model, cost)
@@ -114,11 +112,19 @@ class LinearStorageReleaseControl(Link, metaclass=NodeMeta):
         node.cost = cost
         node.min_flow = min_flow
 
-        #breakpoint()
+        """
+            The Pywr Loadable base class contains a reference to
+            `self.__parameters_to_load.items()` which will fail unless
+            a pre-mangled name which matches the expected value from
+            inside the Loadable class is added here.
+
+            See pywr/nodes.py:80 Loadable.finalise_load()
+        """
+        setattr(node, "_Loadable__parameters_to_load", {})
         return node
 
-
 class Reservoir(Storage, metaclass=NodeMeta):
+
     def __init__(self, model, name, **kwargs):
         bathymetry = kwargs.pop('bathymetry', None)
         volume = kwargs.pop('volume', None)
@@ -138,13 +144,11 @@ class Reservoir(Storage, metaclass=NodeMeta):
         self.evaporation_node = None
         self.evaporation_recorder = None
 
-
     @classmethod
-    def load(cls, data, model):
+    def pre_load(cls, model, data):
 
         bathymetry = data.pop("bathymetry", None)
         name = data.pop("name")
-        data.pop("type")
         node = cls(name=name, model=model, **data)
 
         if bathymetry is not None:
@@ -165,7 +169,7 @@ class Reservoir(Storage, metaclass=NodeMeta):
         if volumes is not None and areas is not None:
             node.area = InterpolatedVolumeParameter(model, node, volumes, areas)
 
-        #breakpoint()
+        setattr(node, "_Loadable__parameters_to_load", {})
         return node
 
 
@@ -203,7 +207,6 @@ class Reservoir(Storage, metaclass=NodeMeta):
                 log.warning(f"Please specify a bathymetry or level on node {self.name}")
                 levels = None
 
-        #breakpoint()
         if volumes is not None and levels is not None:
             self.level = InterpolatedVolumeParameter(self.model, self, volumes, levels)
 
@@ -292,6 +295,7 @@ class Reservoir(Storage, metaclass=NodeMeta):
 
 
 class Turbine(Link, metaclass=NodeMeta):
+
     def __init__(self, model, name, **kwargs):
         hp_recorder_kwarg_names = ('efficiency', 'density', 'flow_unit_conversion', 'energy_unit_conversion')
         hp_kwargs = {}
@@ -336,12 +340,11 @@ class Turbine(Link, metaclass=NodeMeta):
         self.hydropower_recorder = hp_recorder
 
     @classmethod
-    def load(cls, data, model):
+    def pre_load(cls, model, data):
         name = data.pop("name")
         cost = data.pop("cost", 0.0)
         min_flow = data.pop("min_flow", None)
 
-        data.pop("type")
         node = cls(name=name, model=model, **data)
 
         cost = load_parameter(model, cost)
@@ -353,6 +356,6 @@ class Turbine(Link, metaclass=NodeMeta):
 
         node.cost = cost
         node.min_flow = min_flow
+        setattr(node, "_Loadable__parameters_to_load", {})
 
-        #breakpoint()
         return node
