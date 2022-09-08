@@ -169,6 +169,7 @@ class PywrHydraExporter(BasePywrHydra):
         pywr_data['edges'] = edges
         if "parameters" in pywr_data:
             pywr_data = unnest_parameter_key(pywr_data, "pandas_kwargs")
+            pywr_data = add_interp_kwargs(pywr_data)
 
         return pywr_data
 
@@ -556,6 +557,11 @@ class PywrHydraExporter(BasePywrHydra):
         return parameters
 
 
+"""
+  Compatibility patches: these update the Pywr data output of
+  get_pywr_data to replace deprecated syntax with that of current
+  Pywr versions.
+"""
 def unnest_parameter_key(data, key):
     """
         Relocates all keys inside parameters' <key> arg
@@ -567,5 +573,19 @@ def unnest_parameter_key(data, key):
             for k, v in param[key].items():
                 param[k] = v
             del param[key]
+
+    return data
+
+def add_interp_kwargs(data):
+    """
+        Replaces the deprecated `kind` key of interpolatedvolume
+        parameters with the nested `interp_kwargs` key.
+    """
+    ptype = "interpolatedvolume"
+    new_key = "interp_kwargs"
+    for param in data["parameters"].values():
+        if param["type"].lower().startswith(ptype) and "kind" in param:
+            param[new_key] = {"kind": param["kind"]}
+            del param["kind"]
 
     return data
