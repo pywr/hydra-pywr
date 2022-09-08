@@ -6,7 +6,8 @@ from pywr.nodes import (
     Link,
     Input,
     AggregatedNode,
-    Storage
+    Storage,
+    Output
 )
 
 from pywr.parameters import (
@@ -21,7 +22,8 @@ from pywr.parameters import (
 )
 
 from pywr.recorders import (
-    HydropowerRecorder
+    HydropowerRecorder,
+    NumpyArrayNodeRecorder
 )
 
 from pywr.parameters.control_curves import (
@@ -130,6 +132,9 @@ class Reservoir(Storage, metaclass=NodeMeta):
         volume = kwargs.pop('volume', None)
         level = kwargs.pop('level', None)
         area = kwargs.pop('area', None)
+        self.weather_cost = kwargs.pop('weather_cost', -999)
+        self.evaporation_cost = kwargs.pop('evaporation_cost', -999)
+        self.rainfall_cost = kwargs.pop('rainfall_cost', -999)
         const = kwargs.pop('const', 1e6 * 1e-3 * 1e-6)
 
         # Pywr Storage does not expect a 'weather' kwargs, so move this to instance
@@ -143,6 +148,7 @@ class Reservoir(Storage, metaclass=NodeMeta):
         self.rainfall_recorder = None
         self.evaporation_node = None
         self.evaporation_recorder = None
+
 
     @classmethod
     def pre_load(cls, model, data):
@@ -169,49 +175,9 @@ class Reservoir(Storage, metaclass=NodeMeta):
         if volumes is not None and areas is not None:
             node.area = InterpolatedVolumeParameter(model, node, volumes, areas)
 
+        node._make_weather_nodes(model, node.weather, node.weather_cost)
         setattr(node, "_Loadable__parameters_to_load", {})
         return node
-
-
-    def _set_bathymetry(self, model, bathymetry, volume=None, level=None, area=None):
-        if bathymetry is not None:
-            if isinstance(bathymetry, str):
-                bathymetry = load_parameter(model, bathymetry)
-                volumes = bathymetry.dataframe['volume'].astype(np.float64)
-                levels = bathymetry.dataframe['level'].astype(np.float64)
-                areas = bathymetry.dataframe['area'].astype(np.float64)
-            else:
-                bathymetry = pd.DataFrame.from_dict(bathymetry)
-                volumes = bathymetry['volume'].astype(np.float64)
-                levels = bathymetry['level'].astype(np.float64)
-                areas = bathymetry['area'].astype(np.float64)
-
-        elif volume is not None and level is not None and area is not None:
-            volumes = volume
-            levels = level
-            areas = area
-        else:
-            try:
-                volumes = load_parameter(model, f'__{self.name}__:volume')
-            except KeyError:
-                log.warning(f"Please specify a bathymetry or volume on node {self.name}")
-                volumes = None
-            try:
-                areas = load_parameter(model, f'__{self.name}__:area')
-            except KeyError:
-                log.warning(f"Please specify a bathymetry or area on node {self.name}")
-                areas = None
-            try:
-                levels = load_parameter(model, f'__{self.name}__:level')
-            except KeyError:
-                log.warning(f"Please specify a bathymetry or level on node {self.name}")
-                levels = None
-
-        if volumes is not None and levels is not None:
-            self.level = InterpolatedVolumeParameter(self.model, self, volumes, levels)
-
-        if volumes is not None and areas is not None:
-            self.area = InterpolatedVolumeParameter(self.model, self, volumes, areas)
 
 
     def _make_weather_nodes(self, model, weather, cost):
