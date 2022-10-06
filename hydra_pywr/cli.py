@@ -124,20 +124,17 @@ def export_json(obj, data_dir, scenario_id, user_id, json_sort_keys, json_indent
     click.echo(f"Network: {network_id}, Scenario: {scenario_id} exported to `{outfile}`")
 
 
-
 @cli.command(name="run-file", context_settings=dict(
     ignore_unknown_options=True,
     allow_extra_args=True))
 @click.pass_obj
 @click.argument("filename", type=click.Path(file_okay=True, dir_okay=False, exists=True))
 @click.option('--domain', type=str, default="water")
-@click.option('--output-frequency', type=str, default=None)
-@click.option('--solver', type=str, default=None)
-@click.option('--check-model/--no-check-model', default=False)
-def run_file(obj, filename, domain, output_frequency, solver, check_model):
+@click.option('--output-file', type=str, default="output.csv")
+def run_file(obj, filename, domain, output_file):
     pfr = PywrFileRunner(domain)
     pfr.load_pywr_model_from_file(filename)
-    pfr.run_pywr_model()
+    pfr.run_pywr_model(output_file)
 
 
 @hydra_app(category='model', name='Run Pywr')
@@ -151,9 +148,8 @@ def run_file(obj, filename, domain, output_frequency, solver, check_model):
 @click.option('--domain', type=str, default="water")
 @click.option('--output-frequency', type=str, default=None)
 @click.option('--solver', type=str, default=None)
-@click.option('--check-model/--no-check-model', default=True)
 @click.option('--data-dir', default=None)
-def run(obj, scenario_id, template_id, user_id, domain, output_frequency, solver, check_model, data_dir):
+def run(obj, scenario_id, template_id, user_id, domain, output_frequency, solver, data_dir):
     """ Export, run and save a Pywr model from Hydra. """
     client = get_logged_in_client(obj, user_id=user_id)
 
@@ -161,10 +157,10 @@ def run(obj, scenario_id, template_id, user_id, domain, output_frequency, solver
         raise Exception('No scenario specified')
 
     run_network_scenario(client, scenario_id, template_id, domain, output_frequency=output_frequency,
-                         solver=solver, check_model=check_model, data_dir=data_dir)
+                         solver=solver, data_dir=data_dir)
 
 
-def run_network_scenario(client, scenario_id, template_id, domain, output_frequency=None, solver=None, check_model=True, data_dir=None):
+def run_network_scenario(client, scenario_id, template_id, domain, output_frequency=None, solver=None, data_dir=None):
 
     runner = PywrHydraRunner.from_scenario_id(client, scenario_id,
                                              template_id=template_id,
@@ -178,7 +174,7 @@ def run_network_scenario(client, scenario_id, template_id, domain, output_freque
     if data_dir is not None:
         save_pywr_file(pywr_data, data_dir, network_id, scenario_id)
 
-    runner.run_pywr_model(check=check_model)
+    runner.run_pywr_model()
     runner.save_pywr_results()
 
     click.echo(f'Pywr model run success. Network ID: {network_id}, Scenario ID: {scenario_id}')

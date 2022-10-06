@@ -1,28 +1,19 @@
-from .exporter import HydraToPywrNetwork as PywrHydraExporter
-import copy
 import pandas
+
 from pywr.model import Model
 from pywr.nodes import Node, Storage
-#from pywr_dcopf.core import Generator, Load, Line, Battery
 from pywr.parameters import Parameter, DeficitParameter
-from pywr.recorders import NumpyArrayNodeRecorder, NumpyArrayStorageRecorder, NumpyArrayLevelRecorder, \
-    NumpyArrayParameterRecorder
+from pywr.recorders import NumpyArrayNodeRecorder, NumpyArrayStorageRecorder, NumpyArrayParameterRecorder
 from pywr.recorders.progress import ProgressRecorder
-from .template import PYWR_ARRAY_RECORDER_ATTRIBUTES
-from hydra_pywr_common.types.network import PywrNetwork
-from hydra_pywr_common.lib.writers import PywrJsonWriter
+
+from .exporter import HydraToPywrNetwork
+
+from pywrparser.types.network import PywrNetwork
 from hydra_pywr.nodes import *
 
 import os
 import logging
 log = logging.getLogger(__name__)
-
-try:
-    from volta import customized_recorders, customized_parameters
-    from integrated_framework_update.engines.custom_recorders import *
-except:
-    log.info("Unable to import model-specific recorders and parameters.")
-
 
 domain_solvers = {
     "water": "glpk-edge",
@@ -32,8 +23,6 @@ domain_solvers = {
 class PywrFileRunner():
     def __init__(self, domain):
         self.model = None
-        self._df_recorders = None
-        self._non_df_recorders = None
         self.domain = domain
 
 
@@ -41,16 +30,26 @@ class PywrFileRunner():
         if self.domain == "energy":
             from pywr_dcopf import core
 
-        pnet = PywrNetwork.from_source_file(filename)
-        writer = PywrJsonWriter(pnet)
-        pywr_data = writer.as_dict()
+        pnet, errors, warnings = PywrNetwork.from_file(filename)
+        if warnings:
+            for component, warns in warnings.items():
+                for warn in warns:
+                    log.info(warn)
+
+        if errors:
+            for component, errs in errors.items():
+                for err in errs:
+                    log.error(err)
+            exit(1)
+
+        pywr_data = pnet.as_dict()
 
         model = Model.load(pywr_data, solver=domain_solvers[self.domain])
         self.model = model
         return pywr_data
 
 
-    def run_pywr_model(self, check=True):
+    def run_pywr_model(self, outfile="output.csv"):
         if self.domain == "energy":
             from pywr_dcopf import core
 
@@ -59,38 +58,18 @@ class PywrFileRunner():
         # Add a progress recorder to monitor the run.
         ProgressRecorder(model)
 
-        # Add recorders for monitoring the simulated timeseries of nodes
-        ##self._add_node_flagged_recorders(model)
-        # Add recorders for parameters that are flagged
-        ##self._add_parameter_flagged_recorders(model)
-
-        df_recorders = []
-        non_df_recorders = []
-        for recorder in model.recorders:
-            if hasattr(recorder, 'to_dataframe'):
-                df_recorders.append(recorder)
-            else:
-                non_df_recorders.append(recorder)
-
         # Force a setup regardless of whether the model has been run or setup before
         model.setup()
 
-        max_scenarios = os.environ.get('HYDRA_PYWR_MAX_SCENARIOS', None)
-        if max_scenarios is not None:
-            nscenarios = len(model.scenarios.combinations)
-            if nscenarios > max_scenarios:
-                raise RuntimeError(f'Number of scenarios ({nscenarios}) exceeds the maximum limit of {max_scenarios}.')
-
-        # Now run the model.
         run_stats = model.run()
+        log.info(run_stats)
 
-        # Save these for later
-        self._df_recorders = df_recorders
-        self._non_df_recorders = non_df_recorders
+        df = model.to_dataframe()
+        df.to_csv(outfile)
 
 
-class PywrHydraRunner(PywrHydraExporter):
-    """ An extension to `PywrHydraExporter` that adds methods for running a Pywr model. """
+class PywrHydraRunner(HydraToPywrNetwork):
+    """ An extension of `HydraToPywrNetwork` that adds methods for running a Pywr model. """
 
     def __init__(self, *args, domain="water", **kwargs):
         self.output_resample_freq = kwargs.pop('output_resample_freq', None)
@@ -131,9 +110,9 @@ class PywrHydraRunner(PywrHydraExporter):
         # Now delete them all
         self.client.delete_resource_scenarios(scenario['id'], ra_to_delete, quiet=True)
 
+
     def load_pywr_model(self, solver=None):
         """ Create a Pywr model from the exported data. """
-
 
         if self.domain == "energy":
             from pywr_dcopf import core
@@ -141,19 +120,18 @@ class PywrHydraRunner(PywrHydraExporter):
         solver = domain_solvers[self.domain]
 
         data = self.get_pywr_data()
-        pnet = PywrNetwork(data)
-        writer = PywrJsonWriter(pnet)
-        pywr_data = writer.as_dict()
+        pnet, errors, warnings = PywrNetwork(data)
+        pywr_data = pnet.as_dict()
         model = Model.load(pywr_data, solver=solver)
         self.model = model
 
         return pywr_data
 
 
-    def run_pywr_model(self, check=True, domain="water"):
-        """ Run a Pywr model from the exported data.
-
-        If no model has been loaded (see `load_pywr_model`) then a load is attempted.
+    def run_pywr_model(self, domain="water"):
+        """
+            Run a Pywr model from the exported data.
+            If no model has been loaded (see `load_pywr_model`) then a load is attempted.
         """
 
         if domain == "energy":
@@ -179,12 +157,6 @@ class PywrHydraRunner(PywrHydraExporter):
                 df_recorders.append(recorder)
             else:
                 non_df_recorders.append(recorder)
-
-        """
-        if check:
-            # Check the model
-            model.check()
-        """
 
         # Force a setup regardless of whether the model has been run or setup before
         model.setup()
