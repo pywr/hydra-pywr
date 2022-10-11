@@ -189,9 +189,9 @@ class HydraToPywrNetwork():
             if not ds:
                 #raise ValueError(f"No dataset found for attr name {attr.name} with id {attr.id}")
                 continue
-            if not ds["type"].startswith(("PYWR_PARAMETER", "PYWR_RECORDER")):
+            if not ds["type"].startswith(("PYWR_PARAMETER", "PYWR_DATAFRAME", "PYWR_RECORDER")):
                 continue
-            if ds["type"].startswith("PYWR_PARAMETER"):
+            if ds["type"].startswith(("PYWR_PARAMETER", "PYWR_DATAFRAME")):
                 value = json.loads(ds["value"])
                 p = PywrParameter(ds["name"], value)
                 assert p.name not in parameters    # Disallow overwriting
