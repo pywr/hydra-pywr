@@ -79,7 +79,6 @@ class PywrHydraRunner(HydraToPywrNetwork):
         self._df_recorders = None
         self._non_df_recorders = None
 
-
         self.attr_dimension_map = {}
 
         self.attr_name_map = self.make_attr_name_map()
@@ -97,7 +96,7 @@ class PywrHydraRunner(HydraToPywrNetwork):
     def _delete_resource_scenarios(self):
         scenario = self.data.scenarios[0]
 
-        ra_is_var_map = {ra['id']: ra['attr_is_var'] for ra in self._get_all_resource_attributes()}
+        ra_is_var_map = {ra['id']: ra['attr_is_var'] for ra in self.hydra.get_resource_attributes("network", self.network_id)}
         ra_to_delete = []
 
         # Compile a list of resource attributes to delete
@@ -108,7 +107,7 @@ class PywrHydraRunner(HydraToPywrNetwork):
                 ra_to_delete.append(ra_id)
 
         # Now delete them all
-        self.client.delete_resource_scenarios(scenario['id'], ra_to_delete, quiet=True)
+        self.hydra.delete_resource_scenarios(scenario['id'], ra_to_delete, quiet=True)
 
 
     def load_pywr_model(self, solver=None):
@@ -119,10 +118,11 @@ class PywrHydraRunner(HydraToPywrNetwork):
 
         solver = domain_solvers[self.domain]
 
-        data = self.get_pywr_data()
-        pnet, errors, warnings = PywrNetwork(data)
-        pywr_data = pnet.as_dict()
-        model = Model.load(pywr_data, solver=solver)
+        data = self.build_pywr_network()
+        #pnet, errors, warnings = PywrNetwork(data)
+        pnet = PywrNetwork(data)
+        pywr_data = pnet.as_json()
+        model = Model.loads(pywr_data, solver=solver)
         self.model = model
 
         return pywr_data
@@ -337,14 +337,14 @@ class PywrHydraRunner(HydraToPywrNetwork):
             })
 
         # The response attributes have ids now.
-        response_attributes = self.client.add_attributes(attributes)
+        response_attributes = self.hydra.add_attributes(attributes)
         # Update the attribute mapping
         self.attributes.update({attr.id: attr for attr in response_attributes})
 
         for resource_scenario in self.generate_array_recorder_resource_scenarios():
             scenario['resourcescenarios'].append(resource_scenario)
 
-        self.client.update_scenario(scenario)
+        self.hydra.update_scenario(scenario)
 
     def generate_array_recorder_resource_scenarios(self):
         """ Generate resource scenario data from NumpyArrayXXX recorders. """
@@ -443,7 +443,7 @@ class PywrHydraRunner(HydraToPywrNetwork):
                 return None
 
             # Try to get the resource attribute
-            resource_attribute = self.client.add_resource_attribute('NODE',
+            resource_attribute = self.hydra.add_resource_attribute('NODE',
                                                                node_id,
                                                                attribute['id'],
                                                                is_var='Y',
@@ -488,9 +488,9 @@ class PywrHydraRunner(HydraToPywrNetwork):
         attr_name_map = {}
         for templatetype in self.template.templatetypes:
             for typeattr in templatetype.typeattrs:
-                attr = self.client.get_attribute_by_id(typeattr.attr_id)
+                attr = self.hydra.get_attribute_by_id(typeattr.attr_id)
                 attr_name_map[attr.name] = attr
-                #populate the dimensioin mapping
+                #populate the dimension mapping
                 self.attr_dimension_map[attr.name] = attr.dimension_id
 
         return attr_name_map

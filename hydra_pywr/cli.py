@@ -113,6 +113,7 @@ def export_json(obj, data_dir, scenario_id, user_id, json_sort_keys, json_indent
     network_id = exporter.data.id
     pywr_network = PywrNetwork(network_data)
 
+    #breakpoint()
     pywr_network.attach_parameters()
     pywr_network.detach_parameters()
 
@@ -163,9 +164,7 @@ def run(obj, scenario_id, template_id, user_id, domain, output_frequency, solver
 def run_network_scenario(client, scenario_id, template_id, domain, output_frequency=None, solver=None, data_dir=None):
 
     runner = PywrHydraRunner.from_scenario_id(client, scenario_id,
-                                             template_id=template_id,
-                                             domain=domain,
-                                             output_resample_freq=output_frequency)
+                                             template_id=template_id)
 
     pywr_data = runner.load_pywr_model(solver=solver)
 

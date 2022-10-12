@@ -18,6 +18,15 @@ from .rules import exec_rules
 import logging
 log = logging.getLogger(__name__)
 
+PARAMETER_TYPES = (
+    "PYWR_PARAMETER",
+    "PYWR_DATAFRAME"
+)
+
+RECORDER_TYPES = (
+    "PYWR_RECORDER",
+)
+
 
 """
     Hydra => PywrNetwork
@@ -31,9 +40,10 @@ class HydraToPywrNetwork():
         "network", "description"
     )
 
-    def __init__(self, client, network, scenario_id, attributes, template, **kwargs):
+    def __init__(self, client, network, network_id, scenario_id, attributes, template, **kwargs):
         self.hydra = client
         self.data = network
+        self.network_id = network_id
         self.scenario_id = scenario_id
         self.attributes = attributes
         self.template = template
@@ -61,9 +71,10 @@ class HydraToPywrNetwork():
     def from_scenario_id(cls, client, scenario_id, template_id=None, index=0):
 
         scenario = client.get_scenario(scenario_id, include_data=True, include_results=False, include_metadata=True, include_attr=False)
-        network = client.get_network(scenario.network_id, include_data=True, include_results=False, template_id=None)
+        network_id = scenario.network_id
+        network = client.get_network(network_id, include_data=True, include_results=False, template_id=None)
         network.scenarios = [scenario]
-        network.rules = client.get_resource_rules('NETWORK', scenario.network_id)
+        network.rules = client.get_resource_rules('NETWORK', network_id)
 
         attributes = client.get_attributes()
         attributes = {attr.id: attr for attr in attributes}
@@ -71,7 +82,7 @@ class HydraToPywrNetwork():
         log.info(f"Retreiving template {network.types[index].template_id}")
         template = client.get_template(network.types[index].template_id)
 
-        return cls(client, network, scenario_id, attributes, template)
+        return cls(client, network, network_id, scenario_id, attributes, template)
 
 
     def write_rules_as_module(self):
@@ -189,14 +200,14 @@ class HydraToPywrNetwork():
             if not ds:
                 #raise ValueError(f"No dataset found for attr name {attr.name} with id {attr.id}")
                 continue
-            if not ds["type"].startswith(("PYWR_PARAMETER", "PYWR_DATAFRAME", "PYWR_RECORDER")):
+            if not ds["type"].startswith(PARAMETER_TYPES + RECORDER_TYPES):
                 continue
-            if ds["type"].startswith(("PYWR_PARAMETER", "PYWR_DATAFRAME")):
+            if ds["type"].startswith(PARAMETER_TYPES):
                 value = json.loads(ds["value"])
                 p = PywrParameter(ds["name"], value)
                 assert p.name not in parameters    # Disallow overwriting
                 parameters[p.name] = p
-            elif ds["type"].startswith("PYWR_RECORDER"):
+            elif ds["type"].startswith(RECORDER_TYPES):
                 value = json.loads(ds["value"])
                 try:
                     r = PywrRecorder(ds["name"], value)

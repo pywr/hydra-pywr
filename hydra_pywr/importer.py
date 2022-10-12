@@ -55,7 +55,7 @@ class PywrToHydraNetwork():
     default_map_projection = None
 
     def __init__(self, network,
-                       hydra = None,
+                       hydra=None,
                        hostname=None,
                        session_id=None,
                        user_id=None,
@@ -491,6 +491,10 @@ class PywrToHydraNetwork():
         return resource_attrs, resource_scenarios
 
     def build_network_descriptor_attributes(self, attr_key):
+        """
+          Applicable to domains only: creates pywr timestepper, metadata
+          etc attrs nested within a per-domain network level attr.
+        """
 
         attr_name = f"{attr_key}_data"
         attrs = [ make_hydra_attr(attr_name) ]
