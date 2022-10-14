@@ -11,7 +11,6 @@ from pywrparser.types import (
     PywrNode,
     PywrEdge
 )
-from pywrparser.types.network import PywrNetwork as NewPywrNetwork
 
 from .rules import exec_rules
 
@@ -115,14 +114,11 @@ class HydraToPywrNetwork():
                 fp.write("\n\n")
 
 
-    def build_pywr_network(self, domain=None):
+    def build_pywr_network(self):
         self.build_pywr_nodes()
         self.edges = self.build_edges()
         self.parameters, self.recorders = self.build_parameters_recorders()
-        if domain:
-            self.timestepper, self.metadata, self.scenarios = self.build_integrated_network_attrs(domain)
-        else:
-            self.timestepper, self.metadata, self.tables, self.scenarios = self.build_network_attrs()
+        self.timestepper, self.metadata, self.tables, self.scenarios = self.build_network_attrs()
 
         if len(self.data.rules) > 0:
             self.write_rules_as_module()
@@ -140,30 +136,8 @@ class HydraToPywrNetwork():
             if comment := node.get("description"):
                 pywr_node["comment"] = comment
 
-            # Get the type for this node from the template
             pywr_node_type = node["types"][0]["name"]
-            """
-            real_template_id = node["types"][0]["template_id"]
 
-            for node_type in node["types"]:
-                try:
-                    #log.info(f"====\nnode: {node}")
-                    if real_template_id != self.template["id"]:
-                        continue
-                    pywr_node_type = self.type_id_map[node_type["id"]]["name"]
-                    break
-                except KeyError:
-                    breakpoint()
-                    # Skip as not in this template...
-                    pywr_node_type = None
-                    continue
-            """
-            #log.info(f"Found node type {pywr_node_type} for node {node['name']} with nt_id {pywr_node_type['id']} on template {self.template['id']}\n====")
-
-            #if pywr_node_type is None:
-            #    raise ValueError('Template does not contain node of type "{}".'.format(pywr_node_type))
-
-            # Skip if not in this template...
             if pywr_node_type:
                 log.info(f"Building node {node['name']} as {pywr_node_type}...")
                 self.build_node_and_references(node, pywr_node_type)
@@ -191,13 +165,13 @@ class HydraToPywrNetwork():
 
 
     def build_parameters_recorders(self):
-        # attr_id = data.network.attributes[x].id
         parameters = {} # {name: P()}
         recorders = {} # {name: R()}
 
         for attr in self.data.attributes:
             ds = self.get_dataset_by_attr_id(attr.id)
             if not ds:
+                # This could raise instead, e.g...
                 #raise ValueError(f"No dataset found for attr name {attr.name} with id {attr.id}")
                 continue
             if not ds["type"].startswith(PARAMETER_TYPES + RECORDER_TYPES):
@@ -260,6 +234,14 @@ class HydraToPywrNetwork():
                 value = dataset["value"]
             metadata[meta_key] = value
 
+        """
+          minimum_version is an optional metadata key, but
+          Pywr requires it to be a string if present.
+        """
+        minver = metadata.get("minimum_version")
+        if minver and not isinstance(minver, str):
+            metadata["minimum_version"] = str(minver)
+
         meta_inst = PywrMetadata(metadata)
 
         """ Tables """
@@ -292,31 +274,8 @@ class HydraToPywrNetwork():
         return ts_inst, meta_inst, tables, scenarios
 
 
-    def build_integrated_network_attrs(self, domain):
-        domain_data_key = f"{domain}_data"
-        domain_attr = self.get_attr_by_name(domain_data_key)
-        dataset = self.get_dataset_by_attr_id(domain_attr.id)
-        data = json.loads(dataset["value"])
-
-        timestep = data["timestepper"]
-        ts_val = timestep.get("timestep",1)
-        try:
-            tv = int(float(ts_val))
-        except ValueError:
-            tv = ts_val
-
-        timestep["timestep"] = tv
-        ts_inst = PywrTimestepper(timestep)
-
-        metadata = data["metadata"]
-        meta_inst = PywrMetadata(metadata)
-
-        scen_insts = [ PywrScenario(s) for s in data.get("scenarios") ]
-
-        return ts_inst, meta_inst, scen_insts
-
-
     def get_network_attr(self, scenario_id, network_id, attr_key):
+
         net_attr = self.hydra.get_attribute_by_name_and_dimension(attr_key, None)
         ra = self.hydra.get_resource_attributes("network", network_id)
         ra_id = None
@@ -334,9 +293,6 @@ class HydraToPywrNetwork():
 
 
     def get_dataset_by_attr_id(self, attr_id):
-        # d = data.scenarios[0].resourcescenarios[x]
-        # d.resource_attr_id == attr_id
-        # d.dataset
 
         scenario = self.data.scenarios[0]
         for rs in scenario.resourcescenarios:
@@ -363,7 +319,7 @@ class HydraToPywrNetwork():
                 continue  # No data associated with this attribute.
 
             # Allow export of probable recorders
-            if resource_attribute["attr_is_var"] == 'Y' and recorder not in attribute["name"].lower():
+            if resource_attribute["attr_is_var"] == 'Y' and "recorder" not in attribute["name"].lower():
                 continue
 
             attribute_name = attribute["name"]

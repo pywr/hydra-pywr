@@ -119,7 +119,6 @@ class PywrHydraRunner(HydraToPywrNetwork):
         solver = domain_solvers[self.domain]
 
         data = self.build_pywr_network()
-        #pnet, errors, warnings = PywrNetwork(data)
         pnet = PywrNetwork(data)
         pywr_data = pnet.as_json()
         model = Model.loads(pywr_data, solver=solver)
@@ -316,8 +315,8 @@ class PywrHydraRunner(HydraToPywrNetwork):
         self._delete_resource_scenarios()
 
         # Convert the scenario from JSONObject to normal dict
-        # This is required to ensure that the complete nested structure (of dicts)
-        # is properly converted to JSONObject's by the client.
+        # This is required to ensure that the complete nested structure of dicts
+        # is properly converted to JSONObjects by the client.
         scenario = self._copy_scenario()
 
         # First add any new attributes required
@@ -399,7 +398,6 @@ class PywrHydraRunner(HydraToPywrNetwork):
             # logger.info('No array recorders defined not results saved to Hydra.')
             return
 
-        #TODO merge this and the above as this is a duplicate
         for recorder in self._non_df_recorders:
             try:
                 value = list(recorder.values())

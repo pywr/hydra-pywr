@@ -113,7 +113,6 @@ def export_json(obj, data_dir, scenario_id, user_id, json_sort_keys, json_indent
     network_id = exporter.data.id
     pywr_network = PywrNetwork(network_data)
 
-    #breakpoint()
     pywr_network.attach_parameters()
     pywr_network.detach_parameters()
 
@@ -201,7 +200,7 @@ def save_pywr_file(data, data_dir, network_id=None, scenario_id=None):
 
 
 """
-  Miscellaneous Utilities - to be reviewed
+  Miscellaneous Utilities - to be reviewed and/or relocated
 """
 @hydra_app(category='network_utility', name='Step model')
 @cli.command(context_settings=dict(
