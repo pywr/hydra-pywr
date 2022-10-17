@@ -1,16 +1,17 @@
+import datetime
+import os
+import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
 from hydra_base.db import DeclarativeBase as _db
 from hydra_base.util.hdb import create_default_users_and_perms, \
     create_default_units_and_dimensions, make_root_user
 from hydra_base.lib.objects import JSONObject
 import hydra_base
 from hydra_base import config
-import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-import datetime
-import os
 
-from hydra_pywr.template import generate_pywr_attributes, generate_pywr_template, load_template_config, PYWR_DEFAULT_DATASETS
+#from hydra_pywr.template import generate_pywr_attributes, generate_pywr_template, load_template_config, PYWR_DEFAULT_DATASETS
 
 global user_id
 user_id = config.get('DEFAULT', 'root_user_id', 1)

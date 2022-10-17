@@ -21,7 +21,7 @@ domain_solvers = {
 }
 
 class PywrFileRunner():
-    def __init__(self, domain):
+    def __init__(self, domain="water"):
         self.model = None
         self.domain = domain
 
