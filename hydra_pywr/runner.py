@@ -107,7 +107,7 @@ class PywrHydraRunner(PywrHydraExporter):
         for recorder in model.recorders:
             if hasattr(recorder, 'to_dataframe'):
                 df_recorders.append(recorder)
-            else:
+            if hasattr(recorder, 'values'):
                 non_df_recorders.append(recorder)
 
         if check:
@@ -178,7 +178,17 @@ class PywrHydraRunner(PywrHydraExporter):
                     return None
         return node
 
-    def _get_attribute_name_from_recorder(self, recorder):
+    def _get_attribute_name_from_recorder(self, recorder, is_dataframe=False):
+        """
+            Get the name of a hydra attribute from a pywr recorder.
+            IF the recorder is 'flow', then return something like 'simulated_flow'.
+            If the recorder is not a dataframe (or it outputs both dataframes and 
+            non-dataframes', then the use the is_dataframes flag. In this case, the
+            attribute name has '_value' added on at the end, resulting in
+            'simulated_flow_value', which should be a single scalar value.
+        """
+        non_timeseries_postfix = 'value'
+
         if recorder.name is None:
             attribute_name = recorder.__class__
         else:
@@ -191,6 +201,9 @@ class PywrHydraRunner(PywrHydraExporter):
 
         if not attribute_name.startswith('simulated'):
             attribute_name = f'simulated_{attribute_name}'
+
+        if is_dataframe is False:
+            attribute_name = f"{attribute_name}_{non_timeseries_postfix}"
 
         return attribute_name
 
@@ -284,11 +297,12 @@ class PywrHydraRunner(PywrHydraExporter):
         attribute_names = []
 
         for recorder in self._df_recorders:
-            attribute_names.append(self._get_attribute_name_from_recorder(recorder))
+            attribute_names.append(self._get_attribute_name_from_recorder(recorder, is_dataframe=True))
         for recorder in self._non_df_recorders:
             attribute_names.append(self._get_attribute_name_from_recorder(recorder))
 
         attribute_names = set(attribute_names)
+
         attributes = []
         for attribute_name in attribute_names:
             attributes.append({
@@ -348,7 +362,8 @@ class PywrHydraRunner(PywrHydraExporter):
             resource_scenario = self._make_recorder_resource_scenario(recorder,
                                                                       value,
                                                                       'dataframe',
-                                                                      is_timeseries=is_timeseries)
+                                                                      is_timeseries=is_timeseries,
+                                                                      is_dataframe=True)
 
             if resource_scenario is None:
                 continue
@@ -362,23 +377,39 @@ class PywrHydraRunner(PywrHydraExporter):
 
         #TODO merge this and the above as this is a duplicate
         for recorder in self._non_df_recorders:
+            foundValidValue = False
             try:
                 value = list(recorder.values())
+                data_type = 'array'
+
+                if len(value) == 1:
+                    value = value[0]
+                    data_type = 'scalar'
+                foundValidValue = True
             except NotImplementedError:
                 continue
 
+            if foundValidValue is False:
+                try:
+                    value = recorder.value()
+                    data_type = 'scalar'
+                except NotImplementedError:
+                    continue
+
             resource_scenario = self._make_recorder_resource_scenario(recorder,
                                                                       value,
-                                                                      'array')
+                                                                      data_type,
+                                                                      is_dataframe=False)
 
             if resource_scenario is None:
                 continue
 
             yield resource_scenario
 
-    def _make_recorder_resource_scenario(self, recorder, value, data_type, is_timeseries=False):
+    def _make_recorder_resource_scenario(self, recorder, value, data_type, is_timeseries=False, is_dataframe=False):
         # Get the attribute and its ID
-        attribute_name = self._get_attribute_name_from_recorder(recorder)
+        attribute_name = self._get_attribute_name_from_recorder(recorder, is_dataframe=is_dataframe)
+
         attribute = self._get_attribute_from_name(attribute_name)
 
         # Now we need to ensure there is a resource attribute for all nodes and recorder attributes
