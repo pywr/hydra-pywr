@@ -8,7 +8,7 @@ from hydra_base.lib.objects import JSONObject
 
 from hydra_pywr.template import PYWR_SPLIT_LINK_TYPES
 
-from hydra_pywr_common.datatypes import PywrParameter, PywrRecorder
+from hydra_pywr_common.datatypes import PywrParameter, PywrRecorder, PywrTable
 
 from hydra_pywr_common.types import PywrDataReference
 
@@ -21,7 +21,6 @@ from hydra_pywr_common.types.base import(
 from hydra_pywr_common.types.fragments.network import(
     Timestepper,
     Metadata,
-    Table,
     Scenario
 )
 
@@ -142,7 +141,7 @@ class PywrHydraExporter(BasePywrHydra):
         if domain is not None:
             self.timestepper, self.metadata, self.scenarios = self.build_integrated_network_attrs(domain)
         else:
-            self.timestepper, self.metadata, self.tables, self.scenarios = self.build_network_attrs()
+            self.timestepper, self.metadata, self.scenarios = self.build_network_attrs()
 
         return self
 
@@ -467,18 +466,38 @@ class PywrHydraExporter(BasePywrHydra):
 
 
         """ Tables """
-        tables_data = defaultdict(dict)
-        tables = {}
         for attr in self.data["attributes"]:
-            if not attr.name.startswith("tbl_"):
+            try:
+                resource_scenario = self._get_resource_scenario(attr)
+            except ValueError as e:
+                log.warning("No value found for network attribute %s", attr.name)
                 continue
-            table_name, table_attr = attr.name[4:].split('.')
-            resource_scenario = self._get_resource_scenario(attr)
-            dataset = resource_scenario["dataset"]
-            tables_data[table_name][table_attr] = dataset["value"]
 
-        for tname, tdata in tables_data.items():
-            tables[tname] = Table(tdata)
+            dataset = resource_scenario["dataset"]
+            dataset_type = hydra_typemap[dataset.type.upper()]
+            #backward compatibility
+            if attr.name.startswith('tbl_'):
+                tablename = attr.name.replace('tbl_', '')
+                for k in ('index_col', 'key', 'url', 'header'):
+                    if tablename.endswith(f'.{k}'):
+                        tablename = tablename.replace(f'.{k}', '')
+                        try:
+                            dataset['value'] = int(float(dataset.value))
+                        except:
+                            try:
+                                dataset['value'] = json.loads(dataset.value)
+                            except:
+                                pass
+                        if self.tables.get(tablename):
+                            self.tables[tablename][k] = dataset.value
+                        else:
+                            self.tables[tablename] = {k: dataset.value}
+            elif issubclass(dataset_type, PywrTable):
+                table = PywrDataReference.ReferenceFactory(attr.name, dataset.value)
+                if isinstance(table, hydra_pywr_common.types.base.PywrTable): #just in case this is somehow mis-categorised
+                    self.tables[attr.name] = table
+                else:
+                    self.tables[dataset.name] = table
 
         """ Parameters """
         for attr in self.data["attributes"]:
@@ -539,7 +558,7 @@ class PywrHydraExporter(BasePywrHydra):
 
 
 
-        return ts_inst, meta_inst, tables, scenarios
+        return ts_inst, meta_inst, scenarios
 
 
     def get_scenario_data(self):

@@ -2,7 +2,8 @@ from .exporter import PywrHydraExporter
 import copy
 import pandas
 from pywr.model import Model
-from pywr.nodes import Node, Storage
+from pywr.nodes import Node
+from pywr._core import AbstractStorage
 #from pywr_dcopf.core import Generator, Load, Line, Battery
 from pywr.parameters import Parameter, DeficitParameter
 from pywr.recorders import NumpyArrayNodeRecorder, NumpyArrayStorageRecorder, NumpyArrayLevelRecorder, \
@@ -182,7 +183,7 @@ class PywrHydraRunner(PywrHydraExporter):
         """
             Get the name of a hydra attribute from a pywr recorder.
             IF the recorder is 'flow', then return something like 'simulated_flow'.
-            If the recorder is not a dataframe (or it outputs both dataframes and 
+            If the recorder is not a dataframe (or it outputs both dataframes and
             non-dataframes', then the use the is_dataframes flag. In this case, the
             attribute name has '_value' added on at the end, resulting in
             'simulated_flow_value', which should be a single scalar value.
@@ -224,7 +225,7 @@ class PywrHydraRunner(PywrHydraExporter):
                     if isinstance(node, (Node)):
                         name = '__{}__:{}'.format(node.name, 'simulated_flow')
                         NumpyArrayNodeRecorder(model, node, name=name)
-                    elif isinstance(node, (Storage)):
+                    elif isinstance(node, (AbstractStorage)):
                         name = '__{}__:{}'.format(node.name, 'simulated_volume')
                         NumpyArrayStorageRecorder(model, node, name=name)
                     else:
