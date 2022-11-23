@@ -493,11 +493,7 @@ class PywrHydraExporter(BasePywrHydra):
                         else:
                             self.tables[tablename] = {k: dataset.value}
             elif issubclass(dataset_type, PywrTable):
-                table = PywrDataReference.ReferenceFactory(attr.name, dataset.value)
-                if isinstance(table, hydra_pywr_common.types.base.PywrTable): #just in case this is somehow mis-categorised
-                    self.tables[attr.name] = table
-                else:
-                    self.tables[dataset.name] = table
+                self.tables[attr.name] = json.loads(dataset.value)
 
         """ Parameters """
         for attr in self.data["attributes"]:
@@ -555,7 +551,6 @@ class PywrHydraExporter(BasePywrHydra):
                     self.recorders[attr.name] = recorder
                 else:
                     self.parameters[dataset.name] = recorder
-
 
 
         return ts_inst, meta_inst, scenarios
