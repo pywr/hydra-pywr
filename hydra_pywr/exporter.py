@@ -1,5 +1,6 @@
 import json
 import os
+import logging
 
 from collections import defaultdict
 
@@ -30,8 +31,6 @@ from hydra_pywr_common.types.fragments.config import IntegratedConfig
 #from hydra_pywr_common.types.parameters import *
 #from hydra_pywr_common.types.recorders import *
 
-import logging
-log = logging.getLogger(__name__)
 
 COST_ALIASES = ['allocation penalty', 'allocation_penalty', 'Allocation Penalty']
 EXCLUDE_HYDRA_ATTRS = ("id", "status", "cr_date", "network_id", "x", "y",
@@ -50,6 +49,8 @@ class PywrHydraExporter(BasePywrHydra):
         self.client = client
         self.template = template
 
+        self.log = logging.getLogger(__name__)
+
         self.type_id_map = {}
         for tt in self.template.templatetypes:
             self.type_id_map[tt.id] = tt
@@ -60,6 +61,8 @@ class PywrHydraExporter(BasePywrHydra):
         self._parameter_recorder_flags = {}
         self._inline_parameter_recorder_flags = defaultdict(dict)
         self._node_recorder_flags = {}
+
+        self.partial = kwargs.get('partial', False)
 
         self.timestepper = None
         self.metadata = None
@@ -76,13 +79,33 @@ class PywrHydraExporter(BasePywrHydra):
         self.reference_model = None
 
         self.excluded_node_ids = []
+        self.excluded_nodes = []
+        # parameters which are used by the sub-netwwork in partial mode.
+        # Any paramteers not in this list are deleted.
+        self.parameters_to_keep = []
+
+        #this is a list of parameters which are referenced from nodes that will
+        #be removed in partial mode. Some may be kept if they are refrenced from nodes which are to
+        #be kept
+        self.parameters_to_remove = []
+
+        self.keep_color = kwargs.get('keep_color', [])
+        if self.keep_color is not None:
+            if isinstance(self.keep_color, str):
+                if self.keep_color.find(',') > 0: # is it comma separated values?
+                    self.keep_color = self.keep_color.split(',')
+                else:
+                    # just one color. Then make a list
+                    self.keep_color = [self.keep_color]
+
+        self.paramkeys = ('params', 'parameters', 'index_parameter')
 
 
     @classmethod
     def from_scenario_id(cls, client, scenario_id, template_id=None, index=0, **kwargs):
         cache_file = f'/tmp/scenario_{scenario_id}.json'
         if kwargs.get('use_cache') is True and os.path.exists(cache_file):
-            log.info("Using cached scenario")
+            self.log.info("Using cached scenario")
             with open(cache_file, 'r') as f:
                 scenario = JSONObject(json.load(f))
         else:
@@ -92,7 +115,7 @@ class PywrHydraExporter(BasePywrHydra):
         # Fetch the network
         network_cache_file = f'/tmp/network_{scenario.network_id}.json'
         if kwargs.get('use_cache') is True and os.path.exists(network_cache_file):
-            log.info("Using cached network")
+            self.log.info("Using cached network")
             with open(network_cache_file, 'r') as f:
                 network = JSONObject(json.load(f))
         else:
@@ -119,7 +142,7 @@ class PywrHydraExporter(BasePywrHydra):
 
         template_cache_file = f'/tmp/template_{template_id}.json'
         if kwargs.get('use_cache') is True and os.path.exists(template_cache_file):
-            log.info("Using cached template")
+            self.log.info("Using cached template")
 
             with open(template_cache_file, 'r') as f:
                 template = JSONObject(json.load(f))
@@ -135,13 +158,16 @@ class PywrHydraExporter(BasePywrHydra):
         if reference_model is not None:
             self.reference_model = json.load(reference_model)
 
-        self.generate_pywr_nodes()
-        self.edges = self.build_edges()
 
         if domain is not None:
             self.timestepper, self.metadata, self.scenarios = self.build_integrated_network_attrs(domain)
         else:
             self.timestepper, self.metadata, self.scenarios = self.build_network_attrs()
+
+        self.generate_pywr_nodes()
+        self.edges = self.build_edges()
+
+        self.remove_unused_parameters()
 
         return self
 
@@ -203,6 +229,11 @@ class PywrHydraExporter(BasePywrHydra):
         link_lookup = self.get_link_lookup()
 
         for node in self.data['nodes']:
+            #this might occur if the node was excluded by virtue of being related
+            #to another node which is being excluded
+            if node['id'] in self.excluded_node_ids:
+                continue
+
             if self.reference_model is not None:
                 if node['name'].lower() not in reference_node_names:
                     continue
@@ -216,12 +247,35 @@ class PywrHydraExporter(BasePywrHydra):
                 keep_node = True
             else:
                 for l in link_lookup.get(node['id'], []):
-                    if l.layout is not None and l.layout.get('color') == 'red':
-                        keep_node = True
+                    if l.layout is not None and l.layout.get('color') is not None:
+                        if self.keep_color  == []:#no specific colour specified
+                            keep_node = True
+                        elif l.layout['color'] in self.keep_color:
+                            #colour(s) specified, and this link matches.
+                            keep_node = True
+
             #only keep nodes which have a link connected to them which has a layout
-            # if keep_node is False:
-            #     self.excluded_node_ids.append(node['id'])
-            #     continue
+            if self.partial is True and keep_node is False:
+                self.log.info("Excluding node %s", node['name'])
+                self.excluded_node_ids.append(node['id'])
+                self.excluded_nodes.append(node)
+
+
+                #identify parameters on this node which should be excluded as they're no longer referenced
+
+                for resource_attribute in node['attributes']:
+                    if resource_attribute['attr_is_var'] == 'Y':
+                        continue
+
+                    attribute = self.attributes[resource_attribute['attr_id']]
+                    try:
+                        resource_scenario = self._get_resource_scenario(resource_attribute, node)
+                    except ValueError:
+                        continue  # No data associated with this attribute.
+                    value = resource_scenario['dataset']['value']
+                    self.flag_parameter_to_remove(value)
+
+                continue
 
             self.hydra_node_lookup[node['id']] = node
 
@@ -246,6 +300,140 @@ class PywrHydraExporter(BasePywrHydra):
             if pywr_node_type:
                 self.build_node_and_references(node, pywr_node_type, node_type_attribute_names)
 
+        self.remove_orphan_nodes()
+
+    def remove_orphan_nodes(self):
+        """
+            If a node in partial mode is being removed, then the nodes to which it references
+            should also be removed.
+        """
+
+        nodes_to_remove = []
+        for name, node in self.nodes.items():
+            if hasattr(node, 'nodes'):
+                #if all of the nodes to which this node references are not in the exported list of nodes
+                #then don't export this node as it's redundant.
+                for n in node.nodes.get_value():
+                    if n in self.nodes:
+                        break
+                else:
+                    nodes_to_remove.append(name)
+
+        #remove all the nodes flagged for removal.
+        for node_to_remove in nodes_to_remove:
+            if node_to_remove in self.nodes:
+                del self.nodes[node_to_remove]
+
+    def flag_parameter_to_remove(self, value):
+        """
+            If the value passed in is a parameter, flag is as a candidate for removal
+        """
+        self._flag_parameter(value, self.parameters_to_remove)
+
+    def flag_parameter_to_keep(self, value):
+        """
+            If the value passed in is a parameter, flag is as one which must remain
+        """
+        self._flag_parameter(value, self.parameters_to_keep)
+
+    def _flag_parameter(self, value, context):
+        """
+            Either set a parameter to be removed or to be kept depending on the context
+            passed in. The context is either self.parameters_to_remove or self.parameters_to_keep
+        """
+        if self.partial is not True:
+            return
+        try:
+            #flag any parameters which are referenced by a paramter
+            #defined on this node
+            if isinstance(value, str):
+                typedval = json.loads(value)
+            else:
+                typedval = value
+
+            if isinstance(typedval, dict):
+                for paramkey in self.paramkeys:
+                    referencedparams = typedval.get(paramkey, [])
+                    if isinstance(referencedparams, list):# eg 'params'
+                        for p in typedval.get(paramkey, []):
+                            context.append(p)
+                            self.flag_related_parameters(p, context)
+                    elif isinstance(referencedparams, str): # eg 'index_parameter'
+                        context.append(referencedparams)
+                        self.flag_related_parameters(p, context)
+            elif isinstance(typedval, str):
+                if self.parameters.get(typedval) is not None:
+                    context.append(typedval)
+        except json.decoder.JSONDecodeError as e:
+            #flag a parameter defined on this node as being
+            #primed for removal
+            typedval = value
+            if self.parameters.get(typedval) is not None:
+                context.append(typedval)
+                self.flag_related_parameters(typedval, context)
+
+    def flag_related_parameters(self, param_name, context):
+        """
+            Take a given parameter name and flag the paramters related to this one
+            to be either removed or kept (depending on the context).
+            The context is either self.parameters_to_remove or self.parameters_to_keep
+        """
+
+        if not isinstance(param_name, dict):#
+            #this paramter name is not a parameter reference, but an embedded parameter
+            #so ignore it
+            return
+
+        if self.parameters.get(param_name) is None:
+            return
+
+        param = self.parameters[param_name].get_value()
+        for paramkey in self.paramkeys:
+            referencedparams = param.get(paramkey, [])
+            if isinstance(referencedparams, list):# eg 'params'
+                 for p in referencedparams:
+                    context.append(p)
+                    self.flag_related_parameters(p, context)
+            elif isinstance(referencedparams, str): # eg 'index_parameter'
+                context.append(referencedparams)
+                self.flag_related_parameters(p, context)
+
+    def flag_orphan_parameters(self):
+        """
+            Reove parameters which refer to nodes that aren't there an ymore, but which
+            aren't referenced from the node, but instead reference the node in the
+            parameter using a key like 'storage_node' or 'node'
+        """
+        for pname in self.parameters:
+            p = self.parameters[pname].get_value()
+            for noderef in ['storage_node', 'node']:
+                if p.get(noderef) is not None:
+                    if p[noderef] not in self.nodes:
+                        self.parameters_to_remove.append(pname)
+
+    def remove_unused_parameters(self):
+        """
+        Remove any parameters which are referenced from nodes which are not included in the export
+        """
+
+        if self.partial is not True:
+            return
+
+        #remove parameters which refer to a node, but the node desn't refer to them
+        self.flag_orphan_parameters()
+
+        #remove any parameters from the 'remove' list which are present in the 'keep' list.
+        #this means they are referenced on nodes both inside and outside the partial network
+        #and therefore should be kept
+        self.parameters_to_remove = set(self.parameters_to_remove) - set(self.parameters_to_keep)
+
+        for unused_parameter in self.parameters_to_remove:
+            if self.parameters.get(unused_parameter) is not None:# maybe it was already removed?
+                self.log.warning(unused_parameter)
+                del(self.parameters[unused_parameter])
+
+        self.log.info("%s parameters removed", len(self.parameters_to_remove))
+
 
     def build_node_and_references(self, nodedata, pywr_node_type, node_type_attribute_names):
 
@@ -262,6 +450,7 @@ class PywrHydraExporter(BasePywrHydra):
             attribute_name = attribute['name']
             dataset = resource_scenario['dataset']
             value = dataset['value']
+
             try:
                 typedval = json.loads(value)
                 if isinstance(typedval, dict) and typedval.get('__recorder__') is not None:
@@ -271,8 +460,14 @@ class PywrHydraExporter(BasePywrHydra):
                     for k, v in typedval.get('pandas_kwargs').items():
                         typedval[k] = v
                     del(typedval['pandas_kwargs'])
+
+                self.flag_parameter_to_keep(value)
+
             except json.decoder.JSONDecodeError as e:
                 typedval = value
+                if self.parameters.get(typedval) is not None:
+                    self.parameters_to_keep.append(typedval)
+
             nodedata[attribute_name] = typedval
 
         nodedata["type"] = pywr_node_type
@@ -286,7 +481,8 @@ class PywrHydraExporter(BasePywrHydra):
         self.nodes[dev_node.name] = dev_node
         self.parameters.update(dev_node.parameters)
         self.recorders.update(dev_node.recorders)
-
+        #add node-level parameters to the used parameters list so they're not deleted
+        self.parameters_to_keep.extend(dev_node.parameters.keys())
 
     def normalise(self, name):
         return name.lower().replace("_", "").replace(" ", "")
@@ -414,7 +610,7 @@ class PywrHydraExporter(BasePywrHydra):
             try:
                 resource_scenario = self._get_resource_scenario(attr)
             except ValueError:
-                log.warning("No value for %s", attr.name)
+                self.log.warning("No value for %s", attr.name)
                 continue
             dataset = resource_scenario["dataset"]
             #ts_key = attr.name.split('.')[-1]
@@ -431,9 +627,12 @@ class PywrHydraExporter(BasePywrHydra):
         ts_inst = Timestepper(timestep)
 
         """ Metadata """
-        metadata = {"title": self.data['name'],
-                    "description": self.data['description']
-                   }
+        metadata = {
+            "hydra_network_id": self.data['name'],
+            "hydra_scenario_id": self.scenario_id,
+            "title": self.data['name'],
+            "description": self.data['description']
+        }
         for attr in self.data["attributes"]:
             attr_group, *subs = attr.name.split('.')
             if attr_group != "metadata":
@@ -452,7 +651,7 @@ class PywrHydraExporter(BasePywrHydra):
                 try:
                     resource_scenario = self._get_resource_scenario(attr)
                 except ValueError as e:
-                    log.warning("No value found for scenario attribute")
+                    self.log.warning("No value found for scenario attribute")
                     continue
 
                 try:
@@ -460,7 +659,7 @@ class PywrHydraExporter(BasePywrHydra):
                     val  = dataset['value']
                     scenarios = json.loads(val)['scenarios']
                 except ValueError as e:
-                    log.warning("An error occurred getting data for scenarios")
+                    self.log.warning("An error occurred getting data for scenarios")
 
                 continue
 
@@ -470,7 +669,7 @@ class PywrHydraExporter(BasePywrHydra):
             try:
                 resource_scenario = self._get_resource_scenario(attr)
             except ValueError as e:
-                log.warning("No value found for network attribute %s", attr.name)
+                self.log.warning("No value found for network attribute %s", attr.name)
                 continue
 
             dataset = resource_scenario["dataset"]
@@ -500,7 +699,7 @@ class PywrHydraExporter(BasePywrHydra):
             try:
                 resource_scenario = self._get_resource_scenario(attr)
             except ValueError as e:
-                log.warning("No value found for network attribute %s", attr.name)
+                self.log.warning("No value found for network attribute %s", attr.name)
                 continue
 
             #Ignore tables
@@ -527,7 +726,7 @@ class PywrHydraExporter(BasePywrHydra):
                     del(data['pandas_kwargs'])
                 dataset.value = json.dumps(data)
             except ValueError as e:
-                log.warning(f"{attr.name} : {e}")
+                self.log.warning(f"{attr.name} : {e}")
 
             if is_parameter_or_recorder is True:
                 parameter = PywrDataReference.ReferenceFactory(attr.name, dataset.value)
@@ -541,7 +740,7 @@ class PywrHydraExporter(BasePywrHydra):
             try:
                 resource_scenario = self._get_resource_scenario(attr)
             except ValueError as e:
-                log.warning("No value found for network attribute %s", attr.name)
+                self.log.warning("No value found for network attribute %s", attr.name)
                 continue
             dataset = resource_scenario["dataset"]
             dataset_type = hydra_typemap[dataset.type.upper()]

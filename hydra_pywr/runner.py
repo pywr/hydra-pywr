@@ -2,7 +2,7 @@ from .exporter import PywrHydraExporter
 import copy
 import pandas
 from pywr.model import Model
-from pywr.nodes import Node
+from pywr.nodes import Node, AggregatedNode
 from pywr._core import AbstractStorage
 #from pywr_dcopf.core import Generator, Load, Line, Battery
 from pywr.parameters import Parameter, DeficitParameter
@@ -222,7 +222,7 @@ class PywrHydraRunner(PywrHydraExporter):
 
                 if flag == 'timeseries':
                     #if isinstance(node, (Node, Generator, Load, Line)):
-                    if isinstance(node, (Node)):
+                    if isinstance(node, (Node, AggregatedNode)):
                         name = '__{}__:{}'.format(node.name, 'simulated_flow')
                         NumpyArrayNodeRecorder(model, node, name=name)
                     elif isinstance(node, (AbstractStorage)):
