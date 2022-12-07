@@ -433,6 +433,7 @@ class PywrHydraRunner(PywrHydraExporter):
                 resource_attribute_id = self._get_resource_attribute_id(recorder_node.name,
                                                                     attribute_name)
             except ValueError:
+                resource_id = None
                 found_ra_id = False
                 resource_type = 'NODE'
                 for node in self.data['nodes']:
@@ -443,7 +444,8 @@ class PywrHydraRunner(PywrHydraExporter):
                         if node['name'] == recorder_node.parent.name:
                             resource_id = node['id']
                             break
-
+                if resource_id is None:
+                    return None
                 # Try to get the resource attribute
                 resource_attribute = self.client.add_resource_attribute(
                     resource_type,
