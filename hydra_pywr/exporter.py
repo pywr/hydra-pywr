@@ -13,6 +13,8 @@ from hydra_pywr_common.datatypes import PywrParameter, PywrRecorder, PywrTable
 
 from hydra_pywr_common.types import PywrDataReference
 
+from hydra_pywr.rules import exec_rules
+
 import hydra_pywr_common
 
 from hydra_pywr_common.types.base import(
@@ -131,6 +133,11 @@ class PywrHydraExporter(BasePywrHydra):
 
         network.scenarios = [scenario]
 
+
+        rules = client.get_resource_rules('NETWORK', scenario.network_id)
+
+        network.rules = rules
+
         # Fetch all the attributes
         attributes = client.get_attributes()
         attributes = {attr.id: attr for attr in attributes}
@@ -168,6 +175,8 @@ class PywrHydraExporter(BasePywrHydra):
         self.edges = self.build_edges()
 
         self.remove_unused_parameters()
+
+        self.exec_rules()
 
         return self
 
@@ -219,6 +228,14 @@ class PywrHydraExporter(BasePywrHydra):
             lookup[l['node_1_id']].append(l)
             lookup[l['node_2_id']].append(l)
         return lookup
+
+    def exec_rules(self):
+
+        rules = [r for r in self.data['rules'] if r.status.lower() == 'a']
+
+        self.log.info("Exec-ing {} rules".format(len(rules)))
+
+        exec_rules(rules)
 
     def generate_pywr_nodes(self):
         """ Generator returning a Pywr dict for each node in the network. """

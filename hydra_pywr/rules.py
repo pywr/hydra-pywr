@@ -20,7 +20,6 @@ from pywr.nodes import *
 from pywr.parameters.control_curves import *
 from pywr.parameters._thresholds import *
 from pywr.parameters._hydropower import *
-from pywr.schema import *
 from pywr.domains.river import *
 
 #In case use wants to namespace stuff by parameters/recorders, the recommended way.
@@ -28,8 +27,6 @@ from pywr import recorders
 from pywr import parameters
 
 import hydra_pywr
-
-from .nodes import DataFrameField
 
 LOG = logging.getLogger('hydra_pywr')
 
