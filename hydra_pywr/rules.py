@@ -11,8 +11,6 @@ import pandas
 import numpy as np
 import scipy
 
-import marshmallow
-
 from pywr.parameters import *
 from pywr.recorders import *
 
