@@ -309,8 +309,7 @@ class PywrHydraRunner(PywrHydraExporter):
             attributes.append({
                 'name': attribute_name,
                 'description': '',
-                'dimension_id' : self.attr_dimension_map.get(attribute_name),
-                'network_id': scenario['network_id']
+                'dimension_id' : self.attr_dimension_map.get(attribute_name)
             })
 
         # The response attributes have ids now.
