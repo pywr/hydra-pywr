@@ -288,7 +288,8 @@ def run(obj, scenario_id, template_id, user_id, output_frequency, solver, check_
     run_network_scenario(client, scenario_id, template_id, output_frequency=output_frequency,
                          solver=solver, check_model=check_model, data_dir=data_dir)
 
-def run_network_scenario(client, scenario_id, template_id, output_frequency=None, solver=None, check_model=True, data_dir=None, use_cache=False):
+
+def export_hydra_pywr_model(client, scenario_id, template_id=None, output_frequency=None, use_cache=False):
     runner = PywrHydraRunner.from_scenario_id(
         client,
         scenario_id,
@@ -297,6 +298,12 @@ def run_network_scenario(client, scenario_id, template_id, output_frequency=None
         use_cache=use_cache)
 
     runner.export_pywr_data()
+
+    return runner
+
+def run_network_scenario(client, scenario_id, template_id, output_frequency=None, solver=None, check_model=True, data_dir=None, use_cache=False):
+
+    runner = export_hydra_pywr_model(client, scenario_id, template_id, output_frequency=output_frequency, use_cache=use_cache)
 
     network_id = runner.data.id
 
@@ -330,6 +337,7 @@ def save_pywr_file(data, data_dir, network_id=None, scenario_id=None):
     """
     if data_dir is None:
         click.echo("No data dir specified. Returning.")
+        exit(0)
 
     title = data['metadata']['title']
 

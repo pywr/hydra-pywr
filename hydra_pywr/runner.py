@@ -1,5 +1,6 @@
 from .exporter import PywrHydraExporter
 import copy
+import yaml
 import pandas
 from pywr.model import Model
 from pywr.nodes import Node, AggregatedNode
@@ -130,6 +131,26 @@ class PywrHydraRunner(PywrHydraExporter):
         # Save these for later
         self._df_recorders = df_recorders
         self._non_df_recorders = non_df_recorders
+
+
+    def get_do_config(self):
+        config = {}
+        do_settings_attr = None
+        for a in self.data['attributes']:
+            if a['name'].startswith('do_'):
+                do_settings_attr = a
+                break
+        else:
+            raise Exception(f"Unable to find any DO settings on network {self.data['name']}")
+        
+        rs = list(filter(lambda x: x.resource_attr_id == do_settings_attr.id, self.data['scenarios'][0]['resourcescenarios']))
+
+        if len(rs) == 0:
+            raise Exception(f"Unable to find any DO settings on network {self.data['name']}")
+        else:
+            return yaml.safe_load(rs[0].dataset.value)
+        
+
 
     def _get_resource_attribute_id(self, node_name, attribute_name):
 
@@ -309,7 +330,8 @@ class PywrHydraRunner(PywrHydraExporter):
             attributes.append({
                 'name': attribute_name,
                 'description': '',
-                'dimension_id' : self.attr_dimension_map.get(attribute_name)
+                'dimension_id' : self.attr_dimension_map.get(attribute_name),
+                'network_id': scenario['network_id']
             })
 
         # The response attributes have ids now.
