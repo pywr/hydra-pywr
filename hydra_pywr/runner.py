@@ -142,14 +142,14 @@ class PywrHydraRunner(PywrHydraExporter):
                 break
         else:
             raise Exception(f"Unable to find any DO settings on network {self.data['name']}")
-        
+
         rs = list(filter(lambda x: x.resource_attr_id == do_settings_attr.id, self.data['scenarios'][0]['resourcescenarios']))
 
         if len(rs) == 0:
             raise Exception(f"Unable to find any DO settings on network {self.data['name']}")
         else:
             return yaml.safe_load(rs[0].dataset.value)
-        
+
 
 
     def _get_resource_attribute_id(self, node_name, attribute_name):
@@ -190,14 +190,14 @@ class PywrHydraRunner(PywrHydraExporter):
                 except KeyError:
                     pass
 
-        if node is None:
-            try:
-                node = recorder.node
-            except AttributeError:
-                try:
-                    node = recorder.parameter.node
-                except AttributeError:
-                    return None
+#        if node is None:
+#            try:
+#                node = recorder.node
+#            except AttributeError:
+#                try:
+#                    node = recorder.parameter.node
+#                except AttributeError:
+#                    return None
         return node
 
     def _get_attribute_name_from_recorder(self, recorder, is_dataframe=False):
@@ -352,6 +352,7 @@ class PywrHydraRunner(PywrHydraExporter):
             return
 
         for recorder in self._df_recorders:
+
             df = recorder.to_dataframe()
 
             columns = []
