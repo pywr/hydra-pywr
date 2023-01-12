@@ -1,7 +1,8 @@
 import click
 import json
 import os
-import pandas
+import pandas as pd
+import numpy as np
 from hydra_client.connection import RemoteJSONConnection, JSONConnection
 from .exporter import PywrHydraExporter
 from .runner import PywrHydraRunner
@@ -328,8 +329,30 @@ def run_file(filename):
 
     model = Model.load(filename)
     model.setup()
-    model.run()
+
+    stats = model.run()
+
+    df = model.to_dataframe()
+
+    df.to_csv('/tmp/model.csv')
+
+    metrics_aggregated = {}
+    metrics = {}
+    for rec in model.recorders:
+        try:
+            metrics[rec.name] = np.array(rec.values())
+            metrics_aggregated[rec.name] = np.array(rec.aggregated_value())
+        except NotImplementedError:
+            pass
+
+    metric_df = pd.DataFrame.from_dict(metrics).T
+    metric_df.to_csv('/tmp/model_metrics.csv')
+
+    agg_df = pd.DataFrame.from_dict({"metric":metrics_aggregated})
+    agg_df.to_csv('/tmp/model_agg.csv')
+
     click.echo(f'Pywr model run success!')
+    click.echo(f"Model results in /tmp/model.csv")
 
 def save_pywr_file(data, data_dir, network_id=None, scenario_id=None):
     """
@@ -405,7 +428,7 @@ def step_game(obj, scenario_id, child_scenario_ids, filename, attribute_name, in
     # Update the initial volumes
     utils.apply_final_volumes_as_initial_volumes(client, scenario_id, new_scenario_ids)
     # Load the new data
-    dataframe = pandas.read_csv(filename, index_col=index_col, parse_dates=True)
+    dataframe = pd.read_csv(filename, index_col=index_col, parse_dates=True)
     # Update the time-step and data for each scenario
     for new_scenario_id in new_scenario_ids:
         utils.import_dataframe(client, dataframe, new_scenario_id, attribute_name,
