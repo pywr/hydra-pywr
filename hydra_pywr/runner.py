@@ -1,28 +1,83 @@
-from .exporter import PywrHydraExporter
-import copy
 import pandas
+
 from pywr.model import Model
 from pywr.nodes import Node, Storage
-#from pywr_dcopf.core import Generator, Load, Line, Battery
 from pywr.parameters import Parameter, DeficitParameter
-from pywr.recorders import NumpyArrayNodeRecorder, NumpyArrayStorageRecorder, NumpyArrayLevelRecorder, \
-    NumpyArrayParameterRecorder
+from pywr.recorders import NumpyArrayNodeRecorder, NumpyArrayStorageRecorder, NumpyArrayParameterRecorder
 from pywr.recorders.progress import ProgressRecorder
-from .template import PYWR_ARRAY_RECORDER_ATTRIBUTES
+
+from .exporter import HydraToPywrNetwork
+
+from pywrparser.types.network import PywrNetwork
+from hydra_pywr.nodes import *
+
 import os
 import logging
 log = logging.getLogger(__name__)
 
+domain_solvers = {
+    "water": "glpk-edge",
+    "energy": "glpk-dcopf"
+}
 
-class PywrHydraRunner(PywrHydraExporter):
-    """ An extension to `PywrHydraExporter` that adds methods for running a Pywr model. """
-    def __init__(self, *args, **kwargs):
+class PywrFileRunner():
+    def __init__(self, domain="water"):
+        self.model = None
+        self.domain = domain
+
+
+    def load_pywr_model_from_file(self, filename, solver=None):
+        if self.domain == "energy":
+            from pywr_dcopf import core
+
+        pnet, errors, warnings = PywrNetwork.from_file(filename)
+        if warnings:
+            for component, warns in warnings.items():
+                for warn in warns:
+                    log.info(warn)
+
+        if errors:
+            for component, errs in errors.items():
+                for err in errs:
+                    log.error(err)
+            exit(1)
+
+        pywr_data = pnet.as_dict()
+
+        model = Model.load(pywr_data, solver=domain_solvers[self.domain])
+        self.model = model
+        return pywr_data
+
+
+    def run_pywr_model(self, outfile="output.csv"):
+        if self.domain == "energy":
+            from pywr_dcopf import core
+
+        model = self.model
+
+        # Add a progress recorder to monitor the run.
+        ProgressRecorder(model)
+
+        # Force a setup regardless of whether the model has been run or setup before
+        model.setup()
+
+        run_stats = model.run()
+        log.info(run_stats)
+
+        df = model.to_dataframe()
+        df.to_csv(outfile)
+
+
+class PywrHydraRunner(HydraToPywrNetwork):
+    """ An extension of `HydraToPywrNetwork` that adds methods for running a Pywr model. """
+
+    def __init__(self, *args, domain="water", **kwargs):
         self.output_resample_freq = kwargs.pop('output_resample_freq', None)
         super(PywrHydraRunner, self).__init__(*args, **kwargs)
+        self.domain = domain
         self.model = None
         self._df_recorders = None
         self._non_df_recorders = None
-
 
         self.attr_dimension_map = {}
 
@@ -33,7 +88,7 @@ class PywrHydraRunner(PywrHydraExporter):
     def _copy_scenario(self):
         # Now construct a scenario object
         scenario = self.data.scenarios[0]
-        new_scenario = {k: v for k, v in scenario.items() if k is not 'resourcescenarios'}
+        new_scenario = {k: v for k, v in scenario.items() if k != 'resourcescenarios'}
 
         new_scenario['resourcescenarios'] = []
         return new_scenario
@@ -41,7 +96,7 @@ class PywrHydraRunner(PywrHydraExporter):
     def _delete_resource_scenarios(self):
         scenario = self.data.scenarios[0]
 
-        ra_is_var_map = {ra['id']: ra['attr_is_var'] for ra in self._get_all_resource_attributes()}
+        ra_is_var_map = {ra['id']: ra['attr_is_var'] for ra in self.hydra.get_resource_attributes("network", self.network_id)}
         ra_to_delete = []
 
         # Compile a list of resource attributes to delete
@@ -52,23 +107,37 @@ class PywrHydraRunner(PywrHydraExporter):
                 ra_to_delete.append(ra_id)
 
         # Now delete them all
-        self.client.delete_resource_scenarios(scenario['id'], ra_to_delete, quiet=True)
+        self.hydra.delete_resource_scenarios(scenario['id'], ra_to_delete, quiet=True)
+
 
     def load_pywr_model(self, solver=None):
         """ Create a Pywr model from the exported data. """
-        pywr_data = self.get_pywr_data()
-        model = Model.load(pywr_data, solver=solver)
+
+        if self.domain == "energy":
+            from pywr_dcopf import core
+
+        solver = domain_solvers[self.domain]
+
+        data = self.build_pywr_network()
+        pnet = PywrNetwork(data)
+        pywr_data = pnet.as_json()
+        model = Model.loads(pywr_data, solver=solver)
         self.model = model
 
         return pywr_data
 
-    def run_pywr_model(self, check=True):
-        """ Run a Pywr model from the exported data.
 
-        If no model has been loaded (see `load_pywr_model`) then a load is attempted.
+    def run_pywr_model(self, domain="water"):
         """
+            Run a Pywr model from the exported data.
+            If no model has been loaded (see `load_pywr_model`) then a load is attempted.
+        """
+
+        if domain == "energy":
+            from pywr_dcopf import core
+
         if self.model is None:
-            self.load_pywr_model(solver='glpk-edge')
+            self.load_pywr_model(solver=domain_solvers[domain])
 
         model = self.model
 
@@ -87,10 +156,6 @@ class PywrHydraRunner(PywrHydraExporter):
                 df_recorders.append(recorder)
             else:
                 non_df_recorders.append(recorder)
-
-        if check:
-            # Check the model
-            model.check()
 
         # Force a setup regardless of whether the model has been run or setup before
         model.setup()
@@ -171,6 +236,11 @@ class PywrHydraRunner(PywrHydraExporter):
         return attribute_name
 
     def _add_node_flagged_recorders(self, model):
+        if self.domain == "energy":
+            from pywr_dcopf.core import Generator, Load, Line, Battery
+            node_classes = (Node, Generator, Load, Line, Battery)
+        else:
+            node_classes = (Node,)
 
         for node in model.nodes:
             try:
@@ -184,7 +254,7 @@ class PywrHydraRunner(PywrHydraExporter):
 
                 if flag == 'timeseries':
                     #if isinstance(node, (Node, Generator, Load, Line)):
-                    if isinstance(node, (Node)):
+                    if isinstance(node, node_classes):
                         name = '__{}__:{}'.format(node.name, 'simulated_flow')
                         NumpyArrayNodeRecorder(model, node, name=name)
                     elif isinstance(node, (Storage)):
@@ -245,8 +315,8 @@ class PywrHydraRunner(PywrHydraExporter):
         self._delete_resource_scenarios()
 
         # Convert the scenario from JSONObject to normal dict
-        # This is required to ensure that the complete nested structure (of dicts)
-        # is properly converted to JSONObject's by the client.
+        # This is required to ensure that the complete nested structure of dicts
+        # is properly converted to JSONObjects by the client.
         scenario = self._copy_scenario()
 
         # First add any new attributes required
@@ -266,14 +336,14 @@ class PywrHydraRunner(PywrHydraExporter):
             })
 
         # The response attributes have ids now.
-        response_attributes = self.client.add_attributes(attributes)
+        response_attributes = self.hydra.add_attributes(attributes)
         # Update the attribute mapping
         self.attributes.update({attr.id: attr for attr in response_attributes})
 
         for resource_scenario in self.generate_array_recorder_resource_scenarios():
             scenario['resourcescenarios'].append(resource_scenario)
 
-        self.client.update_scenario(scenario)
+        self.hydra.update_scenario(scenario)
 
     def generate_array_recorder_resource_scenarios(self):
         """ Generate resource scenario data from NumpyArrayXXX recorders. """
@@ -328,7 +398,6 @@ class PywrHydraRunner(PywrHydraExporter):
             # logger.info('No array recorders defined not results saved to Hydra.')
             return
 
-        #TODO merge this and the above as this is a duplicate
         for recorder in self._non_df_recorders:
             try:
                 value = list(recorder.values())
@@ -372,7 +441,7 @@ class PywrHydraRunner(PywrHydraExporter):
                 return None
 
             # Try to get the resource attribute
-            resource_attribute = self.client.add_resource_attribute('NODE',
+            resource_attribute = self.hydra.add_resource_attribute('NODE',
                                                                node_id,
                                                                attribute['id'],
                                                                is_var='Y',
@@ -417,12 +486,41 @@ class PywrHydraRunner(PywrHydraExporter):
         attr_name_map = {}
         for templatetype in self.template.templatetypes:
             for typeattr in templatetype.typeattrs:
-                attr = self.client.get_attribute_by_id(typeattr.attr_id)
+                attr = self.hydra.get_attribute_by_id(typeattr.attr_id)
                 attr_name_map[attr.name] = attr
-                #populate the dimensioin mapping
+                #populate the dimension mapping
                 self.attr_dimension_map[attr.name] = attr.dimension_id
 
         return attr_name_map
+
+    def _make_dataset_resource_scenario(self, name, value, data_type, resource_attribute_id,
+                                        unit_id=None, encode_to_json=False, metadata={}):
+        """ A helper method to make a dataset, resource attribute and resource scenario. """
+        import json
+
+        if data_type.lower() in ("descriptor", "scalar"):
+            encode_to_json = False
+
+        metadata['json_encoded'] = encode_to_json
+
+        # Create a dataset representing the value
+        dataset = {
+            'name': name,
+            'value': json.dumps(value) if encode_to_json is True else value,
+            "hidden": "N",
+            "type": data_type,
+            "unit_id": unit_id,
+            "metadata": json.dumps(metadata)
+        }
+
+        # Create a resource scenario linking the dataset to the scenario
+        resource_scenario = {
+            'resource_attr_id': resource_attribute_id,
+            'dataset': dataset
+        }
+
+        # Finally return resource attribute and resource scenario
+        return resource_scenario
 
 
 

@@ -1,598 +1,517 @@
 import json
-import warnings
-from past.builtins import basestring
-from .template import PYWR_PROTECTED_NODE_KEYS, pywr_template_name, load_template_config
-from .core import BasePywrHydra, data_type_from_field
-from pywr.nodes import NodeMeta
-from hydra_pywr_common import data_type_from_component_type, data_type_from_parameter_value, PywrParameter
-from hydra_base.exceptions import HydraError
+from numbers import Number
+
+from pywrparser.types import (
+    PywrParameter,
+    PywrRecorder,
+    PywrTimestepper,
+    PywrMetadata,
+    PywrTable,
+    PywrScenario,
+    PywrNode,
+    PywrEdge
+)
+
 import logging
 log = logging.getLogger(__name__)
 
 
-class PywrHydraImporter(BasePywrHydra):
+PARAMETER_HYDRA_TYPE_MAP = {
+    "aggregatedparameter": "PYWR_PARAMETER_AGGREGATED",
+    "constantscenarioparameter": "PYWR_PARAMETER_CONSTANT_SCENARIO",
+    "controlcurveindexparameter": "PYWR_PARAMETER_CONTROL_CURVE_INDEX",
+    "controlcurveinterpolatedparameter": "PYWR_PARAMETER_CONTROL_CURVE_INTERPOLATED",
+    "dataframeparameter": "PYWR_DATAFRAME",
+    "indexedarrayparameter": "PYWR_PARAMETER_INDEXED_ARRAY",
+    "monthlyprofileparameter": "PYWR_PARAMETER_MONTHLY_PROFILE"
+}
 
-    def __init__(self, client, data, template):
-        super().__init__()
-        self.template = template
-        self.client = client
+RECORDER_HYDRA_TYPE_MAP = {
+    "flowdurationcurvedeviationrecorder": "PYWR_RECORDER_FDC_DEVIATION"
+}
 
-        if isinstance(data, basestring):
-            # argument is a filename
-            path = data
-            with open(path, "r") as f:
-                data = json.load(f)
-        elif hasattr(data, 'read'):
-            # argument is a file-like object
-            data = json.load(data)
-
-        self.data = data
-        self.attr_unit_map = {}
-        self.dimensions = {}
-        #maps the name of an attribute to its dimension (if it has one)
-        self.attr_dimension_map = {}
-        self.attr_name_map = self.make_attr_name_map()
-        self.attribute_name_id_map = {}
-
-        #If any node types in the input file are not available in the current
-        #environment (custom pywr nodes) then either log a warning and use default or throw an exception.
-        self.ignore_type_errors = False
-
-        self.next_node_id = -1
-
-    @classmethod
-    def from_client(cls, client, data, template_id):
-        template = client.get_template(template_id)
-        return cls(client, data, template)
-
-    @property
-    def name(self):
-        try:
-            name = self.data['metadata']['title']
-        except KeyError:
-            name = 'A Pywr model.'
-            warnings.warn('Pywr model data contains no name metadata. Using default name: "{}"'.format(name))
-        return name
-
-    @property
-    def description(self):
-        try:
-            description = self.data['metadata']['description']
-        except KeyError:
-            description = ''
-        return description
-
-    def make_attr_unit_map(self):
-        """
-            Create a mapping between an attribute ID and its unit, as defined
-            in the template
-        """
-
-        if self.template is None:
-            log.info("Cannot build unit map as no template was specified.")
-            return
-
-        for templatetype in self.template.templatetypes:
-            for typeattr in templatetype.typeattrs:
-                self.attr_unit_map[typeattr.attr_id] = typeattr.unit_id
-
-        log.info("Units map created")
-
-    def import_data(self, project_id, projection=None, ignore_type_errors=False):
-
-        self.ignore_type_errors = ignore_type_errors
-
-        self.make_attr_unit_map()
-
-        # First the attributes must be added.
-        attributes = list(self.add_attributes_request_data())
-
-        # The response attributes have ids now.
-        response_attributes = self.client.add_attributes(attributes)
-
-        # Convert to a simple dict for local processing.
-        self.attribute_name_id_map = {a.name.lower(): a.id for a in response_attributes}
-
-        # Now we try to create the network
-        network = self.add_network_request_data(project_id, projection=projection)
-        hydra_network = self.client.add_network(network)
-
-        # Get the added scenario_id. There should only be one scenario
-        assert len(hydra_network['scenarios']) == 1
-        scenario_id = hydra_network['scenarios'][0]['id']
-
-        return hydra_network.id, scenario_id
-
-    def make_attr_name_map(self):
-        """
-            Create a mapping between an attribute's name and itself, as defined
-            in the template
-        """
-        attr_name_map = {}
-        for templatetype in self.template.templatetypes:
-            for typeattr in templatetype.typeattrs:
-                attr = self.client.get_attribute_by_id(typeattr.attr_id)
-                attr_name_map[attr.name] = attr
-                #populate the dimensioin mapping
-                self.attr_dimension_map[attr.name] = attr.dimension_id
-
-        return attr_name_map
-
-    def add_attributes_request_data(self):
-        """ Generate the data for adding attributes to Hydra. """
-
-
-        # Yield attributes from the timestepper ...
-        for attr in self.attributes_from_meta():
-            yield attr
-
-        # Yield the attributes from the nodes ...
-        for attr in self.attributes_from_nodes():
-            yield attr
-
-        # ... now the attributes associated with the recorders and parameters.
-        for key in ('recorders', 'parameters'):
-            if key not in self.data:
-                continue
-            for attr in self.attributes_from_component_dict(key):
-                yield attr
-
-    def add_network_request_data(self, project_id, projection=None):
-        """ Return a dictionary of the data required for adding a network to Hydra. """
-
-        # Get the network type
-        for template_type in self.template['templatetypes']:
-            if template_type['resource_type'] == 'NETWORK':
-                network_template_type = template_type
-                break
+class PywrTypeEncoder(json.JSONEncoder):
+    def default(self, inst):
+        if isinstance(inst, (PywrParameter, PywrRecorder)):
+            return inst.data
         else:
-            raise ValueError('No NETWORK resource type found in template.')
+            return json.JSONEncoder.default(self, inst)
 
-        network_template_type_id = network_template_type['id']
 
-        # TODO add tables and scenarios.
 
-        nodes, links, resource_scenarios = self.convert_nodes_and_edges()
+"""
+    PywrNetwork => hydra_network
+"""
+def make_hydra_attr(name, desc=None):
+    return { "name": name,
+             "description": desc if desc else name
+           }
 
-        network_attributes = []
-        for component_key in ('recorders', 'parameters'):
-            generator = self.generate_component_resource_scenarios(component_key, encode_to_json=True)
-            for resource_attribute, resource_scenario in generator:
-                network_attributes.append(resource_attribute)
-                resource_scenarios.append(resource_scenario)
+class PywrToHydraNetwork():
 
-        # TODO timestepper data is on the scenario.
-        for component_key in ('metadata', 'timestepper'):
-            generator = self.generate_component_resource_scenarios(component_key, encode_to_json=False)
-            for resource_attribute, resource_scenario in generator:
-                network_attributes.append(resource_attribute)
-                resource_scenarios.append(resource_scenario)
+    default_map_projection = "EPSG:4326"
 
-        if 'scenarios' in self.data:
-            resource_attribute, resource_scenario = self._make_dataset_resource_attribute_and_scenario('scenarios',
-                                                                                                       {'scenarios': self.data['scenarios']},
-                                                                                'PYWR_SCENARIOS', self.attribute_name_id_map['scenarios'],
-                                                                                encode_to_json=True)
-            network_attributes.append(resource_attribute)
-            resource_scenarios.append(resource_scenario)
+    def __init__(self, network,
+                       hydra=None,
+                       hostname=None,
+                       session_id=None,
+                       user_id=None,
+                       template_id=None,
+                       project_id=None):
+        self.hydra = hydra
+        self.network = network
+        self.hostname = hostname
+        self.session_id = session_id
+        self.user_id = user_id
+        self.template_id = template_id
+        self.project_id = project_id
 
-        if 'scenario_combinations' in self.data:
-            resource_attribute, resource_scenario = self._make_dataset_resource_attribute_and_scenario('scenario_combinations',
-                                                                                                       {'scenario_combinations': self.data['scenario_combinations']},
-                                                                                'PYWR_SCENARIO_COMBINATIONS', self.attribute_name_id_map['scenario_combinations'],
-                                                                                encode_to_json=True)
-            network_attributes.append(resource_attribute)
-            resource_scenarios.append(resource_scenario)
+        self._next_node_id = 0
+        self._next_link_id = 0
+        self._next_attr_id = 0
 
-        scenario = self.make_scenario(resource_scenarios)
 
-        data = {
-            "name": self.name,
-            "description": self.description,
-            "project_id": project_id,
-            "links": links,
-            "nodes": nodes,
+    def get_typeid_by_name(self, name):
+        for t in self.template["templatetypes"]:
+            if t["name"].lower() == name.lower():
+                return t["id"]
+
+    def get_hydra_network_type(self):
+        for t in self.template["templatetypes"]:
+            if t["resource_type"] == "NETWORK":
+                return t
+
+    def get_hydra_attrid_by_name(self, attr_name):
+        if attr_name in self.template_attributes:
+            return self.template_attributes[attr_name]
+
+        for attr in self.hydra_attributes:
+            if attr["name"] == attr_name:
+                return attr["id"]
+
+    def get_next_node_id(self):
+        self._next_node_id -= 1
+        return self._next_node_id
+
+    def get_next_link_id(self):
+        self._next_link_id -= 1
+        return self._next_link_id
+
+    def get_next_attr_id(self):
+        self._next_attr_id -= 1
+        return self._next_attr_id
+
+    def get_node_by_name(self, name):
+        for node in self.hydra_nodes:
+            if node["name"] == name:
+                return node
+
+    def make_baseline_scenario(self, resource_scenarios):
+        return { "name": "Baseline",
+                 "description": "hydra-pywr Baseline scenario",
+                 "resourcescenarios": resource_scenarios if resource_scenarios else []
+               }
+
+
+    def initialise_hydra_connection(self):
+        if not self.hydra:
+            from hydra_client.connection import JSONConnection
+            self.hydra = JSONConnection(self.hostname, session_id=self.session_id, user_id=self.user_id)
+
+        print(f"Retrieving template id '{self.template_id}'...")
+        self.template = self.hydra.get_template(self.template_id)
+
+
+    def build_hydra_network(self, projection=None):
+        if projection:
+            self.projection = projection
+        else:
+            self.projection = self.network.metadata.data.get("projection")
+            if not self.projection:
+                self.projection = self.__class__.default_map_projection
+
+        self.initialise_hydra_connection()
+
+        self.network.attach_parameters()
+
+        self.template_attributes = self.collect_template_attributes()
+        self.hydra_attributes = self.register_hydra_attributes()
+
+        """ Build network elements and resource_scenarios with datasets """
+        self.hydra_nodes, node_scenarios = self.build_hydra_nodes()
+
+        self.network_attributes, network_scenarios = self.build_network_attributes()
+
+        self.hydra_links, link_scenarios = self.build_hydra_links()
+        paramrec_attrs, paramrec_scenarios = self.build_parameters_recorders()
+
+        self.network_attributes += paramrec_attrs
+
+        self.resource_scenarios = node_scenarios + network_scenarios + link_scenarios + paramrec_scenarios
+
+        """ Create baseline scenario with resource_scenarios """
+        baseline_scenario = self.make_baseline_scenario(self.resource_scenarios)
+
+        """ Assemble complete network """
+        network_name = self.network.metadata.data["title"]
+        network_description = self.network.metadata.data["description"]
+        self.network_hydratype = self.get_hydra_network_type()
+
+        self.hydra_network = {
+            "name": network_name,
+            "description": network_description,
+            "project_id": self.project_id,
+            "nodes": self.hydra_nodes,
+            "links": self.hydra_links,
             "layout": None,
-            "scenarios": [scenario, ],
-            "projection": projection,
-            "attributes": network_attributes,
-            'types': [{'id': network_template_type_id}]
+            "scenarios": [baseline_scenario],
+            "projection": self.projection,
+            "attributes": self.network_attributes,
+            "types": [{ "id": self.network_hydratype["id"], "child_template_id": self.template_id }]
         }
-        return data
+        return self.hydra_network
 
-    def make_scenario(self, resource_scenarios=None):
-        """ Make the request data for a Hydra scenario. """
+    def build_network_attributes(self):
+        exclude_metadata_attrs = ("title", "description", "projection")
+        hydra_network_attrs = []
+        resource_scenarios = []
 
-        if resource_scenarios is None:
-            resource_scenarios = []
+        for attr_name in self.network.timestepper.data:
+            ra, rs = self.make_resource_attr_and_scenario(self.network.timestepper, f"timestepper.{attr_name}")
+            hydra_network_attrs.append(ra)
+            resource_scenarios.append(rs)
 
-        scenario = {
-            "name": "Baseline",
-            "description": "Baseline scenario (auto-generated by Pywr app)",
-            "resourcescenarios": resource_scenarios
-        }
-        return scenario
+        for attr_name in (a for a in self.network.metadata.data if a not in exclude_metadata_attrs):
+            ra, rs = self.make_resource_attr_and_scenario(self.network.metadata, f"metadata.{attr_name}")
+            hydra_network_attrs.append(ra)
+            resource_scenarios.append(rs)
 
-    def attributes_from_nodes(self):
-        """ Generator to convert Pywr nodes data in to Hydra attribute data.
+        for table_name, table in self.network.tables.items():
+            for attr_name in table.data:
+                ra, rs = self.make_resource_attr_and_scenario(table, f"tbl_{table_name}.{attr_name}")
+                hydra_network_attrs.append(ra)
+                resource_scenarios.append(rs)
 
-        This function is intended to be used to convert Pywr components (e.g. recorders, parameters, etc.)  data
-        in to a format that can be imported in to Hydra. The Pywr component data is a dict of dict with each
-        sub-dict represent a single component (see the "recorder" or "parameters" section of the Pywr JSON format). This
-        function returns Hydra data to add a Attribute for each of the components in the outer dict.
-        """
-        nodes = self.data['nodes']
+        scenario_data = [ scenario.data for scenario in self.network.scenarios ]
+        if scenario_data:
+            attr_name = "scenarios"
+            ra, rs = self.make_direct_resource_attr_and_scenario(
+                    {"scenarios": scenario_data},
+                    attr_name,
+                    "PYWR_SCENARIOS"
+            )
+            hydra_network_attrs.append(ra)
+            resource_scenarios.append(rs)
 
-        attributes = set()
+        return hydra_network_attrs, resource_scenarios
+
+    def collect_template_attributes(self):
+        template_attrs = {}
+        for tt in self.template["templatetypes"]:
+            for ta in tt["typeattrs"]:
+                attr = ta["attr"]
+                template_attrs[attr["name"]] = attr["id"]
+
+        return template_attrs
+
+    def register_hydra_attributes(self):
+        timestepper_attrs = { 'timestepper.start', 'timestepper.end', 'timestepper.timestep'}
+        excluded_attrs = { 'position', 'type' }
+        pending_attrs = timestepper_attrs
+
+        pending_attrs.add("scenarios")
+
+        for node in self.network.nodes.values():
+            for attr_name in node.data:
+                pending_attrs.add(attr_name)
+
+        for param_name in self.network.parameters:
+            pending_attrs.add(param_name)
+
+        for rec_name in self.network.recorders:
+            pending_attrs.add(rec_name)
+
+        for meta_attr in self.network.metadata.data:
+            pending_attrs.add(f"metadata.{meta_attr}")
+
+        for table_name, table in self.network.tables.items():
+            for attr_name in table.data.keys():
+                pending_attrs.add(f"tbl_{table_name}.{attr_name}")
+
+        attrs = [ make_hydra_attr(attr_name) for attr_name in pending_attrs - excluded_attrs.union(set(self.template_attributes.keys())) ]
+
+        return self.hydra.add_attributes(attrs)
 
 
-        for node in nodes:
-            node_type = node['type'].lower()
-            node_klass = NodeMeta.node_registry.get(node_type)
-            if node_klass is None:
-                msg = f"Node type {node_type} not recognised."
-                if self.ignore_type_errors is False:
-                    raise HydraError(msg)
-                log.warning(msg + "Attempting to add default values.")
-                for name in node.keys():
-                    if name not in PYWR_PROTECTED_NODE_KEYS:
-                        attributes.add(name)
-                continue
-            schema = node_klass.Schema()
+    def make_resource_attr_and_scenario(self, element, attr_name, datatype=None):
+        local_attr_id = self.get_next_attr_id()
 
-            # Create an attribute for each field in the schema.
-            for name, field in schema.fields.items():
-                if name in PYWR_PROTECTED_NODE_KEYS:
-                    continue
-                attributes.add(name)
-
-        for attr in sorted(attributes):
-            yield self.attr_name_map.get(attr, {
-                'name': attr,
-                'description': '',
-                'dimension_id' : self.attr_dimension_map.get(attr)
-            })
-
-    def attributes_from_meta(self):
-        """ Generator to convert Pywr timestepper data in to Hydra attribute data. """
-        if 'scenarios' in self.data:
-            yield self.attr_name_map.get('scenarios', {'name': 'scenarios', 'description': ''})
-
-        if 'scenario_combinations' in self.data:
-            yield self.attr_name_map.get('scenario_combinations', {'name': 'scenario_combinations', 'description': ''})
-
-        for meta_key in ('metadata', 'timestepper'):
-            meta_data = self.data.get(meta_key)
-            if meta_data is None:
-                log.warning("No meta data found for key %s", meta_key)
-                continue
-            for key in meta_data.keys():
-                # Prefix these names with Pywr JSON section.
-                attr_name = '{}.{}'.format(meta_key, key)
-                yield self.attr_name_map.get(attr_name, {'name': attr_name,'description': ''})
-
-    def _get_template_type_by_name(self, name, resource_type=None):
-        for template_type in self.template['templatetypes']:
-            if name == template_type['name']:
-                if resource_type is None or template_type['resource_type'] == resource_type:
-                    return template_type
-        msg = 'Template does not contain node of type "{}".'.format(name)
-        if self.ignore_type_errors:
-            log.warning(msg)
-            return {}
+        if isinstance(element, (PywrParameter, PywrRecorder)):
+            resource_scenario = self.make_paramrec_resource_scenario(element, attr_name, local_attr_id)
+        elif isinstance(element, (PywrMetadata, PywrTimestepper, PywrTable)):
+            base, name = attr_name.split('.')
+            resource_scenario = self.make_network_resource_scenario(element, name, local_attr_id)
         else:
-            raise HydraError(msg)
+            resource_scenario = self.make_resource_scenario(element, attr_name, local_attr_id)
+
+        resource_attribute = { "id": local_attr_id,
+                               "attr_id": self.get_hydra_attrid_by_name(attr_name),
+                               "attr_is_var": "N"
+                             }
+
+        return resource_attribute, resource_scenario
 
 
-    def convert_nodes_and_edges(self):
-        """ Convert a tuple of (nodes, links) of Hydra data based on the given Pywr data. """
+    def make_direct_resource_attr_and_scenario(self, value, attr_name, hydra_datatype):
 
-        pywr_nodes = self.data['nodes']
-        pywr_edges = self.data['edges']
+        local_attr_id = self.get_next_attr_id()
 
-        def find_node_id(node_name):
-            for hydra_node in hydra_nodes:
-                if hydra_node['name'] == node_name:
-                    return hydra_node['id']
-            raise ValueError('Node name "{}" not found in node data.'.format(node_name))
+        dataset = { "name":  attr_name,
+                    "type":  hydra_datatype,
+                    "value": json.dumps(value),
+                    "metadata": "{}",
+                    "unit": "-",
+                    "hidden": 'N'
+                  }
 
-        # TODO make this object properties
-        node_id = -1
-        link_id = -1
+        resource_scenario = { "resource_attr_id": local_attr_id,
+                              "dataset": dataset
+                            }
+
+        resource_attribute = { "id": local_attr_id,
+                               "attr_id": self.get_hydra_attrid_by_name(attr_name),
+                               "attr_is_var": "N"
+                             }
+
+        return resource_attribute, resource_scenario
+
+
+    def make_network_resource_scenario(self, element, attr_name, local_attr_id):
+
+        value = element.data[attr_name]
+        hydra_datatype = self.lookup_hydra_datatype(value)
+
+        dataset = { "name":  attr_name,
+                    "type":  hydra_datatype,
+                    "value": value,
+                    "metadata": "{}",
+                    "unit": "-",
+                    "hidden": 'N'
+                  }
+
+        resource_scenario = { "resource_attr_id": local_attr_id,
+                              "dataset": dataset
+                            }
+        return resource_scenario
+
+    def make_paramrec_resource_scenario(self, element, attr_name, local_attr_id):
+
+        value = element.data
+        hydra_datatype = self.lookup_hydra_datatype(element)
+
+        dataset = { "name":  element.name,
+                    "type":  hydra_datatype,
+                    "value": json.dumps(value),
+                    "metadata": "{}",
+                    "unit": "-",
+                    "hidden": 'N'
+                  }
+
+        resource_scenario = { "resource_attr_id": local_attr_id,
+                              "dataset": dataset
+                            }
+        return resource_scenario
+
+    def make_resource_scenario(self, element, attr_name, local_attr_id):
+
+        value = element.data[attr_name]
+        hydra_datatype = self.lookup_hydra_datatype(value)
+
+        dataset = { "name":  attr_name,
+                    "type":  hydra_datatype,
+                    "value": json.dumps(value, cls=PywrTypeEncoder),
+                    "metadata": "{}",
+                    "unit": "-",
+                    "hidden": 'N'
+                  }
+
+        resource_scenario = { "resource_attr_id": local_attr_id,
+                              "dataset": dataset
+                            }
+
+        return resource_scenario
+
+
+    def lookup_parameter_hydra_datatype(self, value):
+        ptype = value.type
+        if not ptype.endswith("parameter"):
+            ptype += "parameter"
+
+        return PARAMETER_HYDRA_TYPE_MAP.get(ptype, "PYWR_PARAMETER")
+
+
+    def lookup_recorder_hydra_datatype(self, value):
+        rtype = value.type
+        if not rtype.endswith("recorder"):
+            rtype += "recorder"
+
+        return RECORDER_HYDRA_TYPE_MAP.get(rtype, "PYWR_RECORDER")
+
+
+    def lookup_hydra_datatype(self, attr_value):
+        if isinstance(attr_value, Number):
+            return "SCALAR"
+        elif isinstance(attr_value, list):
+            return "ARRAY"
+        elif isinstance(attr_value, dict):
+            return "DATAFRAME"
+        elif isinstance(attr_value, str):
+            return "DESCRIPTOR"
+        elif isinstance(attr_value, PywrParameter):
+            return self.lookup_parameter_hydra_datatype(attr_value)
+        elif isinstance(attr_value, PywrRecorder):
+            return self.lookup_recorder_hydra_datatype(attr_value)
+
+        raise ValueError(f"Unknown data type: '{attr_value}'")
+
+
+    def build_hydra_nodes(self):
         hydra_nodes = []
-        hydra_links = []  # Note the change in nomenclature pywr->edges, hydra->links
-        hydra_resource_scenarios = []
+        resource_scenarios = []
 
-        # First generate the hydra node data
-        for pywr_node in pywr_nodes:
-
-            try:
-                comment = pywr_node['comment']
-            except KeyError:
-                comment = None
-
-            # Get the type for this node from the template
-            # Pywr keeps a registry of lower case node types.
-            pywr_node_type = pywr_node['type'].lower()
-            node_template_type = self._get_template_type_by_name(pywr_node_type, 'NODE')
-            node_template_type_id = node_template_type.get('id')
-
-            # Now make the attributes
+        for node in self.network.nodes.values():
             resource_attributes = []
-            for resource_attribute, resource_scenario in self.generate_node_resource_scenarios(pywr_node):
-                resource_attributes.append(resource_attribute)
-                hydra_resource_scenarios.append(resource_scenario)
 
-            # Try to get geometry from the pywr_node
-            geometry = None
-            try:
-                geometry = pywr_node['position']['geographic']
-            except KeyError:
-                pass
+            exclude = ("name", "position", "type", "comment")
 
-            x, y = None, None
-            if geometry is not None:
-                if isinstance(geometry, list):
-                    x, y = geometry
-                    geometry = None  # Don't save this a layout
-                elif isinstance(geometry, dict):
-                    from shapely.geometry import shape
-                    rpoint = shape(geometry).representative_point()
-                    x = rpoint.x
-                    y = rpoint.y
-                else:
-                    raise ValueError(f'Node "{pywr_node["name"]}" position data not supported.')
+            for attr_name in node.data:
+                if attr_name in exclude:
+                    continue
+                ra, rs = self.make_resource_attr_and_scenario(node, attr_name)
+                if ra["attr_id"] == None:
+                    raise ValueError(f"Node '{node.name}' attr '{attr_name}' has invalid attr id: '{attr_id}'")
+                resource_attributes.append(ra)
+                resource_scenarios.append(rs)
 
-            hydra_node = {
-                'id': node_id,
-                'name': pywr_node['name'],
-                'description': comment,
-                'layout': {
-                    'geojson': geometry
-                },
-                'x': x,  # TODO add some tests with coordinates.
-                'y': y,
-                'attributes': resource_attributes,
-                'types': [{'id': node_template_type_id}] if node_template_type_id else None
-            }
+            hydra_node = {}
+            hydra_node["resource_type"] = "NODE"
+            hydra_node["id"] = self.get_next_node_id()
+            hydra_node["name"] = node.name
+            if comment := node.data.get("comment"):
+                hydra_node["description"] = comment
+            hydra_node["layout"] = {}
+            hydra_node["attributes"] = resource_attributes
+            hydra_node["types"] = [{ "id": self.get_typeid_by_name(node.type.lower()),
+                                     "child_template_id": self.template_id
+                                  }]
+
+            if "position" in node.data:
+                proj_data = node.data["position"]
+                for coords in proj_data.values():
+                    x, y = coords[0], coords[1]
+                hydra_node["x"] = x
+                hydra_node["y"] = y
 
             hydra_nodes.append(hydra_node)
-            node_id -= 1
 
-        # All Pywr edges have the same type
-        edge_template_type = self._get_template_type_by_name('edge', 'LINK')
-        edge_template_type_id = edge_template_type.get('id')
+        return hydra_nodes, resource_scenarios
 
-        for pywr_edge in pywr_edges:
 
-            # TODO slots
-            if len(pywr_edge) > 2:
-                log.warning('Edges with slot definitions are not currently supported. %s', pywr_edge)
-                pywr_edge = pywr_edge[0:2]
+    def build_hydra_links(self):
+        hydra_links = []
+        resource_scenarios = []
 
-            node_1_name, node_2_name = pywr_edge
+        for edge in self.network.edges:
+            resource_attributes = []
 
-            hydra_link = {
-                'id': link_id,
-                'name': "{} to {}".format(node_1_name, node_2_name),
-                'description': None,
-                'layout': None,
-                'node_1_id': find_node_id(node_1_name),
-                'node_2_id': find_node_id(node_2_name),
-                'attributes': [],  # Links have no resource attributes
-                'types': [{'id': edge_template_type_id}] if edge_template_type_id else None
-            }
+            src = edge.data[0]
+            dest = edge.data[1]
+            name = f"{src} to {dest}"
+
+            hydra_link = {}
+            hydra_link["resource_type"] = "LINK"
+            hydra_link["id"] = self.get_next_link_id()
+            hydra_link["name"] = name
+            hydra_link["node_1_id"] = self.get_node_by_name(src)["id"]
+            hydra_link["node_2_id"] = self.get_node_by_name(dest)["id"]
+            hydra_link["layout"] = {}
+            hydra_link["resource_attributes"] = resource_attributes
+            hydra_link["types"] = [{ "id": self.get_typeid_by_name("edge") }]
+
             hydra_links.append(hydra_link)
-            link_id -= 1
 
-        return hydra_nodes, hydra_links, hydra_resource_scenarios
-
-    def generate_node_resource_scenarios(self, pywr_node):
-
-        for ra, rs in self.generate_node_schema_resource_scenarios(pywr_node):
-            yield ra, rs
-
-        for component_key in ('parameters', 'recorders'):
-            for ra, rs in self.generate_node_component_resource_scenarios(pywr_node, component_key,
-                                                                          encode_to_json=True):
-                yield ra, rs
-
-    def generate_node_schema_resource_scenarios(self, pywr_node):
-        """ Generate resource attribute, resource scenario and datasets for a Pywr node.
-
-        """
-        node_name = pywr_node['name']
-        node_type = pywr_node['type'].lower()
-        node_klass = NodeMeta.node_registry.get(node_type)
-
-        msg = f"Node type {node_klass} not recognised."
-
-        if node_klass is None and self.ignore_type_errors is False:
-            raise HydraError(msg)
-
-        if node_klass is None:
-            log.warning(msg + " Using 'descriptor' as default data type")
-            fields = dict((n, 'descriptor') for n in pywr_node.keys())
-        else:
-            schema = node_klass.Schema()
-            fields = schema.fields
-
-        # Create an attribute for each field in the schema.
-        for name, field in fields.items():
-            if name not in pywr_node:
-                continue  # Skip missing fields
-
-            if name in PYWR_PROTECTED_NODE_KEYS:
-                continue
-            # Non-protected keys represent data that must be added to Hydra.
-            if isinstance(field, str):
-                data_type = field #the default field if it can't find the class
-            else:
-                data_type = data_type_from_field(field)
-
-            if data_type == PywrParameter.tag.lower():
-                # If the field is defined as general parameter then the actual
-                # type might be something more specific.
-                try:
-                    data_type = data_type_from_parameter_value(pywr_node[name]).tag
-                except ValueError:
-                    log.warning(f'No Hydra data type for Pywr field "{name}"'
-                                f' on node type "{node_type}" found.')
-
-                #TODO: hack to ignore these when they reference parameters elsewhere
-                if data_type.lower() == 'descriptor' and pywr_node[name].find(f"__{node_name}__") >= 0:
-
-                    log.warn(f"Ignoring descriptor %s on attribute %s, node %s as this it is assumed this is defined as a parameter, and so will be set as an attribute through the parameters.", pywr_node[name], name, node_name)
-                    continue
-
-            # Key is the attribute name. The attributes need to already by added to the
-            # database and hence have a valid id.
-            attribute_id = self.attribute_name_id_map[name]
-
-            unit_id = self.attr_unit_map.get(attribute_id)
-
-            yield self._make_dataset_resource_attribute_and_scenario(name,
-                                                                     pywr_node[name],
-                                                                     data_type,
-                                                                     attribute_id,
-                                                                     unit_id=unit_id,
-                                                                     encode_to_json=True)
-
-    def generate_node_component_resource_scenarios(self, pywr_node, component_key,
-                                                   **kwargs):
-
-        try:
-            components = self.data[component_key]
-        except KeyError:
-            components = {}
-
-        node_name = pywr_node['name']
-
-        for component_name, component_data in components.items():
-            # Filter components to only include those that should be stored at the node level
-            if not self.is_component_a_node_attribute(component_name, node_name):
-                continue
-
-            data_type = data_type_from_component_type(component_key, component_data['type']).tag
-            attribute_name = self._attribute_name(component_key, component_name)
-
-            # This the attribute corresponding to the component.
-            # It should have a positive id and already be entered in the hydra database.
-            attribute_id = self.attribute_name_id_map[attribute_name.lower()]
-
-            unit_id = self.attr_unit_map.get(attribute_id)
-
-            yield self._make_dataset_resource_attribute_and_scenario(attribute_name,
-                                                                     component_data,
-                                                                     data_type,
-                                                                     attribute_id,
-                                                                     unit_id=unit_id,
-                                                                     **kwargs)
-
-    def _attribute_name(self, component_key, component_name):
-        if component_key in ('parameters', 'recorders'):
-            if self._node_attribute_component_delimiter in component_name:
-                attribute_name = component_name.split(self._node_attribute_component_delimiter, 1)[-1]
-            else:
-                attribute_name = component_name
-        elif component_key == 'timestepper':
-            attribute_name = '{}.{}'.format(component_key, component_name)
-        else:
-            attribute_name = component_key
-
-        return attribute_name
-
-    def attributes_from_component_dict(self, component_key):
-        """ Generator to convert Pywr components data in to Hydra attribute data.
-
-        This function is intended to be used to convert Pywr components
-        (e.g. recorders, parameters, etc.) data in to a format that can be imported in to Hydra.
-        The Pywr component data is a dict of dict with each sub-dict represent a single component
-        (see the "recorder" or "parameters" section of the Pywr JSON format). This
-        function returns Hydra data to add a Attribute for each of the components in the outer dict.
+        return hydra_links, resource_scenarios
 
 
-        """
-        components = self.data[component_key]
-        for component_name in components.keys():
-            attribute_name = self._attribute_name(component_key, component_name)
+    def build_parameters_recorders(self):
+        resource_attrs = []
+        resource_scenarios = []
 
-            yield self.attr_name_map.get(attribute_name, {
-                'name': attribute_name,
-                'description': '',
-                'dimension_id' : self.attr_dimension_map.get(attribute_name)
-            })
+        for param_name, param in self.network.parameters.items():
+            ra, rs = self.make_resource_attr_and_scenario(param, param_name)
+            resource_attrs.append(ra)
+            resource_scenarios.append(rs)
 
-    def generate_component_resource_scenarios(self, component_key, **kwargs):
-        """ Convert from Pywr components to resource attributes and resource scenarios.
+        for rec_name, rec in self.network.recorders.items():
+            ra, rs = self.make_resource_attr_and_scenario(rec, rec_name)
+            resource_attrs.append(ra)
+            resource_scenarios.append(rs)
 
-        This function is intended to be used to convert Pywr components
-        (e.g. recorders, parameters, etc.) data into a format that can be imported in to Hydra.
-        The Pywr component data is a dict of dict with each sub-dict represent a
-        single component (see the "recorder" or "parameters" section of the Pywr JSON format).
-        This function returns a list of resource attributes and resource scenarios.
-        These can be used to import the data
-        to Hydra.
+        return resource_attrs, resource_scenarios
 
-        """
-        try:
-            components = self.data[component_key]
-        except KeyError:
-            components = {}
 
-        #Recorders and parameters can result in duplicate attributes.
-        #To avoid this, we keep track of duplicates and add them as a list within
-        #a single attribute, and change the data type
-        attribute_data_registry = {}
+    def add_network_to_hydra(self):
+        """ Pass network to Hydra"""
+        self.hydra.add_network(self.hydra_network)
 
-        for component_name, component_data in components.items():
 
-            if component_key.lower() == 'metadata':
-                if component_name in ('title', 'description', 'minimum_version'):
-                    # These names are saved on the hydra network directly (name and descripton)
-                    # therefore do not add as a attributes as well.
-                    continue
+"""
+    Utilities
+"""
+def unwrap_list(node_data):
+    return [ i[0] for i in node_data ]
 
-            # Determine whether this component should be store on as a node attribute.
-            if component_key in ('parameters', 'recorders') and \
-                    self.is_component_a_node_attribute(component_name):
-                continue
+def build_times(data, node="/time"):
+    raw_times = data.get_node(node).read().tolist()
+    """ Profile times to determine period.
+        A more rigorous solution is to include a token
+        indicating the period (e.g. H, D, W, or M)
+        in the hdf output.
+    """
+    if len(raw_times) > 1 and (raw_times[0][0] == raw_times[1][0] or raw_times[-2][0] == raw_times[-1][0]):
+        # Probably hours...
+        times = [ f"{t[0]:02}-{t[2]:02}-{t[3]} {t[1] % 24:02}:00:00" for t in raw_times ]
+    else:
+        # ...assume single day values
+        times = [ f"{t[0]:02}-{t[2]:02}-{t[3]}" for t in raw_times ]
 
-            # Determine the data type
-            if component_key in ('parameters', 'recorders'):
-                data_type = data_type_from_component_type(component_key, component_data['type']).tag
-            else:
-                data_type = 'DESCRIPTOR'
+    return times
 
-            attribute_name = self._attribute_name(component_key, component_name)
+def build_node_dataset(node, times, node_attr="value"):
+    raw_node_data = node.read().tolist()
+    node_data = unwrap_list(raw_node_data)
 
-            # This the attribute corresponding to the component.
-            # It should have a positive id and already be entered in the hydra database.
-            attribute_id = self.attribute_name_id_map[attribute_name.lower()]
+    series = {}
+    dataset = { "value": series}
 
-            attribute_data = {'attribute_name':attribute_name,
-                              'data':{component_name:component_data},
-                              'data_type':data_type,
-                              'attribute_id':attribute_id}
+    for t,v in zip(times, node_data):
+        series[t] = v
 
-            if attribute_data_registry.get(attribute_name):
-                attribute_data_registry[attribute_name]['data'][component_name] = component_data
-            else:
-                attribute_data_registry[attribute_name] = attribute_data
+    return dataset
 
-        for attribute_name, attribute_data in attribute_data_registry.items():
-            if attribute_name == 'capacity:capex':
-                log.info(f"capacity:capex: {attribute_data}")
-            attribute_name = attribute_data['attribute_name']
-            data = attribute_data['data']
-            if len(data) == 1:
-                data = list(data.values())[0]
-            data_type = attribute_data['data_type']
-            attribute_id = attribute_data['attribute_id']
-            unit_id = self.attr_unit_map.get(attribute_id)
-            yield self._make_dataset_resource_attribute_and_scenario(attribute_name,
-                                                                     data,
-                                                                     data_type,
-                                                                     attribute_id,
-                                                                     unit_id=unit_id,
-                                                                     **kwargs)
+def build_metric(node, data):
+    return data
+
+
+def build_parameter_dataset(param, times, stok='_'):
+    node, _, attr = param.name.partition(stok)
+    raw_param_data = param.read().tolist()
+    param_data = unwrap_list(raw_param_data)
+
+    series = {}
+    dataset = { node: { attr: series} }
+
+    for t,v in zip(times, param_data):
+        series[t] = v
+
+    return dataset
