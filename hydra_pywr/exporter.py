@@ -134,7 +134,7 @@ class PywrHydraExporter(BasePywrHydra):
         network.scenarios = [scenario]
 
 
-        rules = client.get_resource_rules('NETWORK', scenario.network_id)
+        rules = client.get_resource_rules(ref_key='NETWORK', ref_id=scenario.network_id, scenario_id=scenario.id)
 
         network.rules = rules
 
