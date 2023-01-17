@@ -113,7 +113,7 @@ def export_json(obj, data_dir, scenario_id, user_id, json_sort_keys, json_indent
     network_id = exporter.data.id
     pywr_network = PywrNetwork(network_data)
 
-    pywr_network.attach_parameters()
+    pywr_network.promote_inline_parameters()
     pywr_network.detach_parameters()
 
     pnet_title = pywr_network.metadata.data["title"]

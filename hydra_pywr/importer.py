@@ -132,7 +132,7 @@ class PywrToHydraNetwork():
 
         self.initialise_hydra_connection()
 
-        self.network.attach_parameters()
+        self.network.promote_inline_parameters()
 
         self.template_attributes = self.collect_template_attributes()
         self.hydra_attributes = self.register_hydra_attributes()
@@ -169,6 +169,11 @@ class PywrToHydraNetwork():
             "attributes": self.network_attributes,
             "types": [{ "id": self.network_hydratype["id"], "child_template_id": self.template_id }]
         }
+        """
+        breakpoint()
+        with open("network.json", 'w') as fp:
+            json.dump(self.hydra_network, fp, indent=2)
+        """
         return self.hydra_network
 
     def build_network_attributes(self):
@@ -187,10 +192,15 @@ class PywrToHydraNetwork():
             resource_scenarios.append(rs)
 
         for table_name, table in self.network.tables.items():
+            ra, rs = self.make_resource_attr_and_scenario(table, table_name)
+            hydra_network_attrs.append(ra)
+            resource_scenarios.append(rs)
+            """
             for attr_name in table.data:
-                ra, rs = self.make_resource_attr_and_scenario(table, f"tbl_{table_name}.{attr_name}")
+                ra, rs = self.make_resource_attr_and_scenario(table, table_name)
                 hydra_network_attrs.append(ra)
                 resource_scenarios.append(rs)
+            """
 
         scenario_data = [ scenario.data for scenario in self.network.scenarios ]
         if scenario_data:
@@ -236,7 +246,7 @@ class PywrToHydraNetwork():
 
         for table_name, table in self.network.tables.items():
             for attr_name in table.data.keys():
-                pending_attrs.add(f"tbl_{table_name}.{attr_name}")
+                pending_attrs.add(table_name)
 
         attrs = [ make_hydra_attr(attr_name) for attr_name in pending_attrs - excluded_attrs.union(set(self.template_attributes.keys())) ]
 
@@ -248,7 +258,9 @@ class PywrToHydraNetwork():
 
         if isinstance(element, (PywrParameter, PywrRecorder)):
             resource_scenario = self.make_paramrec_resource_scenario(element, attr_name, local_attr_id)
-        elif isinstance(element, (PywrMetadata, PywrTimestepper, PywrTable)):
+        elif isinstance(element, PywrTable):
+            resource_scenario = self.make_table_resource_scenario(element, attr_name, local_attr_id)
+        elif isinstance(element, (PywrMetadata, PywrTimestepper)):
             base, name = attr_name.split('.')
             resource_scenario = self.make_network_resource_scenario(element, name, local_attr_id)
         else:
@@ -284,6 +296,22 @@ class PywrToHydraNetwork():
                              }
 
         return resource_attribute, resource_scenario
+
+
+    def make_table_resource_scenario(self, element, attr_name, local_attr_id):
+
+        dataset = { "name":  attr_name,
+                    "type":  "PYWR_TABLE",
+                    "value": element.as_json(),
+                    "metadata": "{}",
+                    "unit": "-",
+                    "hidden": 'N'
+                  }
+
+        resource_scenario = { "resource_attr_id": local_attr_id,
+                              "dataset": dataset
+                            }
+        return resource_scenario
 
 
     def make_network_resource_scenario(self, element, attr_name, local_attr_id):
