@@ -299,9 +299,9 @@ class PywrToHydraNetwork():
 
 
     def make_table_resource_scenario(self, element, attr_name, local_attr_id):
-
+        hydra_datatype = self.lookup_hydra_datatype(element)
         dataset = { "name":  attr_name,
-                    "type":  "PYWR_TABLE",
+                    "type":  hydra_datatype,
                     "value": element.as_json(),
                     "metadata": "{}",
                     "unit": "-",
@@ -395,6 +395,8 @@ class PywrToHydraNetwork():
             return "DATAFRAME"
         elif isinstance(attr_value, str):
             return "DESCRIPTOR"
+        elif isinstance(attr_value, PywrTable):
+            return "PYWR_TABLE"
         elif isinstance(attr_value, PywrParameter):
             return self.lookup_parameter_hydra_datatype(attr_value)
         elif isinstance(attr_value, PywrRecorder):

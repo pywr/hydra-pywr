@@ -14,6 +14,8 @@ from pywrparser.types import (
 
 from .rules import exec_rules
 
+from hydra_base.exceptions import ResourceNotFoundError
+
 import logging
 log = logging.getLogger(__name__)
 
@@ -118,7 +120,8 @@ class HydraToPywrNetwork():
         self.build_pywr_nodes()
         self.edges = self.build_edges()
         self.parameters, self.recorders = self.build_parameters_recorders()
-        self.timestepper, self.metadata, self.tables, self.scenarios = self.build_network_attrs()
+        self.tables = self.build_tables()
+        self.timestepper, self.metadata, self.scenarios = self.build_network_attrs()
 
         if len(self.data.rules) > 0:
             self.write_rules_as_module()
@@ -162,6 +165,19 @@ class HydraToPywrNetwork():
             edges.append(edge)
 
         return edges
+
+    def build_tables(self):
+        tables = {}
+        for attr in self.data.attributes:
+            ds = self.get_dataset_by_attr_id(attr.id)
+            if not ds:
+                continue
+            if ds["type"].upper().startswith("PYWR_TABLE"):
+                value = json.loads(ds["value"])
+                table = PywrTable(ds["name"], value)
+                tables[table.name] = table
+
+        return tables
 
 
     def build_parameters_recorders(self):
@@ -246,6 +262,7 @@ class HydraToPywrNetwork():
 
         """ Tables """
 
+        """
         table_prefix = "tbl_"
         tables_data = defaultdict(dict)
         tables = {}
@@ -262,16 +279,16 @@ class HydraToPywrNetwork():
 
         for tname, tdata in tables_data.items():
             tables[tname] = PywrTable(tname, tdata)
-
+        """
         """ Scenarios """
 
         try:
             scenarios_dataset = self.get_network_attr(self.scenario_id, self.data["id"], "scenarios")
             scenarios = [ PywrScenario(scenario) for scenario in scenarios_dataset["scenarios"] ]
-        except ValueError as e:
+        except (ResourceNotFoundError, ValueError):
             scenarios = []
 
-        return ts_inst, meta_inst, tables, scenarios
+        return ts_inst, meta_inst, scenarios
 
 
     def get_network_attr(self, scenario_id, network_id, attr_key):
@@ -285,6 +302,9 @@ class HydraToPywrNetwork():
 
         if not ra_id:
             raise ValueError(f"Resource attribute for {attr_key} not found in scenario {scenario_id} on network {network_id}")
+
+        #if ra_id == 1773645:
+        #    breakpoint()
 
         data = self.hydra.get_resource_scenario(ra_id, scenario_id, get_parent_data=False)
         attr_data = json.loads(data["dataset"]["value"])
