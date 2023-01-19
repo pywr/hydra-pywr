@@ -453,10 +453,15 @@ class PywrToHydraNetwork():
 
         for edge in self.network.edges:
             resource_attributes = []
-
             src = edge.data[0]
             dest = edge.data[1]
-            name = f"{src} to {dest}"
+            if len(edge.data) == 4:
+                src_slot = edge.data[2]
+                dest_slot = edge.data[3]
+                dest_slot_text = f":slot({dest_slot})" if dest_slot != "None" else ""
+                name = f"{src}:slot({src_slot}) to {dest}{dest_slot_text}"
+            else:
+                name = f"{src} to {dest}"
 
             hydra_link = {}
             hydra_link["resource_type"] = "LINK"

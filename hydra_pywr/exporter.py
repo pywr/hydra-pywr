@@ -1,4 +1,5 @@
 import json
+import re
 from collections import defaultdict
 
 from pywrparser.types import (
@@ -13,8 +14,10 @@ from pywrparser.types import (
 )
 
 from .rules import exec_rules
+from .template import PYWR_SPLIT_LINK_TYPES
 
 from hydra_base.exceptions import ResourceNotFoundError
+
 
 import logging
 log = logging.getLogger(__name__)
@@ -148,6 +151,8 @@ class HydraToPywrNetwork():
 
     def build_edges(self):
         edges = []
+        slot_pattern_text = r":slot\((.+?)\)"
+        slot_pattern = re.compile(slot_pattern_text)
 
         for hydra_edge in self.data["links"]:
             src_hydra_node = self.hydra_node_by_id[hydra_edge["node_1_id"]]
@@ -161,7 +166,25 @@ class HydraToPywrNetwork():
                 # Not in this template...
                 continue
 
-            edge = PywrEdge([src_node.name, dest_node.name])
+            verts = [src_node.name, dest_node.name]
+
+            matches = 0
+            for match in slot_pattern.finditer(hydra_edge["name"]):
+                slot = match.group(1)
+                verts.append(slot)
+                if matches == 1:
+                    # Take max of two slots
+                    break
+                matches += 1
+
+            if len(verts) == 3:
+                # Slotted links must be [src_node, dest_node, src_slot, (dest_slot|null)]
+                verts.append(None)
+
+            if len(verts) > 2:
+                log.info(f"slotted edge with verts {verts}")
+
+            edge = PywrEdge(verts)
             edges.append(edge)
 
         return edges
@@ -361,6 +384,9 @@ class HydraToPywrNetwork():
         if comment := nodedata.get("description"):
             node_attr_data["comment"] = comment
 
-        node = PywrNode(node_attr_data)
+        try:
+            node = PywrNode(node_attr_data)
+        except Exception as e:
+            breakpoint()
 
         self.nodes[node.name] = node
