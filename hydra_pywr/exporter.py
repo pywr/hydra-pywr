@@ -167,6 +167,7 @@ class HydraToPywrNetwork():
                 continue
 
             verts = [src_node.name, dest_node.name]
+            breakpoint()
 
             matches = 0
             for match in slot_pattern.finditer(hydra_edge["name"]):
@@ -231,7 +232,7 @@ class HydraToPywrNetwork():
         return parameters, recorders
 
     def build_network_attrs(self):
-        """ TimeStepper, Metadata, and Tables instances """
+        """ TimeStepper, Metadata, Scenario instances """
 
         timestep = {}
         ts_keys = ("start", "end", "timestep")
@@ -283,26 +284,6 @@ class HydraToPywrNetwork():
 
         meta_inst = PywrMetadata(metadata)
 
-        """ Tables """
-
-        """
-        table_prefix = "tbl_"
-        tables_data = defaultdict(dict)
-        tables = {}
-        for attr in self.data["attributes"]:
-            if not attr.name.startswith(table_prefix):
-                continue
-            table_name, table_attr = attr.name[len(table_prefix):].split('.')
-            dataset = self.get_dataset_by_attr_id(attr.id)
-            try:
-                value = json.loads(dataset["value"])
-            except json.decoder.JSONDecodeError:
-                value = dataset["value"]
-            tables_data[table_name][table_attr] = value
-
-        for tname, tdata in tables_data.items():
-            tables[tname] = PywrTable(tname, tdata)
-        """
         """ Scenarios """
 
         try:
@@ -325,9 +306,6 @@ class HydraToPywrNetwork():
 
         if not ra_id:
             raise ValueError(f"Resource attribute for {attr_key} not found in scenario {scenario_id} on network {network_id}")
-
-        #if ra_id == 1773645:
-        #    breakpoint()
 
         data = self.hydra.get_resource_scenario(ra_id, scenario_id, get_parent_data=False)
         attr_data = json.loads(data["dataset"]["value"])

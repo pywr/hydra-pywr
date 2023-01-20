@@ -75,6 +75,7 @@ class PywrToHydraNetwork():
         for t in self.template["templatetypes"]:
             if t["name"].lower() == name.lower():
                 return t["id"]
+        log.critical(f"Template {self.template_id} does not define type {name}")
 
     def get_hydra_network_type(self):
         for t in self.template["templatetypes"]:
@@ -88,6 +89,7 @@ class PywrToHydraNetwork():
         for attr in self.hydra_attributes:
             if attr["name"] == attr_name:
                 return attr["id"]
+        log.critical(f"Attr {attr_name} not registered")
 
     def get_next_node_id(self):
         self._next_node_id -= 1
@@ -143,6 +145,7 @@ class PywrToHydraNetwork():
         self.network_attributes, network_scenarios = self.build_network_attributes()
 
         self.hydra_links, link_scenarios = self.build_hydra_links()
+        breakpoint()
         paramrec_attrs, paramrec_scenarios = self.build_parameters_recorders()
 
         self.network_attributes += paramrec_attrs
@@ -452,26 +455,47 @@ class PywrToHydraNetwork():
         resource_scenarios = []
 
         for edge in self.network.edges:
+            link_type = {}
             resource_attributes = []
             src = edge.data[0]
             dest = edge.data[1]
             if len(edge.data) == 4:
                 src_slot = edge.data[2]
                 dest_slot = edge.data[3]
-                dest_slot_text = f":slot({dest_slot})" if dest_slot != "None" else ""
-                name = f"{src}:slot({src_slot}) to {dest}{dest_slot_text}"
+                dest_slot_text = f"::{dest_slot}" if dest_slot else ""
+                name = f"{src}::{src_slot} to {dest}{dest_slot_text}"
+                link_type["id"] = self.get_typeid_by_name("slottededge")
+                link_type["child_template_id"] = self.template_id
+                src_ra, src_rs = self.make_direct_resource_attr_and_scenario(
+                        src_slot,
+                        "src_slot",
+                        "DESCRIPTOR"
+                )
+                resource_attributes.append(src_ra)
+                resource_scenarios.append(src_rs)
+                breakpoint()
+                if dest_slot:
+                    dest_ra, dest_rs = self.make_direct_resource_attr_and_scenario(
+                             dest_slot,
+                             "dest_slot",
+                             "DESCRIPTOR"
+                    )
+                    resource_attributes.append(dest_ra)
+                    resource_scenarios.append(dest_rs)
             else:
                 name = f"{src} to {dest}"
+                link_type["id"] = self.get_typeid_by_name("edge")
 
-            hydra_link = {}
-            hydra_link["resource_type"] = "LINK"
-            hydra_link["id"] = self.get_next_link_id()
-            hydra_link["name"] = name
-            hydra_link["node_1_id"] = self.get_node_by_name(src)["id"]
-            hydra_link["node_2_id"] = self.get_node_by_name(dest)["id"]
-            hydra_link["layout"] = {}
-            hydra_link["resource_attributes"] = resource_attributes
-            hydra_link["types"] = [{ "id": self.get_typeid_by_name("edge") }]
+            hydra_link = {
+                "resource_type": "LINK",
+                "id": self.get_next_link_id(),
+                "name": name,
+                "node_1_id": self.get_node_by_name(src)["id"],
+                "node_2_id": self.get_node_by_name(dest)["id"],
+                "layout": {},
+                "attributes": resource_attributes,
+                "types": [link_type]
+            }
 
             hydra_links.append(hydra_link)
 
