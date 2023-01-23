@@ -151,8 +151,6 @@ class HydraToPywrNetwork():
 
     def build_edges(self):
         edges = []
-        slot_pattern_text = r":slot\((.+?)\)"
-        slot_pattern = re.compile(slot_pattern_text)
 
         for hydra_edge in self.data["links"]:
             src_hydra_node = self.hydra_node_by_id[hydra_edge["node_1_id"]]
@@ -167,23 +165,12 @@ class HydraToPywrNetwork():
                 continue
 
             verts = [src_node.name, dest_node.name]
-            breakpoint()
 
-            matches = 0
-            for match in slot_pattern.finditer(hydra_edge["name"]):
-                slot = match.group(1)
-                verts.append(slot)
-                if matches == 1:
-                    # Take max of two slots
-                    break
-                matches += 1
-
-            if len(verts) == 3:
-                # Slotted links must be [src_node, dest_node, src_slot, (dest_slot|null)]
-                verts.append(None)
-
-            if len(verts) > 2:
-                log.info(f"slotted edge with verts {verts}")
+            if hydra_edge["types"][0]["name"].lower() == "slottededge":
+                for slot in ("src_slot", "dest_slot"):
+                    slot_id = [attr.id for attr in hydra_edge["attributes"] if attr.name == slot][0]
+                    slot_ds = self.get_dataset_by_attr_id(slot_id)
+                    verts.append(slot_ds.value if slot_ds else None)
 
             edge = PywrEdge(verts)
             edges.append(edge)
@@ -192,7 +179,7 @@ class HydraToPywrNetwork():
 
     def build_tables(self):
         tables = {}
-        for attr in self.data.attributes:
+        for attr in self.data["attributes"]:
             ds = self.get_dataset_by_attr_id(attr.id)
             if not ds:
                 continue
@@ -368,3 +355,36 @@ class HydraToPywrNetwork():
             breakpoint()
 
         self.nodes[node.name] = node
+
+"""
+  Compatibility patches: these update the Pywr data output of
+  get_pywr_data to replace deprecated syntax with that of current
+  Pywr versions.
+"""
+def unnest_parameter_key(data, key):
+    """
+        Relocates all keys inside parameters' <key> arg
+        to the top level of that parameter and removes the
+        original <key>.
+    """
+    for param in data["parameters"].values():
+        if key in param:
+            for k, v in param[key].items():
+                param[k] = v
+            del param[key]
+
+    return data
+
+def add_interp_kwargs(data):
+    """
+        Replaces the deprecated `kind` key of interpolatedvolume
+        parameters with the nested `interp_kwargs` key.
+    """
+    ptype = "interpolatedvolume"
+    new_key = "interp_kwargs"
+    for param in data["parameters"].values():
+        if param["type"].lower().startswith(ptype) and "kind" in param:
+            param[new_key] = {"kind": param["kind"]}
+            del param["kind"]
+
+    return data

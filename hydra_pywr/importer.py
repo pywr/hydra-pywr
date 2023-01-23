@@ -145,7 +145,6 @@ class PywrToHydraNetwork():
         self.network_attributes, network_scenarios = self.build_network_attributes()
 
         self.hydra_links, link_scenarios = self.build_hydra_links()
-        breakpoint()
         paramrec_attrs, paramrec_scenarios = self.build_parameters_recorders()
 
         self.network_attributes += paramrec_attrs
@@ -173,7 +172,6 @@ class PywrToHydraNetwork():
             "types": [{ "id": self.network_hydratype["id"], "child_template_id": self.template_id }]
         }
         """
-        breakpoint()
         with open("network.json", 'w') as fp:
             json.dump(self.hydra_network, fp, indent=2)
         """
@@ -277,13 +275,14 @@ class PywrToHydraNetwork():
         return resource_attribute, resource_scenario
 
 
-    def make_direct_resource_attr_and_scenario(self, value, attr_name, hydra_datatype):
+    def make_direct_resource_attr_and_scenario(self, value, attr_name, hydra_datatype, jsonify=True):
 
         local_attr_id = self.get_next_attr_id()
+        ds_value = json.dumps(value) if jsonify else value
 
         dataset = { "name":  attr_name,
                     "type":  hydra_datatype,
-                    "value": json.dumps(value),
+                    "value": ds_value,
                     "metadata": "{}",
                     "unit": "-",
                     "hidden": 'N'
@@ -469,16 +468,17 @@ class PywrToHydraNetwork():
                 src_ra, src_rs = self.make_direct_resource_attr_and_scenario(
                         src_slot,
                         "src_slot",
-                        "DESCRIPTOR"
+                        "DESCRIPTOR",
+                        jsonify=False
                 )
                 resource_attributes.append(src_ra)
                 resource_scenarios.append(src_rs)
-                breakpoint()
                 if dest_slot:
                     dest_ra, dest_rs = self.make_direct_resource_attr_and_scenario(
                              dest_slot,
                              "dest_slot",
-                             "DESCRIPTOR"
+                             "DESCRIPTOR",
+                             jsonify=False
                     )
                     resource_attributes.append(dest_ra)
                     resource_scenarios.append(dest_rs)
