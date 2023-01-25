@@ -105,7 +105,7 @@ class HydraToPywrNetwork():
             "from pywr.domains.river import *"
         )
 
-        forbidden = ("import", "eval", "exec")
+        forbidden = ("import", "eval", "exec", "__builtins__")
 
         with open(filename, 'w') as fp:
             for p in prelude:
@@ -114,7 +114,7 @@ class HydraToPywrNetwork():
             for rule in self.data.rules:
                 for forbid in forbidden:
                     if forbid in rule["value"]:
-                        raise PermissionError(f"Use of {forbid} statement forbidden in custom rules.")
+                        raise PermissionError(f"Use of <{forbid}> forbidden in custom rules.")
                 fp.write(rule["value"])
                 fp.write("\n\n")
 
@@ -124,7 +124,9 @@ class HydraToPywrNetwork():
         self.edges = self.build_edges()
         self.parameters, self.recorders = self.build_parameters_recorders()
         self.tables = self.build_tables()
-        self.timestepper, self.metadata, self.scenarios = self.build_network_attrs()
+        self.timestepper = self.build_timestepper()
+        self.metadata = self.build_metadata()
+        self.scenarios = self.build_scenarios()
 
         if len(self.data.rules) > 0:
             self.write_rules_as_module()
@@ -145,7 +147,7 @@ class HydraToPywrNetwork():
             pywr_node_type = node["types"][0]["name"]
 
             if pywr_node_type:
-                log.info(f"Building node {node['name']} as {pywr_node_type}...")
+                log.info(f"Building node <{node['name']}> as <{pywr_node_type}>")
                 self.build_node_and_references(node, pywr_node_type)
 
 
@@ -179,16 +181,118 @@ class HydraToPywrNetwork():
 
     def build_tables(self):
         tables = {}
+        table_attr_prefix = "tbl_"
+        table_subattrs = ("header", "index_col", "key", "url")
         for attr in self.data["attributes"]:
             ds = self.get_dataset_by_attr_id(attr.id)
             if not ds:
                 continue
             if ds["type"].upper().startswith("PYWR_TABLE"):
+                # New style Table type: single dictionary value
                 value = json.loads(ds["value"])
                 table = PywrTable(ds["name"], value)
                 tables[table.name] = table
-
+            elif attr.name.lower().startswith(table_attr_prefix):
+                # Old style deprecated Table: multiple subattrs w common prefix
+                tablename = attr.name[len(table_attr_prefix):]
+                for k in table_subattrs:
+                    if tablename.endswith(f".{k}"):
+                        tablename = tablename.replace(f".{k}", "")
+                        try:
+                            ds["value"] = float(ds["value"])
+                        except ValueError:
+                            try:
+                                ds["value"] = json.loads(ds["value"])
+                            except json.decoder.JSONDecodeError:
+                                pass
+                        if table := tables.get(tablename):
+                            table.data[k] = ds["value"]
+                        else:
+                            table_data = {k: ds["value"]}
+                            if k != "url":  # url key required for valid Table
+                                table_data.update({"url": None})
+                            tables[tablename] = PywrTable(tablename, table_data)
         return tables
+
+    def build_timestepper(self):
+        timestep = {}
+        ts_attr_prefix = "timestepper"
+        ts_keys = ("start", "end", "timestep")
+
+        for attr in self.data["attributes"]:
+            ds = self.get_dataset_by_attr_id(attr.id)
+            if ds and ds["type"].upper().startswith("PYWR_TIMESTEP"):
+                # New style Timestep type: single dictionary value
+                value = json.loads(ds["value"])
+                return PywrTimestepper(value)
+            elif ds:
+                # Deprecated multi-attr Timestep, must aggregate
+                # all subattrs then create instance
+                attr_group, *subs = attr.name.split('.')
+                if attr_group != ts_attr_prefix:
+                    continue
+                ts_key = subs[-1]
+                try:
+                    value = json.loads(ds["value"])
+                except json.decoder.JSONDecodeError:
+                    value = ds["value"]
+                timestep[ts_key] = value
+            else:
+                continue
+
+        ts_val = timestep.get("timestep",1)
+        try:
+            tv = int(float(ts_val))
+        except ValueError:
+            tv = ts_val
+        timestep["timestep"] = tv
+        return PywrTimestepper(timestep)
+
+
+    def build_metadata(self):
+        metadata = {
+            "title": self.data['name'],
+            "description": self.data['description']
+        }
+        for attr in self.data["attributes"]:
+            ds = self.get_dataset_by_attr_id(attr.id)
+            if ds and ds["type"].upper().startswith("PYWR_METADATA"):
+                # New style Metadata type: single dictionary value
+                value = json.loads(ds["value"])
+                return PywrMetadata(value)
+            elif ds:
+                # Deprecated multi-attr Metadata, must aggregate
+                # all subattrs then create instance
+                attr_group, *subs = attr.name.split('.')
+                if attr_group != "metadata":
+                    continue
+                meta_key = subs[-1]
+                try:
+                    value = json.loads(ds["value"])
+                except json.decoder.JSONDecodeError:
+                    value = ds["value"]
+                metadata[meta_key] = value
+            else:
+                continue
+        """
+          minimum_version is an optional metadata key, but
+          Pywr requires it to be a string if present.
+        """
+        minver = metadata.get("minimum_version")
+        if minver and not isinstance(minver, str):
+            metadata["minimum_version"] = str(minver)
+
+        return PywrMetadata(metadata)
+
+
+    def build_scenarios(self):
+        try:
+            scenarios_dataset = self.get_network_attr(self.scenario_id, self.data["id"], "scenarios")
+            scenarios = [ PywrScenario(scenario) for scenario in scenarios_dataset["scenarios"] ]
+        except (ResourceNotFoundError, ValueError):
+            scenarios = []
+
+        return scenarios
 
 
     def build_parameters_recorders(self):
@@ -205,6 +309,8 @@ class HydraToPywrNetwork():
                 continue
             if ds["type"].startswith(PARAMETER_TYPES):
                 value = json.loads(ds["value"])
+                value = unnest_parameter_key(value, key="pandas_kwargs")
+                value = add_interp_kwargs(value)
                 p = PywrParameter(ds["name"], value)
                 assert p.name not in parameters    # Disallow overwriting
                 parameters[p.name] = p
@@ -217,69 +323,6 @@ class HydraToPywrNetwork():
                 recorders[r.name] = r
 
         return parameters, recorders
-
-    def build_network_attrs(self):
-        """ TimeStepper, Metadata, Scenario instances """
-
-        timestep = {}
-        ts_keys = ("start", "end", "timestep")
-
-        for attr in self.data["attributes"]:
-            attr_group, *subs = attr.name.split('.')
-            if attr_group != "timestepper":
-                continue
-            dataset = self.get_dataset_by_attr_id(attr.id)
-            ts_key = subs[-1]
-            try:
-                value = json.loads(dataset["value"])
-            except json.decoder.JSONDecodeError:
-                value = dataset["value"]
-            timestep[ts_key] = value
-
-
-        ts_val = timestep.get("timestep",1)
-        try:
-            tv = int(float(ts_val))
-        except ValueError:
-            tv = ts_val
-        timestep["timestep"] = tv
-        ts_inst = PywrTimestepper(timestep)
-
-        """ Metadata """
-        metadata = {"title": self.data['name'],
-                    "description": self.data['description']
-                   }
-        for attr in self.data["attributes"]:
-            attr_group, *subs = attr.name.split('.')
-            if attr_group != "metadata":
-                continue
-            dataset = self.get_dataset_by_attr_id(attr.id)
-            meta_key = subs[-1]
-            try:
-                value = json.loads(dataset["value"])
-            except json.decoder.JSONDecodeError:
-                value = dataset["value"]
-            metadata[meta_key] = value
-
-        """
-          minimum_version is an optional metadata key, but
-          Pywr requires it to be a string if present.
-        """
-        minver = metadata.get("minimum_version")
-        if minver and not isinstance(minver, str):
-            metadata["minimum_version"] = str(minver)
-
-        meta_inst = PywrMetadata(metadata)
-
-        """ Scenarios """
-
-        try:
-            scenarios_dataset = self.get_network_attr(self.scenario_id, self.data["id"], "scenarios")
-            scenarios = [ PywrScenario(scenario) for scenario in scenarios_dataset["scenarios"] ]
-        except (ResourceNotFoundError, ValueError):
-            scenarios = []
-
-        return ts_inst, meta_inst, scenarios
 
 
     def get_network_attr(self, scenario_id, network_id, attr_key):
@@ -361,30 +404,28 @@ class HydraToPywrNetwork():
   get_pywr_data to replace deprecated syntax with that of current
   Pywr versions.
 """
-def unnest_parameter_key(data, key):
+def unnest_parameter_key(param_data, key="pandas_kwargs"):
     """
         Relocates all keys inside parameters' <key> arg
         to the top level of that parameter and removes the
         original <key>.
     """
-    for param in data["parameters"].values():
-        if key in param:
-            for k, v in param[key].items():
-                param[k] = v
-            del param[key]
+    if key in param_data:
+        for k, v in param_data[key].items():
+            param_data[k] = v
+        del param_data[key]
 
-    return data
+    return param_data
 
-def add_interp_kwargs(data):
+def add_interp_kwargs(param_data):
     """
         Replaces the deprecated `kind` key of interpolatedvolume
         parameters with the nested `interp_kwargs` key.
     """
     ptype = "interpolatedvolume"
     new_key = "interp_kwargs"
-    for param in data["parameters"].values():
-        if param["type"].lower().startswith(ptype) and "kind" in param:
-            param[new_key] = {"kind": param["kind"]}
-            del param["kind"]
+    if param_data["type"].lower().startswith(ptype) and "kind" in param_data:
+        param_data[new_key] = {"kind": param_data["kind"]}
+        del param_data["kind"]
 
-    return data
+    return param_data
