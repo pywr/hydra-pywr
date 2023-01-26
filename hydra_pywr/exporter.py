@@ -221,7 +221,7 @@ class HydraToPywrNetwork():
 
         for attr in self.data["attributes"]:
             ds = self.get_dataset_by_attr_id(attr.id)
-            if ds and ds["type"].upper().startswith("PYWR_TIMESTEP"):
+            if ds and ds["type"].upper().startswith("PYWR_TIMESTEPPER"):
                 # New style Timestep type: single dictionary value
                 value = json.loads(ds["value"])
                 return PywrTimestepper(value)

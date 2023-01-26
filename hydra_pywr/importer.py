@@ -178,17 +178,12 @@ class PywrToHydraNetwork():
         return self.hydra_network
 
     def build_network_attributes(self):
-        exclude_metadata_attrs = ("title", "description", "projection")
         hydra_network_attrs = []
         resource_scenarios = []
 
-        for attr_name in self.network.timestepper.data:
-            ra, rs = self.make_resource_attr_and_scenario(self.network.timestepper, f"timestepper.{attr_name}")
-            hydra_network_attrs.append(ra)
-            resource_scenarios.append(rs)
-
-        for attr_name in (a for a in self.network.metadata.data if a not in exclude_metadata_attrs):
-            ra, rs = self.make_resource_attr_and_scenario(self.network.metadata, f"metadata.{attr_name}")
+        for component in ("timestepper", "metadata"):
+            comp_inst = getattr(self.network, component)
+            ra, rs = self.make_resource_attr_and_scenario(comp_inst, component)
             hydra_network_attrs.append(ra)
             resource_scenarios.append(rs)
 
@@ -196,12 +191,6 @@ class PywrToHydraNetwork():
             ra, rs = self.make_resource_attr_and_scenario(table, table_name)
             hydra_network_attrs.append(ra)
             resource_scenarios.append(rs)
-            """
-            for attr_name in table.data:
-                ra, rs = self.make_resource_attr_and_scenario(table, table_name)
-                hydra_network_attrs.append(ra)
-                resource_scenarios.append(rs)
-            """
 
         scenario_data = [ scenario.data for scenario in self.network.scenarios ]
         if scenario_data:
@@ -226,11 +215,9 @@ class PywrToHydraNetwork():
         return template_attrs
 
     def register_hydra_attributes(self):
-        timestepper_attrs = { 'timestepper.start', 'timestepper.end', 'timestepper.timestep'}
+        typed_network_attrs = { "timestepper", "metadata", "scenarios" }
         excluded_attrs = { 'position', 'type' }
-        pending_attrs = timestepper_attrs
-
-        pending_attrs.add("scenarios")
+        pending_attrs = typed_network_attrs
 
         for node in self.network.nodes.values():
             for attr_name in node.data:
@@ -242,12 +229,8 @@ class PywrToHydraNetwork():
         for rec_name in self.network.recorders:
             pending_attrs.add(rec_name)
 
-        for meta_attr in self.network.metadata.data:
-            pending_attrs.add(f"metadata.{meta_attr}")
-
-        for table_name, table in self.network.tables.items():
-            for attr_name in table.data.keys():
-                pending_attrs.add(table_name)
+        for table_name in self.network.tables:
+            pending_attrs.add(table_name)
 
         attrs = [ make_hydra_attr(attr_name) for attr_name in pending_attrs - excluded_attrs.union(set(self.template_attributes.keys())) ]
 
@@ -259,11 +242,8 @@ class PywrToHydraNetwork():
 
         if isinstance(element, (PywrParameter, PywrRecorder)):
             resource_scenario = self.make_paramrec_resource_scenario(element, attr_name, local_attr_id)
-        elif isinstance(element, PywrTable):
-            resource_scenario = self.make_table_resource_scenario(element, attr_name, local_attr_id)
-        elif isinstance(element, (PywrMetadata, PywrTimestepper)):
-            base, name = attr_name.split('.')
-            resource_scenario = self.make_network_resource_scenario(element, name, local_attr_id)
+        elif isinstance(element, (PywrTable, PywrMetadata, PywrTimestepper)):
+            resource_scenario = self.make_typed_resource_scenario(element, attr_name, local_attr_id)
         else:
             resource_scenario = self.make_resource_scenario(element, attr_name, local_attr_id)
 
@@ -300,7 +280,7 @@ class PywrToHydraNetwork():
         return resource_attribute, resource_scenario
 
 
-    def make_table_resource_scenario(self, element, attr_name, local_attr_id):
+    def make_typed_resource_scenario(self, element, attr_name, local_attr_id):
         hydra_datatype = self.lookup_hydra_datatype(element)
         dataset = { "name":  attr_name,
                     "type":  hydra_datatype,
@@ -399,6 +379,10 @@ class PywrToHydraNetwork():
             return "DESCRIPTOR"
         elif isinstance(attr_value, PywrTable):
             return "PYWR_TABLE"
+        elif isinstance(attr_value, PywrTimestepper):
+            return "PYWR_TIMESTEPPER"
+        elif isinstance(attr_value, PywrMetadata):
+            return "PYWR_METADATA"
         elif isinstance(attr_value, PywrParameter):
             return self.lookup_parameter_hydra_datatype(attr_value)
         elif isinstance(attr_value, PywrRecorder):
