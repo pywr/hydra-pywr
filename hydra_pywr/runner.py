@@ -154,7 +154,7 @@ class PywrHydraRunner(HydraToPywrNetwork):
         for recorder in model.recorders:
             if hasattr(recorder, 'to_dataframe'):
                 df_recorders.append(recorder)
-            else:
+            elif hasattr(recorder, "value"):
                 non_df_recorders.append(recorder)
 
         # Force a setup regardless of whether the model has been run or setup before
@@ -219,19 +219,25 @@ class PywrHydraRunner(HydraToPywrNetwork):
                 node = recorder.parameter.node
         return node
 
-    def _get_attribute_name_from_recorder(self, recorder):
+    def _get_attribute_name_from_recorder(self, recorder, is_dataframe=False):
+        scalar_suffix = "value"
+        simulated_prefix = "simulated"
+
         if recorder.name is None:
-            attribute_name = recorder.__class__
+            attribute_name = recorder.__class__.__name__
         else:
             if ':' in recorder.name:
-                _, attribute_name = recorder.name.rsplit(':', 1)
+                attribute_name = recorder.name.rsplit(':')[-1]
             elif '.' in recorder.name:
                 attribute_name = recorder.name.split('.')[0]
             else:
                 attribute_name = recorder.name
 
-        if not attribute_name.startswith('simulated'):
-            attribute_name = f'simulated_{attribute_name}'
+        if not attribute_name.startswith(simulated_prefix):
+            attribute_name = f'{simulated_prefix}_{attribute_name}'
+
+        if not (is_dataframe or attribute_name.endswith(scalar_suffix)):
+            attribute_name = f"{attribute_name}_{scalar_suffix}"
 
         return attribute_name
 
@@ -348,8 +354,7 @@ class PywrHydraRunner(HydraToPywrNetwork):
     def generate_array_recorder_resource_scenarios(self):
         """ Generate resource scenario data from NumpyArrayXXX recorders. """
         if self._df_recorders is None:
-            # TODO turn this on when logging is sorted out.
-            # logger.info('No array recorders defined not results saved to Hydra.')
+            log.warning('No array recorders defined, results not saved to Hydra.')
             return
 
         for recorder in self._df_recorders:
@@ -386,7 +391,8 @@ class PywrHydraRunner(HydraToPywrNetwork):
             resource_scenario = self._make_recorder_resource_scenario(recorder,
                                                                       value,
                                                                       'dataframe',
-                                                                      is_timeseries=is_timeseries)
+                                                                      is_timeseries=is_timeseries,
+                                                                      is_dataframe=True)
 
             if resource_scenario is None:
                 continue
@@ -394,28 +400,38 @@ class PywrHydraRunner(HydraToPywrNetwork):
             yield resource_scenario
 
         if self._non_df_recorders is None:
-            # TODO turn this on when logging is sorted out.
-            # logger.info('No array recorders defined not results saved to Hydra.')
+            log.warning('No array recorders defined, results not saved to Hydra.')
             return
 
         for recorder in self._non_df_recorders:
             try:
+                data_type = "array"
                 value = list(recorder.values())
+                if len(value) == 1:
+                    value = value[0]
+                    data_type = "scalar"
             except NotImplementedError:
                 continue
+            else:
+                try:
+                    value = recorder.value()
+                    data_type = "scalar"
+                except NotImplementedError:
+                    continue
 
             resource_scenario = self._make_recorder_resource_scenario(recorder,
                                                                       value,
-                                                                      'array')
+                                                                      data_type,
+                                                                      is_dataframe=False)
 
             if resource_scenario is None:
                 continue
 
             yield resource_scenario
 
-    def _make_recorder_resource_scenario(self, recorder, value, data_type, is_timeseries=False):
+    def _make_recorder_resource_scenario(self, recorder, value, data_type, is_timeseries=False, is_dataframe=False):
         # Get the attribute and its ID
-        attribute_name = self._get_attribute_name_from_recorder(recorder)
+        attribute_name = self._get_attribute_name_from_recorder(recorder, is_dataframe=is_dataframe)
         attribute = self._get_attribute_from_name(attribute_name)
 
         # Now we need to ensure there is a resource attribute for all nodes and recorder attributes
