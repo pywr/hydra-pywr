@@ -12,23 +12,14 @@ from pywrparser.types import (
     PywrEdge
 )
 
+from .datatypes import (
+    lookup_parameter_hydra_datatype,
+    lookup_recorder_hydra_datatype
+)
+
 import logging
 log = logging.getLogger(__name__)
 
-
-PARAMETER_HYDRA_TYPE_MAP = {
-    "aggregatedparameter": "PYWR_PARAMETER_AGGREGATED",
-    "constantscenarioparameter": "PYWR_PARAMETER_CONSTANT_SCENARIO",
-    "controlcurveindexparameter": "PYWR_PARAMETER_CONTROL_CURVE_INDEX",
-    "controlcurveinterpolatedparameter": "PYWR_PARAMETER_CONTROL_CURVE_INTERPOLATED",
-    "dataframeparameter": "PYWR_DATAFRAME",
-    "indexedarrayparameter": "PYWR_PARAMETER_INDEXED_ARRAY",
-    "monthlyprofileparameter": "PYWR_PARAMETER_MONTHLY_PROFILE"
-}
-
-RECORDER_HYDRA_TYPE_MAP = {
-    "flowdurationcurvedeviationrecorder": "PYWR_RECORDER_FDC_DEVIATION"
-}
 
 class PywrTypeEncoder(json.JSONEncoder):
     def default(self, inst):
@@ -36,7 +27,6 @@ class PywrTypeEncoder(json.JSONEncoder):
             return inst.data
         else:
             return json.JSONEncoder.default(self, inst)
-
 
 
 """
@@ -352,22 +342,6 @@ class PywrToHydraNetwork():
         return resource_scenario
 
 
-    def lookup_parameter_hydra_datatype(self, value):
-        ptype = value.type
-        if not ptype.endswith("parameter"):
-            ptype += "parameter"
-
-        return PARAMETER_HYDRA_TYPE_MAP.get(ptype, "PYWR_PARAMETER")
-
-
-    def lookup_recorder_hydra_datatype(self, value):
-        rtype = value.type
-        if not rtype.endswith("recorder"):
-            rtype += "recorder"
-
-        return RECORDER_HYDRA_TYPE_MAP.get(rtype, "PYWR_RECORDER")
-
-
     def lookup_hydra_datatype(self, attr_value):
         if isinstance(attr_value, Number):
             return "SCALAR"
@@ -384,9 +358,9 @@ class PywrToHydraNetwork():
         elif isinstance(attr_value, PywrMetadata):
             return "PYWR_METADATA"
         elif isinstance(attr_value, PywrParameter):
-            return self.lookup_parameter_hydra_datatype(attr_value)
+            return lookup_parameter_hydra_datatype(attr_value)
         elif isinstance(attr_value, PywrRecorder):
-            return self.lookup_recorder_hydra_datatype(attr_value)
+            return lookup_recorder_hydra_datatype(attr_value)
 
         raise ValueError(f"Unknown data type: '{attr_value}'")
 
