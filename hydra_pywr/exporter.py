@@ -139,7 +139,11 @@ class PywrHydraExporter(BasePywrHydra):
         network.rules = rules
 
         # Fetch all the attributes
-        attributes = client.get_attributes()
+        attributes = client.get_attributes(
+        network_id=network.id,
+        project_id = network.project_id,
+        include_global=True
+        )
         attributes = {attr.id: attr for attr in attributes}
 
         template = None
@@ -246,6 +250,7 @@ class PywrHydraExporter(BasePywrHydra):
         link_lookup = self.get_link_lookup()
 
         for node in self.data['nodes']:
+
             #this might occur if the node was excluded by virtue of being related
             #to another node which is being excluded
             if node['id'] in self.excluded_node_ids:
