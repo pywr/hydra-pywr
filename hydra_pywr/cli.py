@@ -106,13 +106,14 @@ def import_json(obj, filename, project_id, user_id, template_id, projection, net
 @click.option('--data-dir', default='/tmp')
 @click.option('-s', '--scenario-id', type=int, default=None)
 @click.option('-u', '--user-id', type=int, default=None)
-@click.option('--json-indent', type=int, default=2)
+@click.option('--use-cache', is_flag=True)
 @click.option('--json-sort-keys/--no-json-sort-keys', default=False)
-def export_json(obj, data_dir, scenario_id, user_id, json_sort_keys, json_indent):
+@click.option('--json-indent', type=int, default=2)
+def export_json(obj, data_dir, scenario_id, user_id, use_cache, json_sort_keys, json_indent):
     """ Export a Pywr JSON from Hydra. """
 
     client = get_logged_in_client(obj, user_id=user_id)
-    exporter = HydraToPywrNetwork.from_scenario_id(client, scenario_id)
+    exporter = HydraToPywrNetwork.from_scenario_id(client, scenario_id, use_cache=use_cache)
     network_data = exporter.build_pywr_network()
     network_id = exporter.data.id
     pywr_network = PywrNetwork(network_data)

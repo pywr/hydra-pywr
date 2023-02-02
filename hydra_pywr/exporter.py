@@ -1,6 +1,8 @@
-import json
-import re
 from collections import defaultdict
+from datetime import datetime
+import json
+import os
+import re
 
 from pywrparser.types import (
     PywrParameter,
@@ -16,6 +18,7 @@ from pywrparser.types import (
 from .rules import exec_rules
 from .template import PYWR_SPLIT_LINK_TYPES
 
+from hydra_base.lib.objects import JSONObject
 from hydra_base.exceptions import ResourceNotFoundError
 
 
@@ -31,6 +34,7 @@ RECORDER_TYPES = (
     "PYWR_RECORDER",
 )
 
+CACHE_DIR = "/tmp/hydra_pywr_cache"
 
 """
     Hydra => PywrNetwork
@@ -72,11 +76,47 @@ class HydraToPywrNetwork():
 
 
     @classmethod
-    def from_scenario_id(cls, client, scenario_id, template_id=None, index=0):
+    def from_scenario_id(cls, client, scenario_id, template_id=None, index=0, **kwargs):
+        if kwargs.get("use_cache") is True:
+            scen_cache_file = f"scenario_{scenario_id}.json"
+            if not os.path.exists(CACHE_DIR):
+                try:
+                    os.mkdir(CACHE_DIR)
+                except OSError:
+                    log.error(f"Unable to create scenario cache at {CACHE_DIR}: defaulting to '/tmp'")
+                    cache_dir = "/tmp"
+            scen_cache_path = os.path.join(CACHE_DIR, scen_cache_file)
+            if os.path.exists(scen_cache_path):
+                mod_ts = os.path.getmtime(scen_cache_path)
+                mod_dt = datetime.fromtimestamp(int(mod_ts))
+                log.info(f"Using cached scenario updated at {mod_dt}")
+                with open(scen_cache_path, 'r') as fp:
+                    scenario = JSONObject(json.load(fp))
+            else:
+                    scenario = client.get_scenario(scenario_id, include_data=True, include_results=False, include_metadata=True, include_attr=False)
+                    with open(scen_cache_path, 'w') as fp:
+                        json.dump(scenario, fp)
+                    log.info(f"Cached scenario written to '{scen_cache_path}'")
 
-        scenario = client.get_scenario(scenario_id, include_data=True, include_results=False, include_metadata=True, include_attr=False)
-        network_id = scenario.network_id
-        network = client.get_network(network_id, include_data=True, include_results=False, template_id=None)
+            network_id = scenario.network_id
+            net_cache_file = f"network_{scenario.network_id}.json"
+            net_cache_path = os.path.join(CACHE_DIR, net_cache_file)
+            if os.path.exists(net_cache_path):
+                mod_ts = os.path.getmtime(net_cache_path)
+                mod_dt = datetime.fromtimestamp(int(mod_ts))
+                log.info(f"Using cached network updated at {mod_dt}")
+                with open(net_cache_path, 'r') as fp:
+                    network = JSONObject(json.load(fp))
+            else:
+                network = client.get_network(network_id, include_data=False, include_results=False, template_id=template_id)
+                with open(net_cache_path, 'w') as fp:
+                    json.dump(JSONObject(network), fp)
+                log.info(f"Cached network written to '{net_cache_path}'")
+        else:
+            scenario = client.get_scenario(scenario_id, include_data=True, include_results=False, include_metadata=True, include_attr=False)
+            network_id = scenario.network_id
+            network = client.get_network(network_id, include_data=False, include_results=False, template_id=template_id)
+
         network.scenarios = [scenario]
         network.rules = client.get_resource_rules('NETWORK', network_id)
 
