@@ -93,7 +93,7 @@ class HydraToPywrNetwork():
                 with open(scen_cache_path, 'r') as fp:
                     scenario = JSONObject(json.load(fp))
             else:
-                    scenario = client.get_scenario(scenario_id, include_data=True, include_results=False, include_metadata=True, include_attr=False)
+                    scenario = client.get_scenario(scenario_id=scenario_id, include_data=True, include_results=False, include_metadata=True, include_attr=False)
                     with open(scen_cache_path, 'w') as fp:
                         json.dump(scenario, fp)
                     log.info(f"Cached scenario written to '{scen_cache_path}'")
@@ -108,23 +108,33 @@ class HydraToPywrNetwork():
                 with open(net_cache_path, 'r') as fp:
                     network = JSONObject(json.load(fp))
             else:
-                network = client.get_network(network_id, include_data=False, include_results=False, template_id=template_id)
+                network = client.get_network(
+                            network_id=network_id,
+                            include_data=False,
+                            include_results=False,
+                            template_id=template_id,
+                            include_attributes=True)
                 with open(net_cache_path, 'w') as fp:
                     json.dump(JSONObject(network), fp)
                 log.info(f"Cached network written to '{net_cache_path}'")
         else:
-            scenario = client.get_scenario(scenario_id, include_data=True, include_results=False, include_metadata=True, include_attr=False)
+            scenario = client.get_scenario(scenario_id=scenario_id, include_data=True, include_results=False, include_metadata=True, include_attr=False)
             network_id = scenario.network_id
-            network = client.get_network(network_id, include_data=False, include_results=False, template_id=template_id)
+            network = client.get_network(
+                        network_id=network_id,
+                        include_data=False,
+                        include_results=False,
+                        template_id=template_id,
+                        include_attributes=True)
 
         network.scenarios = [scenario]
-        network.rules = client.get_resource_rules('NETWORK', network_id)
+        network.rules = client.get_resource_rules(ref_key='NETWORK', scenario_id_id=scenario_id)
 
         attributes = client.get_attributes()
         attributes = {attr.id: attr for attr in attributes}
 
         log.info(f"Retreiving template {network.types[index].template_id}")
-        template = client.get_template(network.types[index].template_id)
+        template = client.get_template(template_id=network.types[index].template_id)
 
         return cls(client, network, network_id, scenario_id, attributes, template)
 
@@ -367,8 +377,8 @@ class HydraToPywrNetwork():
 
     def get_network_attr(self, scenario_id, network_id, attr_key):
 
-        net_attr = self.hydra.get_attribute_by_name_and_dimension(attr_key, None)
-        ra = self.hydra.get_resource_attributes("network", network_id)
+        net_attr = self.hydra.get_attribute_by_name_and_dimension(name=attr_key, dimension_id=None)
+        ra = self.hydra.get_resource_attributes(ref_key="network", ref_id=network_id)
         ra_id = None
         for r in ra:
             if r["attr_id"] == net_attr["id"]:
@@ -377,7 +387,7 @@ class HydraToPywrNetwork():
         if not ra_id:
             raise ValueError(f"Resource attribute for {attr_key} not found in scenario {scenario_id} on network {network_id}")
 
-        data = self.hydra.get_resource_scenario(ra_id, scenario_id, get_parent_data=False)
+        data = self.hydra.get_resource_scenario(resource_attr_id=ra_id, scenario_id=scenario_id, get_parent_data=False)
         attr_data = json.loads(data["dataset"]["value"])
 
         return attr_data # NB: String keys
@@ -432,11 +442,7 @@ class HydraToPywrNetwork():
         if comment := nodedata.get("description"):
             node_attr_data["comment"] = comment
 
-        try:
-            node = PywrNode(node_attr_data)
-        except Exception as e:
-            breakpoint()
-
+        node = PywrNode(node_attr_data)
         self.nodes[node.name] = node
 
 """
