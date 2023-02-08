@@ -17,6 +17,8 @@ from .datatypes import (
     lookup_recorder_hydra_datatype
 )
 
+from hydra_base.lib.objects import JSONObject
+
 import logging
 log = logging.getLogger(__name__)
 
@@ -32,10 +34,6 @@ class PywrTypeEncoder(json.JSONEncoder):
 """
     PywrNetwork => hydra_network
 """
-def make_hydra_attr(name, desc=None):
-    return { "name": name,
-             "description": desc if desc else name
-           }
 
 class PywrToHydraNetwork():
 
@@ -98,6 +96,12 @@ class PywrToHydraNetwork():
             if node["name"] == name:
                 return node
 
+    def make_hydra_attr(self, name, desc=None):
+        return { "name": name,
+                 "description": desc if desc else name,
+                 "project_id": self.project_id
+               }
+
     def make_baseline_scenario(self, resource_scenarios):
         return { "name": "Baseline",
                  "description": "hydra-pywr Baseline scenario",
@@ -107,11 +111,11 @@ class PywrToHydraNetwork():
 
     def initialise_hydra_connection(self):
         if not self.hydra:
-            from hydra_client.connection import JSONConnection
-            self.hydra = JSONConnection(self.hostname, session_id=self.session_id, user_id=self.user_id)
+            from hydra_client.connection import RemoteJSONConnection
+            self.hydra = RemoteJSONConnection(session_id=self.session_id, user_id=self.user_id)
 
         print(f"Retrieving template id '{self.template_id}'...")
-        self.template = self.hydra.get_template(self.template_id)
+        self.template = self.hydra.get_template(template_id=self.template_id)
 
 
     def build_hydra_network(self, projection=None):
@@ -222,9 +226,9 @@ class PywrToHydraNetwork():
         for table_name in self.network.tables:
             pending_attrs.add(table_name)
 
-        attrs = [ make_hydra_attr(attr_name) for attr_name in pending_attrs - excluded_attrs.union(set(self.template_attributes.keys())) ]
+        attrs = [ self.make_hydra_attr(attr_name) for attr_name in pending_attrs - excluded_attrs.union(set(self.template_attributes.keys())) ]
 
-        return self.hydra.add_attributes(attrs)
+        return self.hydra.add_attributes(attrs=attrs)
 
 
     def make_resource_attr_and_scenario(self, element, attr_name, datatype=None):
@@ -255,6 +259,7 @@ class PywrToHydraNetwork():
                     "value": ds_value,
                     "metadata": "{}",
                     "unit": "-",
+                    "unit_id": None,
                     "hidden": 'N'
                   }
 
@@ -277,6 +282,7 @@ class PywrToHydraNetwork():
                     "value": element.as_json(),
                     "metadata": "{}",
                     "unit": "-",
+                    "unit_id": None,
                     "hidden": 'N'
                   }
 
@@ -296,6 +302,7 @@ class PywrToHydraNetwork():
                     "value": value,
                     "metadata": "{}",
                     "unit": "-",
+                    "unit_id": None,
                     "hidden": 'N'
                   }
 
@@ -314,6 +321,7 @@ class PywrToHydraNetwork():
                     "value": json.dumps(value),
                     "metadata": "{}",
                     "unit": "-",
+                    "unit_id": None,
                     "hidden": 'N'
                   }
 
@@ -332,6 +340,7 @@ class PywrToHydraNetwork():
                     "value": json.dumps(value, cls=PywrTypeEncoder),
                     "metadata": "{}",
                     "unit": "-",
+                    "unit_id": None,
                     "hidden": 'N'
                   }
 
@@ -394,13 +403,15 @@ class PywrToHydraNetwork():
             hydra_node["types"] = [{ "id": self.get_typeid_by_name(node.type.lower()),
                                      "child_template_id": self.template_id
                                   }]
-
             if "position" in node.data:
                 proj_data = node.data["position"]
                 for coords in proj_data.values():
                     x, y = coords[0], coords[1]
                 hydra_node["x"] = x
                 hydra_node["y"] = y
+            else:
+                hydra_node["x"] = 0
+                hydra_node["y"] = 0
 
             hydra_nodes.append(hydra_node)
 
@@ -479,7 +490,8 @@ class PywrToHydraNetwork():
 
     def add_network_to_hydra(self):
         """ Pass network to Hydra"""
-        self.hydra.add_network(self.hydra_network)
+        network = JSONObject(self.hydra_network)
+        self.hydra.add_network({"net": network})
 
 
 """

@@ -91,7 +91,8 @@ def import_json(obj, filename, project_id, user_id, template_id, projection, net
     if network_name:
         pnet.metadata.data["title"] = network_name
 
-    importer = PywrToHydraNetwork(pnet, user_id=user_id, template_id=template_id, project_id=project_id)
+    client = get_logged_in_client(obj)
+    importer = PywrToHydraNetwork(pnet, hydra=client, user_id=user_id, template_id=template_id, project_id=project_id)
     importer.build_hydra_network(projection)
     importer.add_network_to_hydra()
 
