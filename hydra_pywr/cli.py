@@ -59,11 +59,12 @@ def cli(obj, username, password, hostname, session):
 @click.option('--template-id', type=int)
 @click.option('--projection', type=str, default=None)
 @click.option('--network-name', type=str, default=None)
+@click.option('--rewrite-url-prefix', type=str, default=None)
 @click.option('--run/--no-run', default=False)
 @click.option('--solver', type=str, default=None)
 @click.option('--check-model/--no-check-model', default=True)
 @click.option('--ignore-type-errors', is_flag=True, default=False)
-def import_json(obj, filename, project_id, user_id, template_id, projection, network_name, run, solver, check_model, ignore_type_errors, *args):
+def import_json(obj, filename, project_id, user_id, template_id, projection, network_name, rewrite_url_prefix, run, solver, check_model, ignore_type_errors, *args):
     """ Import a Pywr JSON file into Hydra. """
     click.echo(f'Beginning import of "{filename}" to Project ID: {project_id}')
 
@@ -90,6 +91,11 @@ def import_json(obj, filename, project_id, user_id, template_id, projection, net
 
     if network_name:
         pnet.metadata.data["title"] = network_name
+
+    if rewrite_url_prefix:
+        from .utils import file_to_s3
+        for elem in [*pnet.parameters.values(), *pnet.tables.values()]:
+            file_to_s3(elem.data, rewrite_url_prefix)
 
     client = get_logged_in_client(obj)
     importer = PywrToHydraNetwork(pnet, hydra=client, user_id=user_id, template_id=template_id, project_id=project_id)

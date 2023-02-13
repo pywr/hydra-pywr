@@ -17,6 +17,10 @@ from pywrparser.types import (
 
 from .rules import exec_rules
 from .template import PYWR_SPLIT_LINK_TYPES
+from .utils import (
+    unnest_parameter_key,
+    add_interp_kwargs
+)
 
 from hydra_base.lib.objects import JSONObject
 from hydra_base.exceptions import ResourceNotFoundError
@@ -156,6 +160,16 @@ class HydraToPywrNetwork():
         )
 
         forbidden = ("import", "eval", "exec", "__builtins__")
+
+        audit_handler = """
+        def handler(event, args):
+            forbidden = ('os.', 'subprocess')
+            for forbid in forbidden:
+                if event.startswith(forbid):
+                    raise PermissionError(f"Use of <{forbid}> forbidden in custom rules.")
+
+        sys.addaudithook(handler)
+        """
 
         with open(filename, 'w') as fp:
             for p in prelude:
@@ -445,33 +459,3 @@ class HydraToPywrNetwork():
         node = PywrNode(node_attr_data)
         self.nodes[node.name] = node
 
-"""
-  Compatibility patches: these update the Pywr data output of
-  get_pywr_data to replace deprecated syntax with that of current
-  Pywr versions.
-"""
-def unnest_parameter_key(param_data, key="pandas_kwargs"):
-    """
-        Relocates all keys inside parameters' <key> arg
-        to the top level of that parameter and removes the
-        original <key>.
-    """
-    if key in param_data:
-        for k, v in param_data[key].items():
-            param_data[k] = v
-        del param_data[key]
-
-    return param_data
-
-def add_interp_kwargs(param_data):
-    """
-        Replaces the deprecated `kind` key of interpolatedvolume
-        parameters with the nested `interp_kwargs` key.
-    """
-    ptype = "interpolatedvolume"
-    new_key = "interp_kwargs"
-    if param_data["type"].lower().startswith(ptype) and "kind" in param_data:
-        param_data[new_key] = {"kind": param_data["kind"]}
-        del param_data["kind"]
-
-    return param_data

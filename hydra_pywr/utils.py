@@ -1,3 +1,4 @@
+import os
 import pandas
 from hydra_network_utils import data as data_utils
 
@@ -154,3 +155,45 @@ def progress_start_end_dates(client, scenario_id):
     # Now update the database with the new data
     for data in timestepper_data.values():
         client.add_data_to_attribute(scenario_id, data['resource_attribute_id'], data['dataset'])
+
+"""
+  Compatibility patches: these update the Pywr data output of
+  get_pywr_data to replace deprecated syntax with that of current
+  Pywr versions.
+"""
+def unnest_parameter_key(param_data, key="pandas_kwargs"):
+    """
+        Relocates all keys inside parameters' <key> arg
+        to the top level of that parameter and removes the
+        original <key>.
+    """
+    if key in param_data:
+        for k, v in param_data[key].items():
+            param_data[k] = v
+        del param_data[key]
+
+    return param_data
+
+def add_interp_kwargs(param_data):
+    """
+        Replaces the deprecated `kind` key of interpolatedvolume
+        parameters with the nested `interp_kwargs` key.
+    """
+    ptype = "interpolatedvolume"
+    new_key = "interp_kwargs"
+    if param_data["type"].lower().startswith(ptype) and "kind" in param_data:
+        param_data[new_key] = {"kind": param_data["kind"]}
+        del param_data["kind"]
+
+    return param_data
+
+def file_to_s3(elem_data, s3prefix):
+    """
+      Transforms local url references to point to s3 storage
+    """
+    if "url" not in elem_data:
+        return
+    url = elem_data["url"]
+    path, filename = os.path.split(url)
+    s3url = os.path.join(s3prefix, filename)
+    elem_data["url"] = s3url
