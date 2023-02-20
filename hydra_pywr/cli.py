@@ -6,10 +6,17 @@ import numpy as np
 from hydra_client.connection import RemoteJSONConnection, JSONConnection
 from .exporter import PywrHydraExporter
 from .runner import PywrHydraRunner
-from .template import register_template, unregister_template, migrate_network_template, TemplateExistsError
+from .template import (
+    register_template,
+    unregister_template,
+    migrate_network_template,
+    TemplateExistsError
+)
 from . import utils
 from hydra_client.click import hydra_app, make_plugins, write_plugins
 from pywr.model import Model
+
+from pywr.recorders.progress import ProgressRecorder  # type: ignore
 
 from hydra_pywr_common.types.network import(
     PywrNetwork,
@@ -326,9 +333,13 @@ def run_network_scenario(client, scenario_id, template_id, output_frequency=None
 @click.argument('filename', default=None)
 def run_file(filename):
     """ Run pywr on the specified file """
+    _run_file(filename)
+def _run_file(filename):
 
     model = Model.load(filename)
-    model.setup()
+
+    ProgressRecorder(model, print_func=print)
+   # model.setup()
 
     stats = model.run()
 
