@@ -16,8 +16,6 @@ log = logging.getLogger(__name__)
 
 class LinearStorageReleaseControl(Link):
     """A specialised node that provides a default max_flow based on a release rule.
-
-
     """
     def __init__(self, model, name, storage_node, release_values, scenario=None, **kwargs):
 
@@ -28,7 +26,11 @@ class LinearStorageReleaseControl(Link):
             control_curves = release_values['volume'].iloc[1:-1].astype(np.float64)
             values = release_values['value'].astype(np.float64)
             storage_node_list = list(filter(lambda x:x.name==storage_node, model.nodes))
-            max_flow_param = ControlCurveInterpolatedParameter(model, storage_node_list[0], control_curves, values)
+            if len(storage_node_list) != 0:
+                max_flow_param = ControlCurveInterpolatedParameter(model, storage_node_list[0], control_curves, values)
+            else:
+                storage_node = model.pre_load_node(storage_node)
+                max_flow_param = ControlCurveInterpolatedParameter(model, storage_node, control_curves, values)
 
         else:
             # There should be multiple control curves defined.
@@ -49,6 +51,7 @@ class LinearStorageReleaseControl(Link):
                 curves.append(control_curve)
 
             max_flow_param = ScenarioWrapperParameter(model, scenario, curves)
+
         self.scenario = scenario
         super().__init__(model, name, max_flow=max_flow_param, **kwargs)
 
