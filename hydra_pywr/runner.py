@@ -1,4 +1,5 @@
 import pandas
+import yaml
 
 from pywr.model import Model
 from pywr.nodes import Node, Storage
@@ -96,7 +97,7 @@ class PywrHydraRunner(HydraToPywrNetwork):
     def _delete_resource_scenarios(self):
         scenario = self.data.scenarios[0]
 
-        ra_is_var_map = {ra['id']: ra['attr_is_var'] for ra in self.hydra.get_resource_attributes("network", self.network_id)}
+        ra_is_var_map = {ra['id']: ra['attr_is_var'] for ra in self.hydra.get_resource_attributes(ref_key="network", ref_id=self.network_id)}
         ra_to_delete = []
 
         # Compile a list of resource attributes to delete
@@ -107,7 +108,7 @@ class PywrHydraRunner(HydraToPywrNetwork):
                 ra_to_delete.append(ra_id)
 
         # Now delete them all
-        self.hydra.delete_resource_scenarios(scenario['id'], ra_to_delete, quiet=True)
+        self.hydra.delete_resource_scenarios(scenario_id=scenario['id'], resource_attr_ids=ra_to_delete, quiet=True)
 
 
     def load_pywr_model(self, solver=None):
@@ -172,6 +173,25 @@ class PywrHydraRunner(HydraToPywrNetwork):
         # Save these for later
         self._df_recorders = df_recorders
         self._non_df_recorders = non_df_recorders
+
+
+    def get_do_config(self):
+        do_config_prefix = "do_"
+        no_config_errtxt = f"No DO settings found on network {self.data['name']}"
+
+        for attr in self.data["attributes"]:
+            if attr["name"].startswith(do_config_prefix):
+                do_config_attr = attr
+                break
+        else:
+            raise RuntimeError(no_config_errtxt)
+
+        rs = [rs for rs in self.data['scenarios'][0]['resourcescenarios'] if rs.resource_attr_id == do_config_attr.id]
+        if len(rs) == 0:
+            raise RuntimeError(no_config_errtxt)
+        else:
+            return yaml.safe_load(rs[0].dataset.value)
+
 
     def _get_resource_attribute_id(self, node_name, attribute_name):
 
@@ -342,7 +362,7 @@ class PywrHydraRunner(HydraToPywrNetwork):
             })
 
         # The response attributes have ids now.
-        response_attributes = self.hydra.add_attributes(attributes)
+        response_attributes = self.hydra.add_attributes(attrs=attributes)
         # Update the attribute mapping
         self.attributes.update({attr.id: attr for attr in response_attributes})
 

@@ -1,7 +1,10 @@
 import os
 import pandas
+from urllib.parse import urlparse
 from hydra_network_utils import data as data_utils
 
+import logging
+log = logging.getLogger(__name__)
 
 def import_dataframe(client, dataframe, scenario_id, attribute_id, create_new=False, data_type='PYWR_DATAFRAME', column=None):
 
@@ -197,3 +200,53 @@ def file_to_s3(elem_data, s3prefix):
     path, filename = os.path.split(url)
     s3url = os.path.join(s3prefix, filename)
     elem_data["url"] = s3url
+
+
+def retrieve_url(url, urldir):
+    import shutil
+    from urllib.request import urlopen
+
+    if not os.path.exists(urldir):
+        try:
+            os.makedirs(urldir)
+        except OSError as err:
+            raise OSError(f"Unable to create URL retrieval directory at {urldir}: {err}")
+    elif not os.path.isdir(urldir):
+        raise OSError(f"Destination '{urldir}' is not a directory")
+
+    filename = os.path.basename(url)
+    filedest = os.path.join(urldir, filename)
+    log.info(f"Retrieving {url} to {filedest} ...")
+
+    with urlopen(url) as resp, open(filedest, "wb") as fp:
+        shutil.copyfileobj(resp, fp)
+
+    log.info(f"Retrieved {filedest} ({os.stat(filedest).st_size} bytes)")
+    return filedest
+
+
+def retrieve_s3(s3path, datadir):
+    try:
+        import s3fs
+    except ImportError:
+        log.error("Retrieval from S3 url requires the s3fs module")
+        raise
+
+    u = urlparse(s3path)
+
+    datadir = "data"
+    filepath = f"{u.netloc}{u.path}"
+    filedest = os.path.join(datadir, filepath)
+
+    if not os.path.exists(datadir):
+        try:
+            os.makedirs(datadir)
+        except OSError as err:
+            raise OSError(f"Unable to create S3 retrieval directory at {datadir}: {err}")
+
+    fs = s3fs.S3FileSystem(anon=True)
+    log.info(f"Retrieving {s3path} to {filedest} ...")
+    fs.get(filepath, filedest)
+    log.info(f"Retrieved {filedest} ({os.stat(filedest).st_size} bytes)")
+
+    return filedest

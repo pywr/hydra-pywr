@@ -1,8 +1,8 @@
 import click
 import json
 import os
-
 import pandas
+from urllib.parse import urlparse
 
 from hydra_client.connection import RemoteJSONConnection
 from pywrparser.lib import PywrTypeJSONEncoder
@@ -127,6 +127,16 @@ def export_json(obj, data_dir, scenario_id, user_id, use_cache, json_sort_keys, 
 
     pywr_network.promote_inline_parameters()
     pywr_network.detach_parameters()
+
+    url_refs = pywr_network.url_references()
+    for url, refs in url_refs.items():
+        u = urlparse(url)
+        if u.scheme == "s3":
+            filedest = utils.retrieve_s3(url, data_dir)
+        elif u.scheme.startswith("http"):
+            filedest = utils.retrieve_url(url, data_dir)
+        for ref in refs:
+            ref.data["url"] = filedest
 
     pnet_title = pywr_network.metadata.data["title"]
     outfile = os.path.join(data_dir, f"{pnet_title.replace(' ', '_')}.json")

@@ -38,7 +38,8 @@ __all__ = (
     "ProportionalInput",
     "LinearStorageReleaseControl",
     "Reservoir",
-    "Turbine"
+    "Turbine",
+    "MonthlyOutput"
 )
 
 class ProportionalInput(Input, metaclass=NodeMeta):
@@ -174,8 +175,8 @@ class Reservoir(Storage, metaclass=NodeMeta):
 
         if volumes is not None and areas is not None:
             node.area = InterpolatedVolumeParameter(model, node, volumes, areas)
-
-        node._make_weather_nodes(model, node.weather, node.weather_cost)
+        if node.weather is not None:
+            node._make_weather_nodes(model, node.weather, node.weather_cost)
         setattr(node, "_Loadable__parameters_to_load", {})
         return node
 
@@ -325,3 +326,8 @@ class Turbine(Link, metaclass=NodeMeta):
         setattr(node, "_Loadable__parameters_to_load", {})
 
         return node
+
+
+class MonthlyOutput(Output, metaclass=NodeMeta):
+    def __init__(self, model, name, scenario=None, **kwargs):
+        super().__init__(model, name, **kwargs)
