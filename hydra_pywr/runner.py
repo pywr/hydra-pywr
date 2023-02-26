@@ -516,7 +516,7 @@ class PywrHydraRunner(PywrHydraExporter):
         attr_name_map = {}
         for templatetype in self.template.templatetypes:
             for typeattr in templatetype.typeattrs:
-                attr = self.client.get_attribute_by_id(attr_id=typeattr.attr_id)
+                attr = self.attributes[typeattr.attr_id]
                 attr_name_map[attr.name] = attr
                 #populate the dimensioin mapping
                 self.attr_dimension_map[attr.name] = attr.dimension_id

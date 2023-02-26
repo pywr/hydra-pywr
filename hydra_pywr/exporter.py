@@ -691,7 +691,7 @@ class PywrHydraExporter(BasePywrHydra):
             try:
                 resource_scenario = self._get_resource_scenario(attr)
             except ValueError as e:
-                self.log.warning("No value found for network attribute %s", attr.name)
+                self.log.debug("No value found for network attribute %s", attr.name)
                 continue
 
             dataset = resource_scenario["dataset"]
@@ -721,7 +721,7 @@ class PywrHydraExporter(BasePywrHydra):
             try:
                 resource_scenario = self._get_resource_scenario(attr)
             except ValueError as e:
-                self.log.warning("No value found for network attribute %s", attr.name)
+                self.log.debug("No value found for network attribute %s", attr.name)
                 continue
 
             #Ignore tables
@@ -762,7 +762,7 @@ class PywrHydraExporter(BasePywrHydra):
             try:
                 resource_scenario = self._get_resource_scenario(attr)
             except ValueError as e:
-                self.log.warning("No value found for network attribute %s", attr.name)
+                self.log.debug("No value found for network attribute %s", attr.name)
                 continue
             dataset = resource_scenario["dataset"]
             dataset_type = hydra_typemap[dataset.type.upper()]
