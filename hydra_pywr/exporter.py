@@ -15,6 +15,7 @@ from pywrparser.types import (
     PywrEdge
 )
 
+from .config import CACHE_DIR
 from .rules import exec_rules
 from .template import PYWR_SPLIT_LINK_TYPES
 from .utils import (
@@ -38,7 +39,6 @@ RECORDER_TYPES = (
     "PYWR_RECORDER",
 )
 
-CACHE_DIR = "/tmp/hydra_pywr_cache"
 
 """
     Hydra => PywrNetwork

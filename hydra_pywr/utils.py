@@ -202,6 +202,12 @@ def file_to_s3(elem_data, s3prefix):
     elem_data["url"] = s3url
 
 
+def url_to_local_path(url, datadir):
+    u = urlparse(url)
+    filepath = f"{u.netloc}{u.path}"
+    return os.path.join(datadir, filepath)
+
+
 def retrieve_url(url, urldir):
     import shutil
     from urllib.request import urlopen
@@ -214,8 +220,7 @@ def retrieve_url(url, urldir):
     elif not os.path.isdir(urldir):
         raise OSError(f"Destination '{urldir}' is not a directory")
 
-    filename = os.path.basename(url)
-    filedest = os.path.join(urldir, filename)
+    filedest = url_to_local_path(url, urldir)
     log.info(f"Retrieving {url} to {filedest} ...")
 
     with urlopen(url) as resp, open(filedest, "wb") as fp:
@@ -232,21 +237,19 @@ def retrieve_s3(s3path, datadir):
         log.error("Retrieval from S3 url requires the s3fs module")
         raise
 
-    u = urlparse(s3path)
-
-    datadir = "data"
-    filepath = f"{u.netloc}{u.path}"
-    filedest = os.path.join(datadir, filepath)
+    filedest = url_to_local_path(s3path, datadir)
 
     if not os.path.exists(datadir):
         try:
             os.makedirs(datadir)
         except OSError as err:
             raise OSError(f"Unable to create S3 retrieval directory at {datadir}: {err}")
+    elif not os.path.isdir(datadir):
+        raise OSError(f"Destination '{datadir}' is not a directory")
 
     fs = s3fs.S3FileSystem(anon=True)
     log.info(f"Retrieving {s3path} to {filedest} ...")
-    fs.get(filepath, filedest)
+    fs.get(s3path, filedest)
     log.info(f"Retrieved {filedest} ({os.stat(filedest).st_size} bytes)")
 
     return filedest

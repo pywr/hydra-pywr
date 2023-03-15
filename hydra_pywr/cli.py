@@ -159,6 +159,15 @@ def run_file(obj, filename, domain, output_file):
     pfr.run_pywr_model(output_file)
 
 
+@cli.command(name="purge-cache", context_settings=dict(
+    ignore_unknown_options=True,
+    allow_extra_args=True))
+@click.pass_obj
+@click.option("--filename", type=str, default=None)
+@click.option("--only-type", type=str, default=None)
+def purge_cache(obj, filename, domain, output_file):
+    pass
+
 @hydra_app(category='model', name='Run Pywr')
 @cli.command(context_settings=dict(
     ignore_unknown_options=True,
@@ -187,7 +196,22 @@ def run_network_scenario(client, scenario_id, template_id, domain, output_freque
     runner = PywrHydraRunner.from_scenario_id(client, scenario_id,
                                              template_id=template_id)
 
-    pywr_data = runner.load_pywr_model(solver=solver)
+    network_data = runner.build_pywr_network()
+    pywr_network = PywrNetwork(network_data)
+    pywr_network.promote_inline_parameters()
+    pywr_network.detach_parameters()
+
+    url_refs = pywr_network.url_references()
+    for url, refs in url_refs.items():
+        u = urlparse(url)
+        if u.scheme == "s3":
+            filedest = utils.retrieve_s3(url, data_dir)
+        elif u.scheme.startswith("http"):
+            filedest = utils.retrieve_url(url, data_dir)
+        for ref in refs:
+            ref.data["url"] = filedest
+
+    pywr_data = runner.load_pywr_model(pywr_network, solver=solver)
 
     network_id = runner.data.id
 

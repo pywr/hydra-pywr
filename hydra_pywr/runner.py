@@ -111,7 +111,7 @@ class PywrHydraRunner(HydraToPywrNetwork):
         self.hydra.delete_resource_scenarios(scenario_id=scenario['id'], resource_attr_ids=ra_to_delete, quiet=True)
 
 
-    def load_pywr_model(self, solver=None):
+    def load_pywr_model(self, pywr_network, solver=None):
         """ Create a Pywr model from the exported data. """
 
         if self.domain == "energy":
@@ -119,9 +119,9 @@ class PywrHydraRunner(HydraToPywrNetwork):
 
         solver = domain_solvers[self.domain]
 
-        data = self.build_pywr_network()
-        pnet = PywrNetwork(data)
-        pywr_data = pnet.as_json()
+        #data = self.build_pywr_network()
+        #pnet = PywrNetwork(data)
+        pywr_data = pywr_network.as_json()
         model = Model.loads(pywr_data, solver=solver)
         self.model = model
 
