@@ -1,6 +1,5 @@
 """ Module to generate a Hydra template from Pywr.
 """
-from pywr.domains.river import *
 from pywr.recorders import NumpyArrayNodeRecorder, NumpyArrayStorageRecorder
 import pywr
 import os
