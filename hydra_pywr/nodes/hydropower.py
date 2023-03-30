@@ -161,21 +161,62 @@ class Reservoir(Storage, metaclass=NodeMeta):
     def pre_load(cls, model, data):
 
         bathymetry = data.pop("bathymetry", None)
+        volume = data.pop("volume", None)
+        level = data.pop("level", None)
+        area = data.pop("area", None)
         name = data.pop("name")
         node = cls(name=name, model=model, **data)
-        volumes = None
+        volumes = areas = levels = None
 
         if bathymetry is not None:
             if isinstance(bathymetry, str):
-                bathymetry = load_parameter(model, bathymetry)
-                volumes = bathymetry.dataframe['volume'].astype(np.float64)
-                levels = bathymetry.dataframe['level'].astype(np.float64)
-                areas = bathymetry.dataframe['area'].astype(np.float64)
+                # Bathymetry assumed to be a parameter reference
+                try:
+                    bathymetry = load_parameter(model, bathymetry)
+                except ValueError:
+                    raise ValueError(f"<{node.__class__.__qualname__}> node {name} contains "
+                                      "invalid bathymetry parameter reference {bathymetry}")
+                bathymetry_data = bathymetry.dataframe
             else:
-                bathymetry = pd.DataFrame.from_dict(bathymetry)
-                volumes = bathymetry['volume'].astype(np.float64)
-                levels = bathymetry['level'].astype(np.float64)
-                areas = bathymetry['area'].astype(np.float64)
+                # Bathymetry assumed to be a dictionary
+                try:
+                    bathymetry = pd.DataFrame.from_dict(bathymetry)
+                except ValueError:
+                    raise ValueError(f"<{node.__class__.__qualname__}> node {name} has "
+                                      "invalid bathymetry argument")
+                bathymetry_data = bathymetry
+            try:
+                # Bathymetry must define all of volume, level, area
+                volumes = bathymetry_data['volume'].astype(np.float64)
+                levels = bathymetry_data['level'].astype(np.float64)
+                areas = bathymetry_data['area'].astype(np.float64)
+            except KeyError as ke:
+                raise ValueError(f"<{node.__class__.__qualname__}> node {name} bathymetry "
+                                 f"must contain a '{ke}' series")
+            except AttributeError as ae:
+                # Value exists but has no astype attr; likely str or int
+                raise ValueError(f"<{node.__class__.__qualname__}> node {name} bathymetry "
+                                 f"has invalid type for {ae}")
+        elif volume is not None and level is not None and area is not None:
+            # Allow non-parameter bathymetry where all components are specified
+            volumes, levels, areas = volume, level, area
+        else:
+            # No bathymetry and not all of volume, level, area
+            try:
+                volumes = load_parameter(model, f'__{name}__:volume')
+            except KeyError:
+                log.warning(f"Please specify a bathymetry or volume on node {name}")
+                volumes = None
+            try:
+                areas = load_parameter(model, f'__{name}__:area')
+            except KeyError:
+                log.warning(f"Please specify a bathymetry or area on node {name}")
+                areas = None
+            try:
+                levels = load_parameter(model, f'__{name}__:level')
+            except KeyError:
+                log.warning(f"Please specify a bathymetry or level on node {name}")
+                levels = None
 
         if volumes is not None and levels is not None:
             node.level = InterpolatedVolumeParameter(model, node, volumes, levels)
@@ -193,7 +234,11 @@ class Reservoir(Storage, metaclass=NodeMeta):
         if not isinstance(self.area, Parameter):
             raise ValueError('Weather nodes can only be created if an area Parameter is given.')
 
-        weather = pd.DataFrame.from_dict(weather)
+        try:
+            weather = pd.DataFrame.from_dict(weather)
+        except ValueError:
+            raise ValueError(f"<{self.__class__.__qualname__}> node {self.name} has invalid 'weather' argument")
+
 
         rainfall = weather['rainfall'].astype(np.float64)
         evaporation = weather['evaporation'].astype(np.float64)
