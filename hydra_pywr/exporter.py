@@ -75,7 +75,7 @@ class PywrHydraExporter(BasePywrHydra):
         self.recorders = {}
         self.tables = {}
         self.scenarios = []
-
+        self.scenario_combinations = None
         self._pattern_templates = None
 
         self.reference_model = None
@@ -171,9 +171,9 @@ class PywrHydraExporter(BasePywrHydra):
 
 
         if domain is not None:
-            self.timestepper, self.metadata, self.scenarios = self.build_integrated_network_attrs(domain)
+            self.timestepper, self.metadata, self.scenarios, self.scenario_combinations = self.build_integrated_network_attrs(domain)
         else:
-            self.timestepper, self.metadata, self.scenarios = self.build_network_attrs()
+            self.timestepper, self.metadata, self.scenarios, self.scenario_combinations = self.build_network_attrs()
 
         self.generate_pywr_nodes()
         self.edges = self.build_edges()
@@ -594,7 +594,7 @@ class PywrHydraExporter(BasePywrHydra):
         scenarios = data["scenarios"]
         scen_insts = [ Scenario(s) for s in scenarios ]
 
-        return ts_inst, meta_inst, scen_insts
+        return ts_inst, meta_inst, scen_insts, None
 
 
     def get_integrated_config(self, config_key="config"):
@@ -668,6 +668,7 @@ class PywrHydraExporter(BasePywrHydra):
 
         """ Scenarios """
         scenarios = []
+        scenario_combinations = None
         for attr in self.data["attributes"]:
             if attr.name == 'scenarios':
                 try:
@@ -684,6 +685,20 @@ class PywrHydraExporter(BasePywrHydra):
                     self.log.warning("An error occurred getting data for scenarios")
 
                 continue
+            elif attr.name == 'scenario_combinations':
+                try:
+                    resource_scenario = self._get_resource_scenario(attr)
+                except ValueError as e:
+                    self.log.warning("No value found for scenario attribute")
+                    continue
+
+                try:
+                    dataset = resource_scenario["dataset"]
+                    val  = dataset['value']
+                    scenario_combinations = json.loads(val)
+                except ValueError as e:
+                    self.log.warning("An error occurred getting data for scenarios")
+
 
 
         """ Tables """
@@ -774,7 +789,7 @@ class PywrHydraExporter(BasePywrHydra):
                     self.parameters[dataset.name] = recorder
 
 
-        return ts_inst, meta_inst, scenarios
+        return ts_inst, meta_inst, scenarios, scenario_combinations
 
 
     def get_scenario_data(self):
