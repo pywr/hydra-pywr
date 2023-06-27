@@ -21,7 +21,7 @@ class TestResults():
         runner.run_pywr_model()
 
         gerd_st_df = gerd_rec.to_dataframe()
-        gerd_turbine_df = runner.model.recorders["hydropowerrecorder.GERD_turbine"].to_dataframe()
+        gerd_turbine_df = runner.model.recorders["__GERD_turbine__:hydropowerrecorder"].to_dataframe()
 
         """
           Verified values for start and end sequences of results period.

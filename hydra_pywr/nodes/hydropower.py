@@ -298,11 +298,13 @@ class Turbine(Link, metaclass=NodeMeta):
                                                    water_elevation_parameter=level_parameter,
                                                    min_head=min_head, min_flow=ConstantParameter(model, 0),
                                                    turbine_elevation=turbine_elevation,
-                                                   **{k: v for k, v in hp_kwargs.items()})
+                                                   **hp_kwargs)
 
         self.max_flow = hp_target_flow
 
-        hp_recorder = HydropowerRecorder(model, self, water_elevation_parameter=level_parameter,
+        hp_recorder = HydropowerRecorder(model, self,
+                                         name=f"__{name}__:hydropowerrecorder",
+                                         water_elevation_parameter=level_parameter,
                                          turbine_elevation=turbine_elevation, **hp_kwargs)
         self.hydropower_recorder = hp_recorder
 
