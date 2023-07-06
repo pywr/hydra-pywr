@@ -52,6 +52,8 @@ class HydraToPywrNetwork():
         "network", "description"
     )
 
+    scenario_combinations_attr_name = "scenario_combinations"
+
     def __init__(self, client, network, network_id, scenario_id, attributes, template, **kwargs):
         self.hydra = client
         self.data = network
@@ -77,6 +79,7 @@ class HydraToPywrNetwork():
         self.recorders = {}
         self.tables = {}
         self.scenarios = []
+        self.scenario_combinations = None
 
 
     @classmethod
@@ -191,6 +194,7 @@ class HydraToPywrNetwork():
         self.timestepper = self.build_timestepper()
         self.metadata = self.build_metadata()
         self.scenarios = self.build_scenarios()
+        self.scenario_combinations = self.build_scenario_combinations()
 
         if len(self.data.rules) > 0:
             self.write_rules_as_module()
@@ -353,10 +357,24 @@ class HydraToPywrNetwork():
         try:
             scenarios_dataset = self.get_network_attr(self.scenario_id, self.data["id"], "scenarios")
             scenarios = [ PywrScenario(scenario) for scenario in scenarios_dataset["scenarios"] ]
-        except (ResourceNotFoundError, ValueError):
+        except (ResourceNotFoundError, ValueError, KeyError):
             scenarios = []
 
         return scenarios
+
+
+    def build_scenario_combinations(self):
+        scenario_combinations = None
+        for attr in self.data["attributes"]:
+            """
+                Dataset type of PYWR_SCENARIO_COMBINATIONS exists, but some
+                combinations are specified as descriptors, so use attr name
+            """
+            if attr.name == self.__class__.scenario_combinations_attr_name:
+                if ds := self.get_dataset_by_attr_id(attr.id):
+                    scenario_combinations = json.loads(ds["value"])
+
+        return scenario_combinations
 
 
     def build_parameters_recorders(self):
@@ -395,8 +413,11 @@ class HydraToPywrNetwork():
         ra = self.hydra.get_resource_attributes(ref_key="network", ref_id=network_id)
         ra_id = None
         for r in ra:
-            if r["attr_id"] == net_attr["id"]:
-                ra_id = r["id"]
+            try:
+                if r["attr_id"] == net_attr["id"]:
+                    ra_id = r["id"]
+            except KeyError:
+                pass
 
         if not ra_id:
             raise ValueError(f"Resource attribute for {attr_key} not found in scenario {scenario_id} on network {network_id}")
