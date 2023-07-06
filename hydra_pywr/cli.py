@@ -16,7 +16,6 @@ from . import utils
 from hydra_client.click import hydra_app, make_plugins, write_plugins
 
 
-
 def get_client(**kwargs):
     return RemoteJSONConnection(app_name='Pywr Hydra App', **kwargs)
 
@@ -162,11 +161,12 @@ def run_file(obj, filename, domain, output_file):
 @cli.command(name="purge-cache", context_settings=dict(
     ignore_unknown_options=True,
     allow_extra_args=True))
-@click.pass_obj
-@click.option("--filename", type=str, default=None)
-@click.option("--only-type", type=str, default=None)
-def purge_cache(obj, filename, domain, output_file):
-    pass
+@click.option("--cache-path", type=click.Path(file_okay=False, dir_okay=True, exists=True))
+def purge_cache(cache_path):
+    from hydra_pywr.filecache import FileCache
+    fc = FileCache(cache_path)
+    fc.purge_all()
+
 
 @hydra_app(category='model', name='Run Pywr')
 @cli.command(context_settings=dict(

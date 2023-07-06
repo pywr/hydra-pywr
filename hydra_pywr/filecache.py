@@ -20,15 +20,20 @@ class CacheEntry():
 
     @property
     def is_local(self):
-        return os.path.exists(self.dest)
+        try:
+            return os.path.exists(self.dest)
+        except TypeError:
+            return False
 
 
 
 class S3CacheEntry(CacheEntry):
-    def __init__(self, url):
+    def __init__(self, url, ref_only=False):
         self.url = url
         self.fs = s3fs.S3FileSystem(anon=True)
-        self.info = self.fs.info(self.url)
+        if not ref_only:
+            self.info = self.fs.info(self.url)
+        self._refonly = ref_only
 
     def fetch(self, dest):
         log.info(f"Retrieving {self.url} to {dest} ...")
@@ -40,6 +45,10 @@ class S3CacheEntry(CacheEntry):
     def checksum(self):
         return self.info["ETag"]
 
+    @property
+    def is_ref_only(self):
+        return self._refonly
+
     def __eq__(self, rhs):
         if not isinstance(rhs, self.__class__):
             raise TypeError(f"Invalid comparison between types of "
@@ -50,9 +59,12 @@ class S3CacheEntry(CacheEntry):
 
 
 class HttpCacheEntry(CacheEntry):
-    def __init__(self, url):
+    def __init__(self, url, ref_only=False):
         self.url = url
-        self.head()
+        if not ref_only:
+            self.head()
+        else:
+            self._refonly = True
 
     def fetch(self, dest):
         log.info(f"Retrieving {self.url} to {dest} ...")
@@ -83,6 +95,11 @@ class HttpCacheEntry(CacheEntry):
                         self.content_length = int(contlen)
                     except:
                         pass
+        self._refonly = False
+
+    @property
+    def is_current(self):
+        return self._current
 
     def __eq__(self, rhs):
         if not isinstance(rhs, self.__class__):
@@ -97,22 +114,12 @@ class HttpCacheEntry(CacheEntry):
         return False
 
 
-    def hash(self):
-        pass
-
-
-class FsCacheEntry(CacheEntry):
-    def __init__(self, url):
-        pass
-
-
 class FileCache():
 
     scheme_map = {
         "s3": S3CacheEntry,
         "http": HttpCacheEntry,
-        "https": HttpCacheEntry,
-        "": FsCacheEntry
+        "https": HttpCacheEntry
     }
 
     def __init__(self, cache_root):
@@ -149,10 +156,14 @@ class FileCache():
         filepath = f"{u.netloc}{u.path}"
         return os.path.join(self.cache_root, filepath)
 
-    @property
     def url_is_current(self, url):
         if url not in self:
             return False
+
+        new_entry = self.__class__.lookup_type(url)(url)
+        entry = self.buf[url]
+
+        return new_entry == entry
 
     def purge_local_file(self, filename):
         """
@@ -207,7 +218,8 @@ class FileCache():
         return target
 
     def purge_all(self):
-        pass
+        for url in list(self.buf.keys()):
+            self.purge_entry(url)
 
     def purge_entry(self, url):
         try:
@@ -218,8 +230,25 @@ class FileCache():
         except KeyError:
             raise ValueError(f"Cache does not contain entry for {url}") from None
 
-    def add_file_as_entry(self, path, url):
-        pass
+    def add_file_as_entry(self, path, url, do_fetch=False):
+        if url in self:
+            # Overwiting is forbidden: purge first, then add to change url
+            raise ValueError(f"Entry already exists for url {url} with path {self.buf[url].dest}")
+
+        if not (os.path.exists(path) and os.path.isfile(path)):
+            raise ValueError(f"Invalid file path: {path}")
+
+        entry = self.__class__.lookup_type(url)(url, ref_only=True)
+        print(f"{path=}")
+        if do_fetch:
+            entry.fetch(path)
+        else:
+            entry.dest = path
+
+        self.buf[url] = entry
+
+        return entry
+
 
     def get(self, url):
         new_entry = self.__class__.lookup_type(url)(url)
@@ -245,28 +274,12 @@ class FileCache():
 
     def load_state(self, state_file=None):
         state_file = state_file if state_file else self.state_file
-        with open(state_file, 'rb') as fp:
-            try:
-                log.info(f"Loading cache state from {state_file}...")
-                self.buf = pickle.load(fp)
-            except (pickle.UnpicklingError, EOFError) as e:
-                log.error(f"Error loading state from {state_file}: {e}")
-
-
-if __name__ == "__main__":
-    s3_url = "s3://modelers-data-bucket/eapp/single/ETH_flow_sim.h5"
-    http_url = "https://hwi-test.s3.amazonaws.com/base/static/js/third-party/sprintf.min.js"
-    fc = FileCache("/tmp/cache")
-    fc.load_state()
-    print(f"{s3_url in fc=}")
-    print(f"{http_url in fc=}")
-    s3_cached = fc.get(s3_url)
-    http_cached = fc.get(http_url)
-    print(s3_cached)
-    print(http_cached)
-    #fc.purge_entry(s3_url)
-    #print(f"{s3_url in fc=}")
-    #s3_cached = fc.get(s3_url)
-    fc.save_state()
-    #fc.purge_entry("nonexistent.txt")
-    #fc.purge_entry("~paul/unsafe.txt")
+        try:
+            with open(state_file, 'rb') as fp:
+                try:
+                    log.info(f"Loading cache state from {state_file}...")
+                    self.buf = pickle.load(fp)
+                except (pickle.UnpicklingError, EOFError) as e:
+                    log.error(f"Error loading state from {state_file}: {e}")
+        except FileNotFoundError as e:
+            log.error(f"Error loading state from {state_file}: {e}")
