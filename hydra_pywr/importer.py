@@ -17,11 +17,55 @@ from .datatypes import (
     lookup_recorder_hydra_datatype
 )
 
+from pywrparser.types.network import PywrNetwork
+
 from hydra_base.lib.objects import JSONObject
 
 import logging
 log = logging.getLogger(__name__)
 
+
+def import_json(client, filename, project_id, user_id, template_id, projection, network_name, rewrite_url_prefix, *args):
+    """
+        A utility function to import a Pywr JSON file into Hydra
+    """
+
+    log.info(f'Beginning import of "{filename}" to Project ID: {project_id}')
+
+    if filename is None:
+        raise Exception("No file specified")
+
+    if project_id is None:
+        raise Exception("No project specified")
+
+    if template_id is None:
+        raise Exception("No template specified")
+
+    pnet, errors, warnings = PywrNetwork.from_file(filename)
+    if warnings:
+        for component, warns in warnings.items():
+            for warn in warns:
+                click.echo(warn)
+
+    if errors:
+        for component, errs in errors.items():
+            for err in errs:
+                click.echo(err)
+        exit(1)
+
+    if network_name:
+        pnet.metadata.data["title"] = network_name
+
+    if rewrite_url_prefix:
+        from .utils import file_to_s3
+        for elem in [*pnet.parameters.values(), *pnet.tables.values()]:
+            file_to_s3(elem.data, rewrite_url_prefix)
+
+    importer = PywrToHydraNetwork(pnet, hydra=client, user_id=user_id, template_id=template_id, project_id=project_id)
+    importer.build_hydra_network(projection)
+    importer.add_network_to_hydra()
+
+    log.info(f"Imported {filename} to Project ID: {project_id}")
 
 class PywrTypeEncoder(json.JSONEncoder):
     def default(self, inst):

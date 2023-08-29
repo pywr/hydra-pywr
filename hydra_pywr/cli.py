@@ -7,8 +7,9 @@ from urllib.parse import urlparse
 from hydra_client.connection import RemoteJSONConnection
 from pywrparser.lib import PywrTypeJSONEncoder
 from pywrparser.types.network import PywrNetwork
-from .exporter import HydraToPywrNetwork
-from .importer import PywrToHydraNetwork
+from . import runner
+from . import exporter
+from . import importer
 from .runner import PywrHydraRunner, PywrFileRunner
 
 from .template import register_template, unregister_template, migrate_network_template, TemplateExistsError
@@ -59,49 +60,19 @@ def cli(obj, username, password, hostname, session):
 @click.option('--projection', type=str, default=None)
 @click.option('--network-name', type=str, default=None)
 @click.option('--rewrite-url-prefix', type=str, default=None)
-@click.option('--run/--no-run', default=False)
-@click.option('--solver', type=str, default=None)
-@click.option('--check-model/--no-check-model', default=True)
-@click.option('--ignore-type-errors', is_flag=True, default=False)
-def import_json(obj, filename, project_id, user_id, template_id, projection, network_name, rewrite_url_prefix, run, solver, check_model, ignore_type_errors, *args):
+def import_json(obj, filename, project_id, user_id, template_id, projection, network_name, rewrite_url_prefix, *args):
     """ Import a Pywr JSON file into Hydra. """
-    click.echo(f'Beginning import of "{filename}" to Project ID: {project_id}')
-
-    if filename is None:
-        raise Exception("No file specified")
-
-    if project_id is None:
-        raise Exception("No project specified")
-
-    if template_id is None:
-        raise Exception("No template specified")
-
-    pnet, errors, warnings = PywrNetwork.from_file(filename)
-    if warnings:
-        for component, warns in warnings.items():
-            for warn in warns:
-                click.echo(warn)
-
-    if errors:
-        for component, errs in errors.items():
-            for err in errs:
-                click.echo(err)
-        exit(1)
-
-    if network_name:
-        pnet.metadata.data["title"] = network_name
-
-    if rewrite_url_prefix:
-        from .utils import file_to_s3
-        for elem in [*pnet.parameters.values(), *pnet.tables.values()]:
-            file_to_s3(elem.data, rewrite_url_prefix)
 
     client = get_logged_in_client(obj)
-    importer = PywrToHydraNetwork(pnet, hydra=client, user_id=user_id, template_id=template_id, project_id=project_id)
-    importer.build_hydra_network(projection)
-    importer.add_network_to_hydra()
-
-    click.echo(f"Imported {filename} to Project ID: {project_id}")
+    importer.import_json(client,
+                         filename,
+                         project_id,
+                         user_id,
+                         template_id,
+                         projection,
+                         network_name,
+                         rewrite_url_prefix,
+                         *args)
 
 
 @hydra_app(category='export', name='Export to Pywr JSON')
@@ -117,32 +88,14 @@ def import_json(obj, filename, project_id, user_id, template_id, projection, net
 @click.option('--json-indent', type=int, default=2)
 def export_json(obj, data_dir, scenario_id, user_id, use_cache, json_sort_keys, json_indent):
     """ Export a Pywr JSON from Hydra. """
-
     client = get_logged_in_client(obj)
-    exporter = HydraToPywrNetwork.from_scenario_id(client, scenario_id, use_cache=use_cache)
-    network_data = exporter.build_pywr_network()
-    network_id = exporter.data.id
-    pywr_network = PywrNetwork(network_data)
-
-    pywr_network.promote_inline_parameters()
-    pywr_network.detach_parameters()
-
-    url_refs = pywr_network.url_references()
-    for url, refs in url_refs.items():
-        u = urlparse(url)
-        if u.scheme == "s3":
-            filedest = utils.retrieve_s3(url, data_dir)
-        elif u.scheme.startswith("http"):
-            filedest = utils.retrieve_url(url, data_dir)
-        for ref in refs:
-            ref.data["url"] = filedest
-
-    pnet_title = pywr_network.metadata.data["title"]
-    outfile = os.path.join(data_dir, f"{pnet_title.replace(' ', '_')}.json")
-    with open(outfile, mode='w') as fp:
-        json.dump(pywr_network.as_dict(), fp, sort_keys=json_sort_keys, indent=2, cls=PywrTypeJSONEncoder)
-
-    click.echo(f"Network: {network_id}, Scenario: {scenario_id} exported to `{outfile}`")
+    exporter.export_json(client,
+                         data_dir,
+                         scenario_id,
+                         user_id,
+                         use_cache,
+                         json_sort_keys,
+                         json_indent)
 
 
 @cli.command(name="run-file", context_settings=dict(
@@ -153,10 +106,7 @@ def export_json(obj, data_dir, scenario_id, user_id, use_cache, json_sort_keys, 
 @click.option('--domain', type=str, default="water")
 @click.option('--output-file', type=str, default="output.csv")
 def run_file(obj, filename, domain, output_file):
-    pfr = PywrFileRunner(domain)
-    pfr.load_pywr_model_from_file(filename)
-    pfr.run_pywr_model(output_file)
-
+    runner.run_file(filename, domain, output_file)
 
 @cli.command(name="purge-cache", context_settings=dict(
     ignore_unknown_options=True,
@@ -187,41 +137,14 @@ def run(obj, scenario_id, template_id, user_id, domain, output_frequency, solver
     if scenario_id is None:
         raise Exception('No scenario specified')
 
-    run_network_scenario(client, scenario_id, template_id, domain, output_frequency=output_frequency,
-                         solver=solver, data_dir=data_dir)
+    runner.run_network_scenario(client,
+                                scenario_id,
+                                template_id,
+                                domain,
+                                output_frequency=output_frequency,
+                                solver=solver,
+                                data_dir=data_dir)
 
-
-def run_network_scenario(client, scenario_id, template_id, domain, output_frequency=None, solver=None, data_dir=None):
-
-    runner = PywrHydraRunner.from_scenario_id(client, scenario_id,
-                                             template_id=template_id)
-
-    network_data = runner.build_pywr_network()
-    pywr_network = PywrNetwork(network_data)
-    pywr_network.promote_inline_parameters()
-    pywr_network.detach_parameters()
-
-    url_refs = pywr_network.url_references()
-    for url, refs in url_refs.items():
-        u = urlparse(url)
-        if u.scheme == "s3":
-            filedest = utils.retrieve_s3(url, data_dir)
-        elif u.scheme.startswith("http"):
-            filedest = utils.retrieve_url(url, data_dir)
-        for ref in refs:
-            ref.data["url"] = filedest
-
-    pywr_data = runner.load_pywr_model(pywr_network, solver=solver)
-
-    network_id = runner.data.id
-
-    if data_dir is not None:
-        save_pywr_file(pywr_data, data_dir, network_id, scenario_id)
-
-    runner.run_pywr_model()
-    runner.save_pywr_results()
-
-    click.echo(f'Pywr model run success. Network ID: {network_id}, Scenario ID: {scenario_id}')
 
 
 def save_pywr_file(data, data_dir, network_id=None, scenario_id=None):

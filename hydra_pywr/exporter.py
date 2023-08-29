@@ -40,6 +40,36 @@ RECORDER_TYPES = (
 )
 
 
+def export_json(client, data_dir, scenario_id, user_id, use_cache, json_sort_keys, json_indent):
+    """
+        A utility function to uxport a Pywr JSON from Hydra.
+    """
+
+    exporter = HydraToPywrNetwork.from_scenario_id(client, scenario_id, use_cache=use_cache)
+    network_data = exporter.build_pywr_network()
+    network_id = exporter.data.id
+    pywr_network = PywrNetwork(network_data)
+
+    pywr_network.promote_inline_parameters()
+    pywr_network.detach_parameters()
+
+    url_refs = pywr_network.url_references()
+    for url, refs in url_refs.items():
+        u = urlparse(url)
+        if u.scheme == "s3":
+            filedest = utils.retrieve_s3(url, data_dir)
+        elif u.scheme.startswith("http"):
+            filedest = utils.retrieve_url(url, data_dir)
+        for ref in refs:
+            ref.data["url"] = filedest
+
+    pnet_title = pywr_network.metadata.data["title"]
+    outfile = os.path.join(data_dir, f"{pnet_title.replace(' ', '_')}.json")
+    with open(outfile, mode='w') as fp:
+        json.dump(pywr_network.as_dict(), fp, sort_keys=json_sort_keys, indent=2, cls=PywrTypeJSONEncoder)
+
+    log.info(f"Network: {network_id}, Scenario: {scenario_id} exported to `{outfile}`")
+
 """
     Hydra => PywrNetwork
 """

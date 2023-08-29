@@ -21,6 +21,48 @@ domain_solvers = {
     "energy": "glpk-dcopf"
 }
 
+
+def run_file(filename, domain, output_file):
+    pfr = PywrFileRunner(domain)
+    pfr.load_pywr_model_from_file(filename)
+    pfr.run_pywr_model(output_file)
+
+
+def run_network_scenario(client, scenario_id, template_id, domain,
+                         output_frequency=None, solver=None, data_dir=None):
+
+    runner = PywrHydraRunner.from_scenario_id(client, scenario_id,
+                                             template_id=template_id)
+
+    network_data = runner.build_pywr_network()
+    pywr_network = PywrNetwork(network_data)
+    pywr_network.promote_inline_parameters()
+    pywr_network.detach_parameters()
+
+    url_refs = pywr_network.url_references()
+    for url, refs in url_refs.items():
+        u = urlparse(url)
+        if u.scheme == "s3":
+            filedest = utils.retrieve_s3(url, data_dir)
+        elif u.scheme.startswith("http"):
+            filedest = utils.retrieve_url(url, data_dir)
+        for ref in refs:
+            ref.data["url"] = filedest
+
+    pywr_data = runner.load_pywr_model(pywr_network, solver=solver)
+
+    network_id = runner.data.id
+
+    if data_dir is not None:
+        save_pywr_file(pywr_data, data_dir, network_id, scenario_id)
+
+    runner.run_pywr_model()
+    runner.save_pywr_results()
+
+    log.info(f'Pywr model run success. Network ID: {network_id}, Scenario ID: {scenario_id}')
+
+
+
 class PywrFileRunner():
     def __init__(self, domain="water"):
         self.model = None
