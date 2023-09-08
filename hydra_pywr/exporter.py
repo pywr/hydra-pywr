@@ -11,6 +11,7 @@ from pywrparser.types import (
     PywrMetadata,
     PywrTable,
     PywrScenario,
+    PywrScenarioCombination,
     PywrNode,
     PywrEdge
 )
@@ -394,18 +395,14 @@ class HydraToPywrNetwork():
 
 
     def build_scenario_combinations(self):
-        scenario_combinations = None
-        for attr in self.data["attributes"]:
-            """
-                Dataset type of PYWR_SCENARIO_COMBINATIONS exists, but some
-                combinations are specified as descriptors, so use attr name
-            """
-            if attr.name == self.__class__.scenario_combinations_attr_name:
-                if ds := self.get_dataset_by_attr_id(attr.id):
-                    scenario_combinations = json.loads(ds["value"])
+        try:
+            s_c_dataset = self.get_network_attr(self.scenario_id, self.data["id"], "scenario_combinations")
+
+            scenario_combinations = [ PywrScenarioCombination(sc) for sc in s_c_dataset["scenario_combinations"] ]
+        except (ResourceNotFoundError, ValueError, KeyError):
+            scenario_combinations = []
 
         return scenario_combinations
-
 
     def build_parameters_recorders(self):
         parameters = {} # {name: P()}

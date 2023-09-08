@@ -1,5 +1,9 @@
 import pandas
 import yaml
+import tempfile
+import os
+import logging
+import json
 
 from pywr.model import Model
 from pywr.nodes import Node, Storage
@@ -12,8 +16,6 @@ from .exporter import HydraToPywrNetwork
 from pywrparser.types.network import PywrNetwork
 from hydra_pywr.nodes import *
 
-import os
-import logging
 log = logging.getLogger(__name__)
 
 domain_solvers = {
@@ -165,6 +167,15 @@ class PywrHydraRunner(HydraToPywrNetwork):
         #pnet = PywrNetwork(data)
         pywr_data = pywr_network.as_json()
         model = Model.loads(pywr_data, solver=solver)
+
+        tmp = tempfile.gettempdir()
+
+        file_location = os.path.join(tmp, f"pywrmodel_n_{self.data['id']}_s_{self.data['scenarios'][0]['id']}.json")
+
+        with open(file_location, 'w') as f:
+            json.dump(pywr_network.as_dict(), f, sort_keys=True, indent=4)
+            log.info("File written to %s", file_location)
+
         self.model = model
 
         return pywr_data
@@ -411,7 +422,7 @@ class PywrHydraRunner(HydraToPywrNetwork):
         for resource_scenario in self.generate_array_recorder_resource_scenarios():
             scenario['resourcescenarios'].append(resource_scenario)
 
-        self.hydra.update_scenario(scenario)
+        self.hydra.update_scenario(scen=scenario)
 
     def generate_array_recorder_resource_scenarios(self):
         """ Generate resource scenario data from NumpyArrayXXX recorders. """
@@ -519,9 +530,9 @@ class PywrHydraRunner(HydraToPywrNetwork):
                 return None
 
             # Try to get the resource attribute
-            resource_attribute = self.hydra.add_resource_attribute('NODE',
-                                                               node_id,
-                                                               attribute['id'],
+            resource_attribute = self.hydra.add_resource_attribute(resource_type='NODE',
+                                                               resource_id=node_id,
+                                                               attr_id=attribute['id'],
                                                                is_var='Y',
                                                                error_on_duplicate=False)
             resource_attribute_id = resource_attribute['id']
@@ -564,7 +575,7 @@ class PywrHydraRunner(HydraToPywrNetwork):
         attr_name_map = {}
         for templatetype in self.template.templatetypes:
             for typeattr in templatetype.typeattrs:
-                attr = self.hydra.get_attribute_by_id(typeattr.attr_id)
+                attr = self.attributes[typeattr.attr_id]
                 attr_name_map[attr.name] = attr
                 #populate the dimension mapping
                 self.attr_dimension_map[attr.name] = attr.dimension_id

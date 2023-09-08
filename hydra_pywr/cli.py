@@ -23,7 +23,7 @@ def get_client(**kwargs):
 
 def get_logged_in_client(context):
     session = context.get("session")
-    client = get_client(session_id=session)
+    client = get_client(url=context.get('hostname'), session_id=session)
     if client.user_id is None and session is None:
         client.login(username=context["username"], password=context["password"])
     return client
@@ -67,12 +67,11 @@ def import_json(obj, filename, project_id, user_id, template_id, projection, net
     importer.import_json(client,
                          filename,
                          project_id,
-                         user_id,
                          template_id,
-                         projection,
                          network_name,
-                         rewrite_url_prefix,
-                         *args)
+                         *args,
+                         rewrite_url_prefix=rewrite_url_prefix,
+                         projection=projection)
 
 
 @hydra_app(category='export', name='Export to Pywr JSON')
