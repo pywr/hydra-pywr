@@ -97,8 +97,13 @@ def cli(obj, username, password, hostname, session):
 @click.option('--check-model/--no-check-model', default=True)
 @click.option('--ignore-type-errors', is_flag=True, default=False)
 def import_json(obj, filename, project_id, user_id, template_id, network_name, projection, run, solver, check_model, ignore_type_errors, *args):
-    """ Import a Pywr JSON file into Hydra. """
+    """ User endpoint for calling the import a Pywr JSON file into Hydra. """
     click.echo(f'Beginning import of "{filename}" to Project ID: {project_id}')
+
+    import_json_file(filename, project_id, user_id, template_id, network_name, projection, run, solver, check_model, ignore_type_errors, *args)
+
+def import_json_file(filename, project_id, user_id, template_id, network_name, projection, run, solver, check_model, ignore_type_errors, *args):
+    """ Import a Pywr JSON file into Hydra. """
 
     if filename is None:
         raise Exception("No file specified")
@@ -113,7 +118,6 @@ def import_json(obj, filename, project_id, user_id, template_id, network_name, p
     hwriter = PywrHydraWriter(pnet, user_id=user_id, network_name=network_name, template_id=template_id, project_id=project_id)
     hwriter.build_hydra_network(projection)
     hwriter.add_network_to_hydra()
-
 
 @hydra_app(category='import', name='Import Integrate Pynsim JSON from combined file')
 @cli.command(name='integrated-import', context_settings=dict(

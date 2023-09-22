@@ -134,10 +134,30 @@ class PywrHydraExporter(BasePywrHydra):
 
         network.scenarios = [scenario]
 
+        rules = client.get_resource_rules(ref_key='NETWORK', ref_id=scenario.network_id)
 
-        rules = client.get_resource_rules(ref_key='NETWORK', ref_id=scenario.network_id, scenario_id=scenario.id)
+        #some models have multiple rules, on different scenarios with the same name.
+        #this keeps any rules in the network which are not duplicated, and any which are,
+        #use the one from this scenario. If none are in this scenario, then use the first one.
+        duplicate_rules = defaultdict(list)
+        for r in rules:
+            duplicate_rules[r.name].append(r)
 
-        network.rules = rules
+        no_duplicate_rules = []
+        for rname, duperulelist in duplicate_rules.items():
+            if len(duperulelist) == 1:
+                no_duplicate_rules = no_duplicate_rules + duperulelist
+            else:
+                #there are dupes in different scenarios, so find the one in this scenario
+                for duplicaterule in duperulelist:
+                    if duplicaterule.scenario_id==scenario_id:
+                        no_duplicate_rules.append(duplicaterule)
+                        break
+                else:
+                    #none are in this scenario, so just add the first one.
+                    no_duplicate_rules.append(duperulelist[0])
+
+        network.rules = no_duplicate_rules
 
         # Fetch all the attributes
         attributes = client.get_attributes(
