@@ -126,10 +126,11 @@ class PywrHydraExporter(BasePywrHydra):
                 include_data=False,
                 include_results=False,
                 template_id=template_id,
+                include_topology=True,
                 include_attributes=True)
 
             with open(network_cache_file, 'w') as f:
-                json.dump(JSONObject(network), f)
+                json.dump(JSONObject(network), f, sort_keys=True, indent=2)
 
         network.scenarios = [scenario]
 

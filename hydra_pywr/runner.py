@@ -2,6 +2,8 @@ from .exporter import PywrHydraExporter
 import copy
 import yaml
 import pandas
+import tempfile
+import json
 from pywr.model import Model
 from pywr.nodes import Node, AggregatedNode
 from pywr._core import AbstractStorage
@@ -68,6 +70,16 @@ class PywrHydraRunner(PywrHydraExporter):
         pnet = PywrNetwork(data)
         writer = PywrJsonWriter(pnet)
         self.pywr_data = writer.as_dict()
+
+        templocation = tempfile.gettempdir()
+        temppywrmodelpath = os.path.join(templocation, 'pywr_model.json')
+
+        with open(temppywrmodelpath, 'w') as f:
+            json.dump(self.pywr_data, f, sort_keys=True, indent=2)
+
+        log.info("Model written to: %s", temppywrmodelpath)
+
+        return tempfile
 
     def load_pywr_model(self, solver=None):
         """ Run Pywr model from the exported data using the model in self.pywr_data """
