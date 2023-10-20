@@ -11,6 +11,8 @@ from pywr.parameters import Parameter, DeficitParameter
 from pywr.recorders import NumpyArrayNodeRecorder, NumpyArrayStorageRecorder, NumpyArrayParameterRecorder
 from pywr.recorders.progress import ProgressRecorder
 
+from pywrparser.lib import PywrTypeJSONEncoder
+
 from .exporter import HydraToPywrNetwork
 
 from pywrparser.types.network import PywrNetwork
@@ -31,7 +33,7 @@ def run_file(filename, domain, output_file):
 
 
 def run_network_scenario(client, scenario_id, template_id, domain,
-                         output_frequency=None, solver=None, data_dir=None):
+                         output_frequency=None, solver=None, data_dir='/tmp'):
 
     runner = PywrHydraRunner.from_scenario_id(client, scenario_id,
                                              template_id=template_id)
@@ -51,18 +53,39 @@ def run_network_scenario(client, scenario_id, template_id, domain,
         for ref in refs:
             ref.data["url"] = filedest
 
+    if data_dir is not None:
+        save_pywr_file(pywr_network.as_dict(), data_dir, network_data.data['id'], scenario_id)
+
     pywr_data = runner.load_pywr_model(pywr_network, solver=solver)
 
     network_id = runner.data.id
-
-    if data_dir is not None:
-        save_pywr_file(pywr_data, data_dir, network_id, scenario_id)
 
     runner.run_pywr_model()
     runner.save_pywr_results()
 
     log.info(f'Pywr model run success. Network ID: {network_id}, Scenario ID: {scenario_id}')
 
+
+def save_pywr_file(data, data_dir, network_id=None, scenario_id=None):
+    """
+    Save pywr json data to the specified directory
+    """
+    if data_dir is None:
+        log.info("No data dir specified. Returning.")
+        exit(1)
+
+    title = data['metadata']['title']
+
+    #check if the output folder exists and create it if not
+    if not os.path.isdir(data_dir):
+        #exist_ok sets unix the '-p' functionality to create the whole path
+        os.makedirs(data_dir, exist_ok=True)
+
+    filename = os.path.join(data_dir, f'{title}.json')
+    with open(filename, mode='w') as fh:
+        json.dump(data, fh, sort_keys=True, indent=2)
+
+    log.info(f'Successfully exported "{filename}". Network ID: {network_id}, Scenario ID: {scenario_id}')
 
 
 class PywrFileRunner():
@@ -402,6 +425,7 @@ class PywrHydraRunner(HydraToPywrNetwork):
         attribute_names = []
         for recorder in self._df_recorders:
             attribute_names.append(self._get_attribute_name_from_recorder(recorder))
+            attribute_names.append(self._get_attribute_name_from_recorder(recorder, is_dataframe=True))
         for recorder in self._non_df_recorders:
             attribute_names.append(self._get_attribute_name_from_recorder(recorder))
 
@@ -424,11 +448,76 @@ class PywrHydraRunner(HydraToPywrNetwork):
 
         self.hydra.update_scenario(scen=scenario)
 
+
+    def add_resource_attributes(self):
+        """
+            Identify new resource attribtues which need adding to the network, and add them prior to adding the data
+            Return a mapping from the recorder name to the new Resource Attr ID.
+        """
+
+        resource_attributes_to_add = []
+        recorder_ra_map = {}
+        recorder_ra_id_map={}
+
+        for recorder in self._df_recorders + self._non_df_recorders:
+                resource_type = 'NETWORK'
+                resource_id = self.data['id']
+                attribute_name = self._get_attribute_name_from_recorder(
+                    recorder, 
+                    is_dataframe=hasattr(recorder, 'to_dataframe')
+                )
+
+                attribute = self._get_attribute_from_name(attribute_name)
+
+                try:
+                    recorder_node = self._get_node_from_recorder(recorder)
+                except AttributeError:
+                    continue
+
+                try:
+                    resource_attribute_id = self._get_resource_attribute_id(recorder_node.name,
+                                                                            attribute_name)
+                    recorder_ra_id_map[recorder.name] = resource_attribute_id
+                except ValueError:
+                    recorder_node_name = recorder.name.split('__:')[0].replace('__', '')
+                    for node in self.data['nodes']:
+                        if node['name'] == recorder_node_name:
+                            resource_id = node['id']
+                            resource_type = 'NODE'
+
+                            break
+                        if recorder_node.parent is not None:
+                            if node['name'] == recorder_node_name:
+                                resource_id = node['id']
+                                resource_type = 'NODE'
+                                break
+                    else:
+                        continue
+                    
+                    # Try to get the resource attribute
+                    resource_attributes_to_add.append(dict(resource_type=resource_type,
+                                                                    resource_id=resource_id,
+                                                                    attr_id=attribute['id'],
+                                                                    is_var='Y',
+                                                                    error_on_duplicate=False))
+                    recorder_ra_map[(resource_type, resource_id, attribute['id'])] = recorder.name
+
+        if len(resource_attributes_to_add) > 0:
+            new_resource_attributes = self.hydra.add_resource_attributes(resource_attributes=resource_attributes_to_add)
+            for new_ra in new_resource_attributes:
+                recorder_name = recorder_ra_map[(new_ra['ref_key'], new_ra['node_id'], new_ra['attr_id'])]
+                recorder_ra_id_map[recorder_name] = new_ra['id']
+
+        return recorder_ra_id_map
+
     def generate_array_recorder_resource_scenarios(self):
         """ Generate resource scenario data from NumpyArrayXXX recorders. """
         if self._df_recorders is None:
             log.warning('No array recorders defined, results not saved to Hydra.')
             return
+
+        #get a mapping from recorder names to resource attribute IDs
+        recorder_ra_id_map = self.add_resource_attributes()
 
         for recorder in self._df_recorders:
             df = recorder.to_dataframe()
@@ -463,6 +552,7 @@ class PywrHydraRunner(HydraToPywrNetwork):
 
             resource_scenario = self._make_recorder_resource_scenario(recorder,
                                                                       value,
+                                                                      recorder_ra_id_map[recorder.name],
                                                                       'dataframe',
                                                                       is_timeseries=is_timeseries,
                                                                       is_dataframe=True)
@@ -494,6 +584,7 @@ class PywrHydraRunner(HydraToPywrNetwork):
 
             resource_scenario = self._make_recorder_resource_scenario(recorder,
                                                                       value,
+                                                                      recorder_ra_id_map[recorder.name],
                                                                       data_type,
                                                                       is_dataframe=False)
 
@@ -502,40 +593,10 @@ class PywrHydraRunner(HydraToPywrNetwork):
 
             yield resource_scenario
 
-    def _make_recorder_resource_scenario(self, recorder, value, data_type, is_timeseries=False, is_dataframe=False):
+    def _make_recorder_resource_scenario(self, recorder, value, resource_attribute_id, data_type, is_timeseries=False, is_dataframe=False):
         # Get the attribute and its ID
         attribute_name = self._get_attribute_name_from_recorder(recorder, is_dataframe=is_dataframe)
         attribute = self._get_attribute_from_name(attribute_name)
-
-        # Now we need to ensure there is a resource attribute for all nodes and recorder attributes
-
-        try:
-            recorder_node = self._get_node_from_recorder(recorder)
-        except AttributeError:
-            return None
-
-        try:
-            resource_attribute_id = self._get_resource_attribute_id(recorder_node.name,
-                                                                    attribute_name)
-        except ValueError:
-            for node in self.data['nodes']:
-                if node['name'] == recorder_node.name:
-                    node_id = node['id']
-                    break
-                if recorder_node.parent is not None:
-                    if node['name'] == recorder_node.parent.name:
-                        node_id = node['id']
-                        break
-            else:
-                return None
-
-            # Try to get the resource attribute
-            resource_attribute = self.hydra.add_resource_attribute(resource_type='NODE',
-                                                               resource_id=node_id,
-                                                               attr_id=attribute['id'],
-                                                               is_var='Y',
-                                                               error_on_duplicate=False)
-            resource_attribute_id = resource_attribute['id']
 
         unit_id = self.attr_unit_map.get(attribute.id)
 

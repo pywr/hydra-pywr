@@ -64,6 +64,7 @@ def import_json(obj, filename, project_id, user_id, template_id, projection, net
     """ Import a Pywr JSON file into Hydra. """
 
     client = get_logged_in_client(obj)
+    
     importer.import_json(client,
                          filename,
                          project_id,
@@ -128,7 +129,7 @@ def purge_cache(cache_path):
 @click.option('--domain', type=str, default="water")
 @click.option('--output-frequency', type=str, default=None)
 @click.option('--solver', type=str, default=None)
-@click.option('--data-dir', default=None)
+@click.option('--data-dir', default='/tmp')
 def run(obj, scenario_id, template_id, user_id, domain, output_frequency, solver, data_dir):
     """ Export, run and save a Pywr model from Hydra. """
     client = get_logged_in_client(obj)
@@ -143,28 +144,6 @@ def run(obj, scenario_id, template_id, user_id, domain, output_frequency, solver
                                 output_frequency=output_frequency,
                                 solver=solver,
                                 data_dir=data_dir)
-
-
-
-def save_pywr_file(data, data_dir, network_id=None, scenario_id=None):
-    """
-    Save pywr json data to the specified directory
-    """
-    if data_dir is None:
-        click.echo("No data dir specified. Returning.")
-
-    title = data['metadata']['title']
-
-    #check if the output folder exists and create it if not
-    if not os.path.isdir(data_dir):
-        #exist_ok sets unix the '-p' functionality to create the whole path
-        os.makedirs(data_dir, exist_ok=True)
-
-    filename = os.path.join(data_dir, f'{title}.json')
-    with open(filename, mode='w') as fh:
-        json.dump(data, fh, sort_keys=True, indent=2)
-
-    click.echo(f'Successfully exported "{filename}". Network ID: {network_id}, Scenario ID: {scenario_id}')
 
 
 """

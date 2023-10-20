@@ -53,6 +53,16 @@ def import_json(client, filename, project_id, template_id, network_name, *args, 
                 log.info(err)
         exit(1)
 
+    if pnet:
+        pnet.add_parameter_references()
+        pnet.add_recorder_references()
+        pnet.promote_inline_parameters()
+        pnet.promote_inline_recorders()
+        pnet.attach_reference_parameters()
+        pnet.attach_reference_recorders()
+        #pnet.detach_parameters()
+
+
     if network_name:
         pnet.metadata.data["title"] = network_name
 

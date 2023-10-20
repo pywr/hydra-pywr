@@ -27,6 +27,8 @@ from .utils import (
 from hydra_base.lib.objects import JSONObject
 from hydra_base.exceptions import ResourceNotFoundError
 
+from pywrparser.lib import PywrTypeJSONEncoder
+
 
 import logging
 log = logging.getLogger(__name__)
@@ -168,7 +170,7 @@ class HydraToPywrNetwork():
         network.scenarios = [scenario]
         network.rules = client.get_resource_rules(ref_key='NETWORK', scenario_id_id=scenario_id)
 
-        attributes = client.get_attributes()
+        attributes = client.get_attributes(network_id=network.id, project_id=network.project_id, include_global=True)
         attributes = {attr.id: attr for attr in attributes}
 
         log.info(f"Retreiving template {network.types[index].template_id}")
@@ -220,7 +222,11 @@ class HydraToPywrNetwork():
     def build_pywr_network(self):
         self.build_pywr_nodes()
         self.edges = self.build_edges()
-        self.parameters, self.recorders = self.build_parameters_recorders()
+
+        parameters, recorders = self.build_parameters_recorders()
+        self.parameters.update(parameters)
+        self.recorders.update(recorders)
+
         self.tables = self.build_tables()
         self.timestepper = self.build_timestepper()
         self.metadata = self.build_metadata()
@@ -243,10 +249,10 @@ class HydraToPywrNetwork():
             if comment := node.get("description"):
                 pywr_node["comment"] = comment
 
-            pywr_node_type = node["types"][0]["name"]
+            pywr_node_type = node["types"][0]
 
             if pywr_node_type:
-                log.info(f"Building node <{node['name']}> as <{pywr_node_type}>")
+                log.debug(f"Building node <{node['name']}> as <{pywr_node_type['name']} ({pywr_node_type['id']})>")
                 self.build_node_and_references(node, pywr_node_type)
 
 
@@ -270,7 +276,7 @@ class HydraToPywrNetwork():
             if hydra_edge["types"][0]["name"].lower() == "slottededge":
                 for slot in ("src_slot", "dest_slot"):
                     slot_id = [attr.id for attr in hydra_edge["attributes"] if attr.name == slot][0]
-                    slot_ds = self.get_dataset_by_attr_id(slot_id)
+                    slot_ds = self.get_dataset_by_resource_attr_id(slot_id)
                     verts.append(slot_ds.value if slot_ds else None)
 
             edge = PywrEdge(verts)
@@ -283,7 +289,7 @@ class HydraToPywrNetwork():
         table_attr_prefix = "tbl_"
         table_subattrs = ("header", "index_col", "key", "url")
         for attr in self.data["attributes"]:
-            ds = self.get_dataset_by_attr_id(attr.id)
+            ds = self.get_dataset_by_resource_attr_id(attr.id)
             if not ds:
                 continue
             if ds["type"].upper().startswith("PYWR_TABLE"):
@@ -319,7 +325,7 @@ class HydraToPywrNetwork():
         ts_keys = ("start", "end", "timestep")
 
         for attr in self.data["attributes"]:
-            ds = self.get_dataset_by_attr_id(attr.id)
+            ds = self.get_dataset_by_resource_attr_id(attr.id)
             if ds and ds["type"].upper().startswith("PYWR_TIMESTEPPER"):
                 # New style Timestep type: single dictionary value
                 value = json.loads(ds["value"])
@@ -354,7 +360,7 @@ class HydraToPywrNetwork():
             "description": self.data['description']
         }
         for attr in self.data["attributes"]:
-            ds = self.get_dataset_by_attr_id(attr.id)
+            ds = self.get_dataset_by_resource_attr_id(attr.id)
             if ds and ds["type"].upper().startswith("PYWR_METADATA"):
                 # New style Metadata type: single dictionary value
                 value = json.loads(ds["value"])
@@ -408,8 +414,11 @@ class HydraToPywrNetwork():
         parameters = {} # {name: P()}
         recorders = {} # {name: R()}
 
-        for attr in self.data.attributes:
-            ds = self.get_dataset_by_attr_id(attr.id)
+        for resource_attr in self.data.attributes:
+            attribute = self.attributes[resource_attr["attr_id"]]
+            ds = self.get_dataset_by_resource_attr_id(resource_attr.id)
+            #a name might have been set directlyu in the 'build_node_and_references' function to include the node name
+            name = resource_attr.get('name', attribute['name'])
             if not ds:
                 # This could raise instead, e.g...
                 #raise ValueError(f"No dataset found for attr name {attr.name} with id {attr.id}")
@@ -420,13 +429,13 @@ class HydraToPywrNetwork():
                 value = json.loads(ds["value"])
                 value = unnest_parameter_key(value, key="pandas_kwargs")
                 value = add_interp_kwargs(value)
-                p = PywrParameter(ds["name"], value)
+                p = PywrParameter(name, value)
                 assert p.name not in parameters    # Disallow overwriting
                 parameters[p.name] = p
             elif ds["type"].startswith(RECORDER_TYPES):
                 value = json.loads(ds["value"])
                 try:
-                    r = PywrRecorder(ds["name"], value)
+                    r = PywrRecorder(name, value)
                 except:
                     raise ValueError(f"Dataset {ds['name']} is not a valid Recorder")
                 recorders[r.name] = r
@@ -455,11 +464,11 @@ class HydraToPywrNetwork():
         return attr_data # NB: String keys
 
 
-    def get_dataset_by_attr_id(self, attr_id):
+    def get_dataset_by_resource_attr_id(self, ra_id):
 
         scenario = self.data.scenarios[0]
         for rs in scenario.resourcescenarios:
-            if rs.resource_attr_id == attr_id:
+            if rs.resource_attr_id == ra_id:
                 return rs.dataset
 
     def _get_resource_scenario(self, resource_attribute_id):
@@ -473,6 +482,8 @@ class HydraToPywrNetwork():
 
 
     def build_node_and_references(self, nodedata, pywr_node_type):
+
+        node_type_attribute_names = [a.attr.name for a in self.type_id_map[pywr_node_type['id']].typeattrs]
 
         for resource_attribute in nodedata["attributes"]:
             attribute = self.attributes[resource_attribute["attr_id"]]
@@ -494,9 +505,15 @@ class HydraToPywrNetwork():
                 typedval = json.loads(value)
             except json.decoder.JSONDecodeError as e:
                 typedval = value
-            nodedata[attribute_name] = typedval
 
-        nodedata["type"] = pywr_node_type
+            #If the attribute name is defined on the node type, put it on the node
+            if attribute_name in node_type_attribute_names:
+                nodedata[attribute_name] = typedval
+            else:
+                resource_attribute['name'] = f"__{nodedata['name']}__:{attribute_name}"
+                self.data.attributes.append(resource_attribute)
+
+        nodedata["type"] = pywr_node_type['name']
         node_attr_data = {a:v for a,v in nodedata.items() if a not in self.exclude_hydra_attrs}
         position = {"geographic": [ nodedata.get("x",0), nodedata.get("y",0) ]}
         node_attr_data["position"] = position
