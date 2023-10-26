@@ -270,7 +270,7 @@ class HydraToPywrNetwork():
         #First get the project hierarchy
         project_hierarchy = self.hydra.get_project_hierarchy(project_id=self.data['project_id'])
 
-        #start from the top down. Files with the same neame, at a lower level
+        #start from the top down. Files with the same name, at a lower level
         #take precedence.
         project_hierarchy.reverse()
 
