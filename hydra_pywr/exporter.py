@@ -533,7 +533,7 @@ class HydraToPywrNetwork():
                 #raise ValueError(f"No dataset found for attr name {attr.name} with id {attr.id}")
                 continue
 
-            #a name might have been set directlyu in the 'build_node_and_references' function to include the node name
+            #a name might have been set directly in the 'build_node_and_references' function to include the node name
             name = resource_attr.get('name', attribute['name'])
 
             if not ds["type"].upper().startswith(PARAMETER_TYPES + RECORDER_TYPES):
