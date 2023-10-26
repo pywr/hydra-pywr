@@ -72,7 +72,9 @@ def export_json(client, data_dir, scenario_id, user_id, use_cache, json_sort_key
             if len(spliturl) == 1:
                 full_path = exporter.filedict.get(spliturl[0])
                 if full_path is not None:
-                    filedest = full_path
+                    filedest = utils.retrieve_s3(full_path, data_dir)
+            else:
+                log.debug("Not processing file %s", url)
 
         for ref in refs:
             ref.data["url"] = filedest
@@ -256,6 +258,15 @@ class HydraToPywrNetwork():
             where '/path/to' is defined in the project's metadata (the appdata column)
         """
         log.info("Retrieving external files")
+        try:
+            import s3fs
+        except ImportError:
+            log.error("Unable to check for external files on. Access to S3 requires the s3fs module")
+            raise
+
+        #assume credential are in the ~/.aws/credentials file
+        fs = s3fs.S3FileSystem()
+
         #First get the project hierarchy
         project_hierarchy = self.hydra.get_project_hierarchy(project_id=self.data['project_id'])
 
@@ -264,7 +275,6 @@ class HydraToPywrNetwork():
         project_hierarchy.reverse()
 
         self.filedict = {}
-        self.fileprojects  = {}
         for proj_in_hierarchy in project_hierarchy:
             #Files uploaded to the USER_FILE_UPLOAD_DIR are synchronized with the USER_FILE_ROOT_DIR
             #So they are then downloaded from the USER_FILE_ROOT_DIR
@@ -281,17 +291,19 @@ class HydraToPywrNetwork():
             if project_data_path is None:
                 continue
 
-            local_project_data_dir = self.sync_with_s3(data_s3_bucket, project_data_path) #TODO: How do we do this?
+            bucket_path = f"{data_s3_bucket}/data/projectdata/{project_data_path}"
 
             try:
-                projectfiles = os.listdir(local_project_data_dir)
-                for f in projectfiles:
-                    name = f.split(os.sep)[-1]
-                    self.filedict[name] = os.path.join(local_project_data_dir, f)
-                    self.fileprojects[name] = proj_in_hierarchy
-            except FileNotFoundError:
-                pass
-        log.info("External files synced")
+                #create a mapping from the files nams in the project_data_path directory
+                #to to their full s3 path
+                projectfiles = fs.ls(bucket_path)
+                for s3filepath in projectfiles:
+                    self.filedict[os.path.basename(s3filepath)] = s3filepath
+            except (FileNotFoundError, PermissionError):
+                log.warning("Unable to access bucket %s. Continuing.", bucket_path)
+
+        log.info("External file mapping created")
+
         return self.filedict
 
 
@@ -311,7 +323,7 @@ class HydraToPywrNetwork():
         if completedprocess.returncode == 0:
             log.info(f"Synced s3 bucket {s3_bucket_name}")
         else:
-            log.warning(f"error syncing bucket {s3_bucket_name}")
+            log.warning(f"error syncing bucket {s3_bucket_name} : {completedprocess.stderr} ")
 
         return data_dir
 

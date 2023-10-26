@@ -249,9 +249,15 @@ def retrieve_s3(s3path, datadir):
     elif not os.path.isdir(datadir):
         raise OSError(f"Destination '{datadir}' is not a directory")
 
-    fs = s3fs.S3FileSystem(anon=True)
+    #assume credential are in the ~/.aws/credentials file
+    fs = s3fs.S3FileSystem()
     log.info(f"Retrieving {s3path} to {filedest} ...")
-    fs.get(s3path, filedest)
+
+    try:
+        fs.get(s3path, filedest)
+    except Exception as e:
+        raise Exception(f"Unable to access data in s3 bucket {s3path}. Error is {e}")
+
     log.info(f"Retrieved {filedest} ({os.stat(filedest).st_size} bytes)")
 
     return filedest
