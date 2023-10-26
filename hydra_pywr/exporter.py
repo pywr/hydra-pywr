@@ -261,7 +261,7 @@ class HydraToPywrNetwork():
         try:
             import s3fs
         except ImportError:
-            log.error("Unable to check for external files on. Access to S3 requires the s3fs module")
+            log.error("Unable to check for external files on S3. Access to S3 requires the s3fs module")
             raise
 
         #assume credential are in the ~/.aws/credentials file
