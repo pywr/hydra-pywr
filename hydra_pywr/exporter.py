@@ -43,7 +43,7 @@ RECORDER_TYPES = (
 )
 
 
-def export_json(client, data_dir, scenario_id, user_id, use_cache, json_sort_keys, json_indent):
+def export_json(client, data_dir, scenario_id, use_cache, json_sort_keys, json_indent):
     """
         A utility function to uxport a Pywr JSON from Hydra.
     """
@@ -72,6 +72,8 @@ def export_json(client, data_dir, scenario_id, user_id, use_cache, json_sort_key
         json.dump(pywr_network.as_dict(), fp, sort_keys=json_sort_keys, indent=2, cls=PywrTypeJSONEncoder)
 
     log.info(f"Network: {network_id}, Scenario: {scenario_id} exported to `{outfile}`")
+
+    return outfile
 
 """
     Hydra => PywrNetwork
