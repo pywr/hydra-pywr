@@ -4,6 +4,7 @@ import tempfile
 import os
 import logging
 import json
+from urllib.parse import urlparse
 
 from pywr.model import Model
 from pywr.nodes import Node, Storage
@@ -463,7 +464,7 @@ class PywrHydraRunner(HydraToPywrNetwork):
                 resource_type = 'NETWORK'
                 resource_id = self.data['id']
                 attribute_name = self._get_attribute_name_from_recorder(
-                    recorder, 
+                    recorder,
                     is_dataframe=hasattr(recorder, 'to_dataframe')
                 )
 
@@ -493,7 +494,7 @@ class PywrHydraRunner(HydraToPywrNetwork):
                                 break
                     else:
                         continue
-                    
+
                     # Try to get the resource attribute
                     resource_attributes_to_add.append(dict(resource_type=resource_type,
                                                                     resource_id=resource_id,
