@@ -207,7 +207,12 @@ def file_to_s3(elem_data, s3prefix):
 def url_to_local_path(url, datadir):
     u = urlparse(url)
     filepath = f"{u.netloc}{u.path}"
-    return os.path.join(datadir, filepath)
+
+    fullpath = os.path.join(datadir, filepath)
+
+    os.makedirs(os.path.dirname(fullpath), exist_ok=True)
+
+    return fullpath
 
 
 def retrieve_url(url, urldir):

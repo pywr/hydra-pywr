@@ -1,4 +1,5 @@
 import json
+import sys
 import os
 import re
 from collections import defaultdict
@@ -58,6 +59,7 @@ def export_json(client, data_dir, scenario_id, use_cache, json_sort_keys, json_i
     pywr_network.detach_parameters()
 
     url_refs = pywr_network.url_references()
+
     for url, refs in url_refs.items():
         u = urlparse(url)
         filedest = url
@@ -70,6 +72,7 @@ def export_json(client, data_dir, scenario_id, use_cache, json_sort_keys, json_i
             spliturl = url.strip(os.sep).split(os.sep)
             #If the url is 'file.csv'
             if len(spliturl) == 1:
+
                 full_path = exporter.filedict.get(spliturl[0])
                 if full_path is not None:
                     filedest = utils.retrieve_s3(full_path, data_dir)
@@ -191,7 +194,7 @@ class HydraToPywrNetwork():
                         include_attributes=True)
 
         network.scenarios = [scenario]
-        network.rules = client.get_resource_rules(ref_key='NETWORK', scenario_id_id=scenario_id)
+        network.rules = client.get_resource_rules(ref_key='NETWORK', ref_id=network_id)
 
         attributes = client.get_attributes(network_id=network.id, project_id=network.project_id, include_global=True)
         attributes = {attr.id: attr for attr in attributes}
@@ -203,11 +206,13 @@ class HydraToPywrNetwork():
 
 
     def write_rules_as_module(self):
-        filename = "hydra_pywr_custom_module.py"
+        filename = os.path.join(os.path.dirname(__file__), "hydra_pywr_custom_module.py")
 
         prelude = (
             "from pywr import recorders",
             "from pywr import parameters",
+            "from pywr.parameters import *",
+            "from pywr.recorders import *",
             "import pandas",
             "import numpy as np",
             "import scipy",
@@ -230,6 +235,8 @@ class HydraToPywrNetwork():
         sys.addaudithook(handler)
         """
 
+        log.info("Adding %s rules.", len(self.data.rules))
+
         with open(filename, 'w') as fp:
             for p in prelude:
                 fp.write(f"{p}\n")
@@ -243,7 +250,7 @@ class HydraToPywrNetwork():
 
     def get_external_files(self):
         """
-            Request the locations of any external files from hydra, using the project appdata column, 
+            Request the locations of any external files from hydra, using the project appdata column,
             then replace the relevant file names in the 'url' section of parameters and tables with the full path to the file.
             for example replace:
             {
@@ -277,12 +284,12 @@ class HydraToPywrNetwork():
         project_hierarchy.reverse()
 
         self.filedict = {}
+
         for proj_in_hierarchy in project_hierarchy:
             #Files uploaded to the USER_FILE_UPLOAD_DIR are synchronized with the USER_FILE_ROOT_DIR
             #So they are then downloaded from the USER_FILE_ROOT_DIR
             if proj_in_hierarchy.appdata is None:
                 continue
-
             data_s3_bucket = proj_in_hierarchy.appdata.get('data_s3_bucket')
 
             if data_s3_bucket is None:
@@ -304,7 +311,7 @@ class HydraToPywrNetwork():
             except (FileNotFoundError, PermissionError):
                 log.warning("Unable to access bucket %s. Continuing.", bucket_path)
 
-        log.info("External file mapping created")
+        log.info("External file mapping created for %s files", len(self.filedict))
 
         return self.filedict
 

@@ -18,6 +18,7 @@ from .exporter import HydraToPywrNetwork
 
 from pywrparser.types.network import PywrNetwork
 from hydra_pywr.nodes import *
+from . import utils
 
 log = logging.getLogger(__name__)
 
@@ -47,12 +48,23 @@ def run_network_scenario(client, scenario_id, template_id, domain,
     url_refs = pywr_network.url_references()
     for url, refs in url_refs.items():
         u = urlparse(url)
+        filedest = None
         if u.scheme == "s3":
             filedest = utils.retrieve_s3(url, data_dir)
         elif u.scheme.startswith("http"):
             filedest = utils.retrieve_url(url, data_dir)
-        for ref in refs:
-            ref.data["url"] = filedest
+        else:
+            #'/file.csv' -> ('', file.csv)
+            spliturl = url.strip(os.sep).split(os.sep)
+            #If the url is 'file.csv'
+            if len(spliturl) == 1:
+
+                full_path = runner.filedict.get(spliturl[0])
+                if full_path is not None:
+                    filedest = utils.retrieve_s3(full_path, data_dir)
+        if filedest is not None:
+            for ref in refs:
+                ref.data["url"] = filedest
 
     if data_dir is not None:
         save_pywr_file(pywr_network.as_dict(), data_dir, network_data.data['id'], scenario_id)
@@ -98,6 +110,10 @@ class PywrFileRunner():
     def load_pywr_model_from_file(self, filename, solver=None):
         if self.domain == "energy":
             from pywr_dcopf import core
+        try:
+            from . import hydra_pywr_custom_module
+        except (ModuleNotFoundError, ImportError) as e:
+            pass
 
         pnet, errors, warnings = PywrNetwork.from_file(filename)
         if warnings:
@@ -184,6 +200,11 @@ class PywrHydraRunner(HydraToPywrNetwork):
 
         if self.domain == "energy":
             from pywr_dcopf import core
+
+        try:
+            from . import hydra_pywr_custom_module
+        except (ModuleNotFoundError, ImportError) as e:
+            pass
 
         solver = domain_solvers[self.domain]
 
@@ -473,6 +494,7 @@ class PywrHydraRunner(HydraToPywrNetwork):
                 try:
                     recorder_node = self._get_node_from_recorder(recorder)
                 except AttributeError:
+                    recorder_node=None
                     continue
 
                 try:
@@ -480,7 +502,11 @@ class PywrHydraRunner(HydraToPywrNetwork):
                                                                             attribute_name)
                     recorder_ra_id_map[recorder.name] = resource_attribute_id
                 except ValueError:
-                    recorder_node_name = recorder.name.split('__:')[0].replace('__', '')
+                    if recorder_node is None:
+                        recorder_node_name = recorder.name.split('__:')[0].replace('__', '')
+                    else:
+                        recorder_node_name = recorder_node.name
+
                     for node in self.data['nodes']:
                         if node['name'] == recorder_node_name:
                             resource_id = node['id']
