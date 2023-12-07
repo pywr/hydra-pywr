@@ -2,8 +2,8 @@ import os
 import pytest
 import hydra_base
 from hydra_base import JSONObject
-from hydra_pywr.importer import PywrHydraImporter
-from hydra_pywr.template import register_template, load_template_config, pywr_template_name
+#from hydra_pywr.importer import PywrHydraImporter
+#from hydra_pywr.template import register_template, load_template_config, pywr_template_name
 from hydra_client.connection import JSONConnection
 from hydra_base_fixtures import testdb_uri
 
@@ -19,7 +19,7 @@ def logged_in_client(client):
     return client
 
 
-@pytest.fixture()
+@pytest.fixture
 def model_directory():
     return os.path.join(os.path.dirname(__file__), 'models')
 
@@ -88,3 +88,7 @@ def db_with_pywr_network(pywr_json_filename, db_with_template, projectmaker, log
 
     return network_id, scenario_id, pywr_json_filename
 
+
+@pytest.fixture
+def hydropower_verification_model(model_directory):
+    return os.path.join(model_directory, "hydropower_verification.json")
