@@ -306,11 +306,10 @@ class PywrHydraExporter(BasePywrHydra):
 
                 #identify parameters on this node which should be excluded as they're no longer referenced
 
-                for resource_attribute in node['attributes']:
-                    if resource_attribute['attr_is_var'] == 'Y':
-                        continue
+                for resource_attribute in filter(lambda x:x.attr_is_var!='Y', node['attributes']):
 
                     attribute = self.attributes[resource_attribute['attr_id']]
+
                     try:
                         resource_scenario = self._get_resource_scenario(resource_attribute, node)
                     except ValueError:
@@ -480,8 +479,9 @@ class PywrHydraExporter(BasePywrHydra):
 
     def build_node_and_references(self, nodedata, pywr_node_type, node_type_attribute_names):
 
-        for resource_attribute in nodedata['attributes']:
+        for resource_attribute in filter(lambda x:x.attr_is_var!='Y', nodedata['attributes']):
             attribute = self.attributes[resource_attribute['attr_id']]
+
             try:
                 resource_scenario = self._get_resource_scenario(resource_attribute, nodedata)
             except ValueError:
@@ -815,7 +815,7 @@ class PywrHydraExporter(BasePywrHydra):
 
     def get_scenario_data(self):
 
-        for resource_attribute in self.data['attributes']:
+        for resource_attribute in filter(lambda x:x.attr_is_var != 'Y', self.data['attributes']):
             attribute = self.attributes[resource_attribute['attr_id']]
 
             try:
