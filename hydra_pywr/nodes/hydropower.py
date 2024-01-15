@@ -275,8 +275,8 @@ class Reservoir(Storage, metaclass=NodeMeta):
         self.connect(evaporation_node)
         self.evaporation_node = evaporation_node
 
-        self.evaporation_recorder = NumpyArrayNodeRecorder(model, evaporation_node,
-                                                           name=f'__{evaporation_node.name}__:evaporation')
+       # self.evaporation_recorder = NumpyArrayNodeRecorder(model, evaporation_node,
+        #                                                   name=f'__{evaporation_node.name}__:evaporation')
 
     def _make_rainfall_node(self, model, rainfall, cost):
 
@@ -308,8 +308,8 @@ class Reservoir(Storage, metaclass=NodeMeta):
         rainfall_node.connect(self)
         self.rainfall_node = rainfall_node
 
-        self.rainfall_recorder = NumpyArrayNodeRecorder(model, rainfall_node,
-                                                        name=f'__{rainfall_node.name}__:rainfall')
+       # self.rainfall_recorder = NumpyArrayNodeRecorder(model, rainfall_node,
+        #                                                name=f'__{rainfall_node.name}__:rainfall')
 
 
 
@@ -354,11 +354,11 @@ class Turbine(Link, metaclass=NodeMeta):
 
         self.max_flow = hp_target_flow
 
-        hp_recorder = HydropowerRecorder(model, self,
-                                         name=f"__{name}__:hydropowerrecorder",
-                                         water_elevation_parameter=level_parameter,
-                                         turbine_elevation=turbine_elevation, **hp_kwargs)
-        self.hydropower_recorder = hp_recorder
+        #hp_recorder = HydropowerRecorder(model, self,
+        #                                 name=f"__{name}__:hydropower",
+        #                                 water_elevation_parameter=level_parameter,
+        #                                 turbine_elevation=turbine_elevation, **hp_kwargs)
+        #self.hydropower_recorder = hp_recorder
 
     @classmethod
     def pre_load(cls, model, data):
