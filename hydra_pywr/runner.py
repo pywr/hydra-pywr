@@ -166,9 +166,19 @@ class PywrHydraRunner(HydraToPywrNetwork):
 
         self.attr_dimension_map = {}
 
+        self.node_lookup = {}
+        self.node_attr_lookup = {}
+        for n in self.data['nodes']:
+            self.node_lookup[n.name] = n
+            self.node_attr_lookup[n.name] = {}
+            for a in n['attributes']:
+                self.node_attr_lookup[a.attr_id] = a
+
         self.attr_name_map = self.make_attr_name_map()
 
         self.make_attr_unit_map()
+
+        self.limit_nodes_recording = False
 
     def _copy_scenario(self):
         # Now construct a scenario object
@@ -225,6 +235,29 @@ class PywrHydraRunner(HydraToPywrNetwork):
 
         return pywr_data
 
+    def get_nodes_to_record(self):
+        """
+        Get the nodes to record in the network.
+        """
+        try:
+            node_recorder_attribute = self._get_attribute_from_name('record_nodes')
+        except KeyError:
+            return []
+
+        for network_ra in self.data['attributes']:
+            if network_ra['attr_id'] == node_recorder_attribute['id']:
+                rs = list(filter(lambda x:x.resource_attr_id==network_ra['id'],
+                                 self.data.scenarios[0].resourcescenarios))
+                if len(rs) > 0:
+                    try:
+                        value = json.loads(rs[0]['dataset']['value'])
+                        if len(value) > 0:
+                            self.limit_nodes_recording = True
+                    except:
+                        self.log.critical(f"Unable to read which nodes to record. Value should be an array of node names or IDS. The value is: {rs[0]['dataset']['value']}")
+                        return []
+                return []
+
 
     def run_pywr_model(self, domain="water"):
         """
@@ -253,7 +286,8 @@ class PywrHydraRunner(HydraToPywrNetwork):
         for recorder in model.recorders:
             if hasattr(recorder, 'to_dataframe'):
                 df_recorders.append(recorder)
-            elif hasattr(recorder, "value"):
+
+            if hasattr(recorder, "value") or hasattr(recorder, "values"):
                 non_df_recorders.append(recorder)
 
         # Force a setup regardless of whether the model has been run or setup before
@@ -296,17 +330,14 @@ class PywrHydraRunner(HydraToPywrNetwork):
         attribute = self._get_attribute_from_name(attribute_name)
         attribute_id = attribute['id']
 
-        for node in self.data['nodes']:
-
-            if node['name'] == node_name:
-                resource_attributes = node['attributes']
-                break
+        node = self.node_lookup.get(node_name)
+        if node is not None:
+            resource_attributes = node['attributes']
         else:
             raise ValueError('Node name "{}" not found in network data.'.format(node_name))
-
-        for resource_attribute in resource_attributes:
-            if resource_attribute['attr_id'] == attribute_id:
-                return resource_attribute['id']
+        node_attribute = self.node_attr_lookup[node.name].get(attribute_id)
+        if node_attribute is not None:
+            return node_attribute['id']
         else:
             raise ValueError('No resource attribute for node "{}" and attribute "{}" found.'.format(node_name, attribute))
 
@@ -334,7 +365,10 @@ class PywrHydraRunner(HydraToPywrNetwork):
             try:
                 node = recorder.node
             except AttributeError:
-                node = recorder.parameter.node
+                try:
+                    node = recorder.parameter.node
+                except AttributeError:
+                    return None
         return node
 
     def _get_attribute_name_from_recorder(self, recorder, is_dataframe=False):
@@ -354,12 +388,15 @@ class PywrHydraRunner(HydraToPywrNetwork):
         if not attribute_name.startswith(simulated_prefix):
             attribute_name = f'{simulated_prefix}_{attribute_name}'
 
-        if not (is_dataframe or attribute_name.endswith(scalar_suffix)):
+        if is_dataframe is False and not attribute_name.endswith(scalar_suffix):
             attribute_name = f"{attribute_name}_{scalar_suffix}"
 
         return attribute_name
 
     def _add_node_flagged_recorders(self, model):
+
+        nodes_to_record = self.get_nodes_to_record()
+
         if self.domain == "energy":
             from pywr_dcopf.core import Generator, Load, Line, Battery
             node_classes = (Node, Generator, Load, Line, Battery)
@@ -367,6 +404,9 @@ class PywrHydraRunner(HydraToPywrNetwork):
             node_classes = (Node,)
 
         for node in model.nodes:
+            if self.limit_nodes_recording is True and node.name not in nodes_to_record:
+                continue
+
             try:
                 flags = self._node_recorder_flags[node.name]
             except KeyError:
@@ -446,7 +486,6 @@ class PywrHydraRunner(HydraToPywrNetwork):
         # First add any new attributes required
         attribute_names = []
         for recorder in self._df_recorders:
-            attribute_names.append(self._get_attribute_name_from_recorder(recorder))
             attribute_names.append(self._get_attribute_name_from_recorder(recorder, is_dataframe=True))
         for recorder in self._non_df_recorders:
             attribute_names.append(self._get_attribute_name_from_recorder(recorder))
@@ -457,6 +496,7 @@ class PywrHydraRunner(HydraToPywrNetwork):
             attributes.append({
                 'name': attribute_name,
                 'description': '',
+                'project_id': self.data.project_id,
                 'dimension_id' : self.attr_dimension_map.get(attribute_name)
             })
 
@@ -468,10 +508,18 @@ class PywrHydraRunner(HydraToPywrNetwork):
         for resource_scenario in self.generate_array_recorder_resource_scenarios():
             scenario['resourcescenarios'].append(resource_scenario)
 
-        self.hydra.update_scenario(scen=scenario)
+        chunk = 100
+        i = 0
+        while i < len(scenario['resourcescenarios']):
+            data = scenario['resourcescenarios'][i:i+chunk]
+            log.info('Saving %s datasets', chunk)
+            self.hydra.bulk_update_resourcedata(
+                scenario_ids = [scenario['id']],
+                resource_scenarios = data)
+            i = i+chunk+1
 
 
-    def add_resource_attributes(self):
+    def add_resource_attributes(self, recorders, is_dataframe):
         """
             Identify new resource attribtues which need adding to the network, and add them prior to adding the data
             Return a mapping from the recorder name to the new Resource Attr ID.
@@ -481,26 +529,34 @@ class PywrHydraRunner(HydraToPywrNetwork):
         recorder_ra_map = {}
         recorder_ra_id_map={}
 
-        for recorder in self._df_recorders + self._non_df_recorders:
-                resource_type = 'NETWORK'
-                resource_id = self.data['id']
-                attribute_name = self._get_attribute_name_from_recorder(
-                    recorder,
-                    is_dataframe=hasattr(recorder, 'to_dataframe')
-                )
+        for recorder in recorders:
 
-                attribute = self._get_attribute_from_name(attribute_name)
+            resource_attribute_id=None
+            resource_type = 'NETWORK'
+            resource_id = self.data['id']
+            attribute_name = self._get_attribute_name_from_recorder(
+                recorder,
+                is_dataframe=is_dataframe
+            )
+            recorder_name = recorder.name
+            if attribute_name.endswith('value'):
+                recorder_name = recorder.name + '_value'
 
-                try:
-                    recorder_node = self._get_node_from_recorder(recorder)
-                except AttributeError:
-                    recorder_node=None
-                    continue
+            attribute = self._get_attribute_from_name(attribute_name)
 
+            try:
+                recorder_node = self._get_node_from_recorder(recorder)
+            except AttributeError:
+                recorder_node=None
+
+            if recorder_node is None:
+                for network_ra in self.data['attributes']:
+                    if network_ra['attr_id'] == attribute['id']:
+                        resource_attribute_id = network_ra['id']
+            else:
                 try:
                     resource_attribute_id = self._get_resource_attribute_id(recorder_node.name,
                                                                             attribute_name)
-                    recorder_ra_id_map[recorder.name] = resource_attribute_id
                 except ValueError:
                     if recorder_node is None:
                         recorder_node_name = recorder.name.split('__:')[0].replace('__', '')
@@ -514,25 +570,28 @@ class PywrHydraRunner(HydraToPywrNetwork):
 
                             break
                         if recorder_node.parent is not None:
-                            if node['name'] == recorder_node_name:
+                            if node['name'] == recorder_node.parent.name:
                                 resource_id = node['id']
                                 resource_type = 'NODE'
                                 break
-                    else:
-                        continue
 
-                    # Try to get the resource attribute
-                    resource_attributes_to_add.append(dict(resource_type=resource_type,
-                                                                    resource_id=resource_id,
-                                                                    attr_id=attribute['id'],
-                                                                    is_var='Y',
-                                                                    error_on_duplicate=False))
-                    recorder_ra_map[(resource_type, resource_id, attribute['id'])] = recorder.name
+            if resource_attribute_id is not None:
+                recorder_ra_id_map[recorder_name] = resource_attribute_id
+                continue
+            else:
+
+                # Try to get the resource attribute
+                resource_attributes_to_add.append(dict(resource_type=resource_type,
+                                                                resource_id=resource_id,
+                                                                attr_id=attribute['id'],
+                                                                is_var='Y',
+                                                                error_on_duplicate='N'))
+                recorder_ra_map[(resource_type, resource_id, attribute['id'])] = recorder_name
 
         if len(resource_attributes_to_add) > 0:
             new_resource_attributes = self.hydra.add_resource_attributes(resource_attributes=resource_attributes_to_add)
             for new_ra in new_resource_attributes:
-                recorder_name = recorder_ra_map[(new_ra['ref_key'], new_ra['node_id'], new_ra['attr_id'])]
+                recorder_name = recorder_ra_map[(new_ra['ref_key'], new_ra.get('node_id', new_ra.get('network_id')), new_ra['attr_id'])]
                 recorder_ra_id_map[recorder_name] = new_ra['id']
 
         return recorder_ra_id_map
@@ -544,7 +603,9 @@ class PywrHydraRunner(HydraToPywrNetwork):
             return
 
         #get a mapping from recorder names to resource attribute IDs
-        recorder_ra_id_map = self.add_resource_attributes()
+        df_recorder_ra_id_map = self.add_resource_attributes(self._df_recorders, is_dataframe=True)
+        non_df_recorder_ra_id_map = self.add_resource_attributes(self._non_df_recorders, is_dataframe=False)
+
 
         for recorder in self._df_recorders:
             df = recorder.to_dataframe()
@@ -577,9 +638,10 @@ class PywrHydraRunner(HydraToPywrNetwork):
             if isinstance(df.index, pandas.DatetimeIndex):
                 is_timeseries=True
 
+
             resource_scenario = self._make_recorder_resource_scenario(recorder,
                                                                       value,
-                                                                      recorder_ra_id_map[recorder.name],
+                                                                      df_recorder_ra_id_map[recorder.name],
                                                                       'dataframe',
                                                                       is_timeseries=is_timeseries,
                                                                       is_dataframe=True)
@@ -600,18 +662,20 @@ class PywrHydraRunner(HydraToPywrNetwork):
                 if len(value) == 1:
                     value = value[0]
                     data_type = "scalar"
+                value = json.dumps(value)
             except NotImplementedError:
                 continue
             else:
                 try:
-                    value = recorder.value()
-                    data_type = "scalar"
+                    if hasattr(recorder, 'value'):
+                        value = recorder.value()
+                        data_type = "scalar"
                 except NotImplementedError:
                     continue
 
             resource_scenario = self._make_recorder_resource_scenario(recorder,
                                                                       value,
-                                                                      recorder_ra_id_map[recorder.name],
+                                                                      non_df_recorder_ra_id_map[recorder.name+'_value'],
                                                                       data_type,
                                                                       is_dataframe=False)
 
@@ -623,6 +687,7 @@ class PywrHydraRunner(HydraToPywrNetwork):
     def _make_recorder_resource_scenario(self, recorder, value, resource_attribute_id, data_type, is_timeseries=False, is_dataframe=False):
         # Get the attribute and its ID
         attribute_name = self._get_attribute_name_from_recorder(recorder, is_dataframe=is_dataframe)
+
         attribute = self._get_attribute_from_name(attribute_name)
 
         unit_id = self.attr_unit_map.get(attribute.id)
@@ -633,7 +698,7 @@ class PywrHydraRunner(HydraToPywrNetwork):
             if is_timeseries is True:
                 metadata['xAxisLabel'] = 'Time'
 
-        resource_scenario = self._make_dataset_resource_scenario(recorder.name,
+        resource_scenario = self._make_dataset_resource_scenario(attribute_name,
                                                                  value,
                                                                  data_type,
                                                                  resource_attribute_id,

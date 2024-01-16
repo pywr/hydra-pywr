@@ -533,8 +533,13 @@ class HydraToPywrNetwork():
         parameters = {} # {name: P()}
         recorders = {} # {name: R()}
 
-        for resource_attr in self.data.attributes:
-            attribute = self.attributes[resource_attr["attr_id"]]
+        for resource_attr in filter(lambda x:x.attr_is_var!='Y', self.data.attributes):
+
+            attribute = self.attributes.get(resource_attr["attr_id"])
+
+            if attribute is None:
+                continue
+
             ds = self.get_dataset_by_resource_attr_id(resource_attr.id)
 
             if not ds:
@@ -608,7 +613,8 @@ class HydraToPywrNetwork():
 
         node_type_attribute_names = [a.attr.name for a in self.type_id_map[pywr_node_type['id']].typeattrs]
 
-        for resource_attribute in nodedata["attributes"]:
+        for resource_attribute in filter(lambda x:x.attr_is_var!='Y', nodedata["attributes"]):
+            
             attribute = self.attributes[resource_attribute["attr_id"]]
             try:
                 resource_scenario = self._get_resource_scenario(resource_attribute["id"])
