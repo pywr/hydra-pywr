@@ -116,16 +116,20 @@ class PywrHydraRunner(PywrHydraExporter):
 
         for network_ra in self.data['attributes']:
             if network_ra['attr_id'] == node_recorder_attribute['id']:
-                self.limit_nodes_recording = True
                 rs = list(filter(lambda x:x.resource_attr_id==network_ra['id'],
                                  self.data.scenarios[0].resourcescenarios))
                 if len(rs) > 0:
                     try:
-                        return json.loads(rs[0]['dataset']['value'])
+                        value = json.loads(rs[0]['dataset']['value'])
+                        if len(value) > 0:
+                            self.limit_nodes_recording = True
+                        return value
                     except:
                         self.log.critical(f"Unable to read which nodes to record. Value should be an array of node names or IDS. The value is: {rs[0]['dataset']['value']}")
                         return []
+
                 return []
+        return []
 
     def run_pywr_model(self, check=True):
         """ Run a Pywr model from the exported data.
@@ -391,8 +395,6 @@ class PywrHydraRunner(PywrHydraExporter):
 
         self.log.info("Processing results...")
         for resource_scenario in self.generate_array_recorder_resource_scenarios():
-            log.info(resource_scenario['dataset']['name'])
-
             scenario['resourcescenarios'].append(resource_scenario)
         self.log.info("Model run complete. Saving %s results", len(scenario['resourcescenarios']))
         self.client.update_scenario(scenario)
