@@ -31,12 +31,25 @@ class PywrHydraRunner(PywrHydraExporter):
         self._df_recorders = None
         self._non_df_recorders = None
 
+        self.node_lookup = {}
+        self.node_attr_lookup = {}
+        for n in self.data['nodes']:
+            self.node_lookup[n.name] = n
+            self.node_attr_lookup[n.name] = {}
+            for a in n['attributes']:
+                self.node_attr_lookup[a.attr_id] = a
+
 
         self.attr_dimension_map = {}
 
         self.attr_name_map = self.make_attr_name_map()
 
         self.make_attr_unit_map()
+
+        #by default record the volume and flow on all nodes. If the 'record_nodes'
+        #attribute is set on the network, then this is set to true, and only the specified
+        #nodes are recorded
+        self.limit_nodes_recording = False
 
     def _copy_scenario(self):
         # Now construct a scenario object
@@ -91,6 +104,28 @@ class PywrHydraRunner(PywrHydraExporter):
         in the pywr_model_path """
         log.info("Running pywr model from file %s", pywr_model_path)
         self.model = Model.load(pywr_model_path, solver=solver)
+
+    def get_nodes_to_record(self):
+        """
+        Get the nodes to record in the network.
+        """
+        try:
+            node_recorder_attribute = self._get_attribute_from_name('record_nodes')
+        except KeyError:
+            return []
+
+        for network_ra in self.data['attributes']:
+            if network_ra['attr_id'] == node_recorder_attribute['id']:
+                self.limit_nodes_recording = True
+                rs = list(filter(lambda x:x.resource_attr_id==network_ra['id'],
+                                 self.data.scenarios[0].resourcescenarios))
+                if len(rs) > 0:
+                    try:
+                        return json.loads(rs[0]['dataset']['value'])
+                    except:
+                        self.log.critical(f"Unable to read which nodes to record. Value should be an array of node names or IDS. The value is: {rs[0]['dataset']['value']}")
+                        return []
+                return []
 
     def run_pywr_model(self, check=True):
         """ Run a Pywr model from the exported data.
@@ -169,17 +204,14 @@ class PywrHydraRunner(PywrHydraExporter):
         attribute = self._get_attribute_from_name(attribute_name)
         attribute_id = attribute['id']
 
-        for node in self.data['nodes']:
-
-            if node['name'] == node_name:
-                resource_attributes = node['attributes']
-                break
+        node = self.node_lookup.get(node_name)
+        if node is not None:
+            resource_attributes = node['attributes']
         else:
             raise ValueError('Node name "{}" not found in network data.'.format(node_name))
-
-        for resource_attribute in resource_attributes:
-            if resource_attribute['attr_id'] == attribute_id:
-                return resource_attribute['id']
+        node_attribute = self.node_attr_lookup[node.name].get(attribute_id)
+        if node_attribute is not None:
+            return node_attribute['id']
         else:
             raise ValueError('No resource attribute for node "{}" and attribute "{}" found.'.format(node_name, attribute))
 
@@ -243,7 +275,13 @@ class PywrHydraRunner(PywrHydraExporter):
 
     def _add_node_flagged_recorders(self, model):
 
+        nodes_to_record = self.get_nodes_to_record()
+
         for node in model.nodes:
+
+            if self.limit_nodes_recording is True and node.name not in nodes_to_record:
+                continue
+
             try:
                 flags = self._node_recorder_flags[node.name]
             except KeyError:
@@ -295,7 +333,7 @@ class PywrHydraRunner(PywrHydraExporter):
                 log.critical("Parameter %s is not in the model", parameter_name)
                 continue
 
-            self._add_flagged_recoder(model, p, recorder_name, flags)
+            self._add_flagged_recorder(model, p, recorder_name, flags)
 
         for node_name, attribute_recorder_flags in self._inline_parameter_recorder_flags.items():
             node = model.nodes[node_name]
@@ -306,9 +344,9 @@ class PywrHydraRunner(PywrHydraExporter):
                     continue
 
                 recorder_name = f'__{node_name}__:simulated_{attribute_name}'
-                self._add_flagged_recoder(model, p, recorder_name, flags)
+                self._add_flagged_recorder(model, p, recorder_name, flags)
 
-    def _add_flagged_recoder(self, model, parameter, recorder_name, flags):
+    def _add_flagged_recorder(self, model, parameter, recorder_name, flags):
         try:
             record_ts = flags['timeseries']
         except KeyError:
@@ -351,10 +389,14 @@ class PywrHydraRunner(PywrHydraExporter):
         # Update the attribute mapping
         self.attributes.update({attr.id: attr for attr in response_attributes})
 
+        self.log.info("Processing results...")
         for resource_scenario in self.generate_array_recorder_resource_scenarios():
-            scenario['resourcescenarios'].append(resource_scenario)
+            log.info(resource_scenario['dataset']['name'])
 
+            scenario['resourcescenarios'].append(resource_scenario)
+        self.log.info("Model run complete. Saving %s results", len(scenario['resourcescenarios']))
         self.client.update_scenario(scenario)
+        self.log.info("Results saved")
 
     def generate_array_recorder_resource_scenarios(self):
         """ Generate resource scenario data from NumpyArrayXXX recorders. """
