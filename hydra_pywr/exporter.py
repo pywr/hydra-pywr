@@ -44,7 +44,7 @@ class PywrHydraExporter(BasePywrHydra):
 
         super().__init__()
 
-        self.data = data
+        self.data = JSONObject(data)
         self.network_id = data['id']
         self.scenario_id = scenario_id
         self.attributes = attributes
@@ -107,7 +107,7 @@ class PywrHydraExporter(BasePywrHydra):
     def from_scenario_id(cls, client, scenario_id, template_id=None, index=0, **kwargs):
         cache_file = f'/tmp/scenario_{scenario_id}.json'
         if kwargs.get('use_cache') is True and os.path.exists(cache_file):
-            logging.info("Using cached scenario")
+            self.log.info("Using cached scenario")
             with open(cache_file, 'r') as f:
                 scenario = JSONObject(json.load(f))
         else:
@@ -117,7 +117,7 @@ class PywrHydraExporter(BasePywrHydra):
         # Fetch the network
         network_cache_file = f'/tmp/network_{scenario.network_id}.json'
         if kwargs.get('use_cache') is True and os.path.exists(network_cache_file):
-            logging.info("Using cached network")
+            self.log.info("Using cached network")
             with open(network_cache_file, 'r') as f:
                 network = JSONObject(json.load(f))
         else:
@@ -174,7 +174,7 @@ class PywrHydraExporter(BasePywrHydra):
 
         template_cache_file = f'/tmp/template_{template_id}.json'
         if kwargs.get('use_cache') is True and os.path.exists(template_cache_file):
-            logging.info("Using cached template")
+            self.log.info("Using cached template")
 
             with open(template_cache_file, 'r') as f:
                 template = JSONObject(json.load(f))
