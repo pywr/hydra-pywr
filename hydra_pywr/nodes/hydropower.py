@@ -354,11 +354,11 @@ class Turbine(Link, metaclass=NodeMeta):
 
         self.max_flow = hp_target_flow
 
-        #hp_recorder = HydropowerRecorder(model, self,
-        #                                 name=f"__{name}__:hydropower",
-        #                                 water_elevation_parameter=level_parameter,
-        #                                 turbine_elevation=turbine_elevation, **hp_kwargs)
-        #self.hydropower_recorder = hp_recorder
+        hp_recorder = HydropowerRecorder(model, self,
+                                         name=f"__{name}__:hydropower",
+                                         water_elevation_parameter=level_parameter,
+                                         turbine_elevation=turbine_elevation, **hp_kwargs)
+        self.hydropower_recorder = hp_recorder
 
     @classmethod
     def pre_load(cls, model, data):
