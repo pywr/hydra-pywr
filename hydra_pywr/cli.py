@@ -186,6 +186,8 @@ def _export_json(obj, data_dir, scenario_id, user_id, json_sort_keys, json_inden
 
     click.echo(f"Network: {network_id}, Scenario: {scenario_id} exported to `{outfile}`")
 
+    client.close_session()
+
 @hydra_app(category='export', name='Export to IntegratedPywrJSON')
 @cli.command(name='integrated-export', context_settings=dict(
     ignore_unknown_options=True,
@@ -228,6 +230,7 @@ def integrated_export(obj, data_dir, scenario_id, user_id, json_sort_keys):
     click.echo(f"Network: {network_id}, Scenario: {scenario_id} exported to `{outfile}`")
     dests["water"]["template_id"] = water_template_id
     dests["energy"]["template_id"] = energy_template_id
+    client.close_session()
     return dests
 
 
@@ -300,6 +303,7 @@ def run(obj, scenario_id, template_id, user_id, output_frequency, solver, check_
     run_network_scenario(client, scenario_id, template_id, output_frequency=output_frequency,
                          solver=solver, check_model=check_model, data_dir=data_dir)
 
+    client.close_session()
 
 def export_hydra_pywr_model(client, scenario_id, template_id=None, output_frequency=None, use_cache=False):
     runner = PywrHydraRunner.from_scenario_id(
@@ -404,6 +408,7 @@ def step_model(obj, network_id, scenario_id, child_scenario_ids, user_id):
     client = get_logged_in_client(obj, user_id=user_id)
     utils.apply_final_volumes_as_initial_volumes(client, scenario_id, child_scenario_ids)
     utils.progress_start_end_dates(client, network_id, scenario_id)
+    client.close_session()
 
 
 @hydra_app(category='network_utility', name='Apply initial volumes')
@@ -417,6 +422,7 @@ def step_model(obj, network_id, scenario_id, child_scenario_ids, user_id):
 def apply_initial_volumes_to_other_networks(obj, scenario_id, child_scenario_ids, user_id):
     client = get_logged_in_client(obj, user_id=user_id)
     utils.apply_final_volumes_as_initial_volumes(client, scenario_id, child_scenario_ids)
+    client.close_session()
 
 
 @hydra_app(category='network_utility', name='Step forward the game')
@@ -449,6 +455,7 @@ def step_game(obj, scenario_id, child_scenario_ids, filename, attribute_name, in
         utils.import_dataframe(client, dataframe, new_scenario_id, attribute_name,
                                create_new=create_new, data_type=data_type, column=column_name)
         utils.progress_start_end_dates(client, new_scenario_id)
+    client.close_session()
 
 
 @cli.command()
@@ -478,7 +485,7 @@ def template_register(obj, config, update):
         register_template(client, config_name=config, update=update)
     except TemplateExistsError:
         click.echo('The template is already registered. To force an updated use the --update option.')
-
+    client.close_session()
 
 @template.command('unregister')
 @click.option('-c', '--config', type=str, default='full')
@@ -489,7 +496,7 @@ def template_unregister(obj, config):
     if click.confirm('Are you sure you want to remove the template? '
                      'This will invalidate any existing networks that use the template.'):
         unregister_template(client, config_name=config)
-
+    client.close_session()
 
 @template.command('migrate')
 @click.argument('network-id', type=int)
@@ -500,3 +507,4 @@ def template_migrate(obj, network_id, template_name, template_id):
     client = get_logged_in_client(obj, user_id=user_id)
     if click.confirm('Are you sure you want to migrate network {} to a new template?'.format(network_id)):
         migrate_network_template(client, network_id, template_name=template_name, template_id=template_id)
+    client.close_session()
