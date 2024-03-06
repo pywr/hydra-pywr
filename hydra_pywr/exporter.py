@@ -614,7 +614,7 @@ class HydraToPywrNetwork():
         node_type_attribute_names = [a.attr.name for a in self.type_id_map[pywr_node_type['id']].typeattrs]
 
         for resource_attribute in filter(lambda x:x.attr_is_var!='Y', nodedata["attributes"]):
-            
+
             attribute = self.attributes[resource_attribute["attr_id"]]
             try:
                 resource_scenario = self._get_resource_scenario(resource_attribute["id"])
@@ -632,6 +632,18 @@ class HydraToPywrNetwork():
 
             try:
                 typedval = json.loads(value)
+
+                #If this is a basic hydra dataframe, transform it into a pywr
+                #dataframe so the model can read it
+                if dataset_type.lower() == 'dataframe':
+                    typedval = {
+                        'type': 'dataframeparameter',
+                        'data': typedval,
+                    }
+
+                if isinstance(typedval, dict):
+                    typedval = utils.unnest_parameter_key(typedval, key="pandas_kwargs")
+                    typedval = utils.add_interp_kwargs(typedval)
             except json.decoder.JSONDecodeError as e:
                 typedval = value
 

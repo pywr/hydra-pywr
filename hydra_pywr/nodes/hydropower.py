@@ -65,7 +65,11 @@ class LinearStorageReleaseControl(Link, metaclass=NodeMeta):
 
     def __init__(self, model, name, storage_node, release_values, scenario=None, **kwargs):
 
-        release_values = pd.DataFrame.from_dict(release_values)
+        if isinstance(release_values, str):
+            release_values = load_parameter(model, release_values).dataframe.astype(np.float64)
+        else:
+            release_values = pd.DataFrame.from_dict(release_values)
+
         storage_node = model.pre_load_node(storage_node)
 
         if scenario is None:
@@ -186,7 +190,10 @@ class Reservoir(Storage, metaclass=NodeMeta):
         if not isinstance(self.area, Parameter):
             raise ValueError('Weather nodes can only be created if an area Parameter is given.')
 
-        weather = pd.DataFrame.from_dict(weather)
+        if isinstance(weather, str):
+            weather = load_parameter(model, weather).dataframe.astype(np.float64)
+        else:
+            weather = pd.DataFrame.from_dict(weather)
 
         rainfall = weather['rainfall'].astype(np.float64)
         evaporation = weather['evaporation'].astype(np.float64)

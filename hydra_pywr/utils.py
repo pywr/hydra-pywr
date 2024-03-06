@@ -186,6 +186,10 @@ def add_interp_kwargs(param_data):
     """
     ptype = "interpolatedvolume"
     new_key = "interp_kwargs"
+
+    if param_data.get('type') is None:
+        return param_data
+
     if param_data["type"].lower().startswith(ptype) and "kind" in param_data:
         param_data[new_key] = {"kind": param_data["kind"]}
         del param_data["kind"]

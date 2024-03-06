@@ -17,11 +17,11 @@ class TestResults():
     def test_hydropower_results(self, hydropower_verification_model):
         runner = PywrFileRunner()
         runner.load_pywr_model_from_file(hydropower_verification_model)
-        gerd_rec = NumpyArrayStorageRecorder(runner.model, runner.model.nodes["GERD"])
+        res1_rec = NumpyArrayStorageRecorder(runner.model, runner.model.nodes["GERD"])
         runner.run_pywr_model()
 
-        gerd_st_df = gerd_rec.to_dataframe()
-        gerd_turbine_df = runner.model.recorders["__GERD_turbine__:hydropowerrecorder"].to_dataframe()
+        res1_st_df = res1_rec.to_dataframe()
+        res1_turbine_df = runner.model.recorders["__GERD_turbine__:hydropowerrecorder"].to_dataframe()
 
         """
           Verified values for start and end sequences of results period.
@@ -29,7 +29,7 @@ class TestResults():
           slice-as-tuple: np.array expected values.
         """
         expected = {
-            "gerd_st": {
+            "res1_st": {
                 (0,5): np.array([[46360.63694919],
                                  [42965.88915086],
                                  [39208.38512899],
@@ -42,7 +42,7 @@ class TestResults():
                                      [53127.665874  ],
                                      [50834.14051615]])
             },
-            "gerd_turbine": {
+            "res1_turbine": {
                 (0,5): np.array([[1730.1752206 ],
                                  [1595.41837885],
                                  [1466.1889006 ],
@@ -57,8 +57,8 @@ class TestResults():
             }
         }
 
-        assert gerd_st_df.shape == (240, 1)
-        assert gerd_turbine_df.shape == (240, 1)
+        assert res1_st_df.shape == (240, 1)
+        assert res1_turbine_df.shape == (240, 1)
 
         for elem, ranges in expected.items():
             for s,v in ranges.items():
