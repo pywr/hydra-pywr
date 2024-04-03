@@ -24,7 +24,7 @@ class TestResults():
         model.run()
 
         gerd_st_df = gerd_rec.to_dataframe()
-        gerd_turbine_df = model.recorders["hydropowerrecorder.GERD_turbine"].to_dataframe()
+        gerd_turbine_df = model.recorders["__GERD_turbine__:hydropower"].to_dataframe()
 
         """
           Verified values for start and end sequences of results period.
