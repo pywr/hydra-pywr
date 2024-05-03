@@ -1,3 +1,4 @@
+import hmac
 import pandas
 import yaml
 import tempfile
@@ -14,6 +15,7 @@ from pywr.recorders import NumpyArrayNodeRecorder, NumpyArrayStorageRecorder, Nu
 from pywr.recorders.progress import ProgressRecorder
 
 from pywrparser.lib import PywrTypeJSONEncoder
+from pywrparser.utils import parse_reference_key
 
 from .exporter import HydraToPywrNetwork
 
@@ -151,13 +153,6 @@ class PywrFileRunner():
         df = model.to_dataframe()
         df.to_csv(outfile)
 
-def hash_with_key(value, key):
-    # Combine the value and key
-    combined = str(value) + key
-    # Hash the combined value using SHA-256
-    return hashlib.sha256(combined.encode()).hexdigest()
-
-
 class PywrHydraRunner(HydraToPywrNetwork):
     """ An extension of `HydraToPywrNetwork` that adds methods for running a Pywr model. """
 
@@ -188,7 +183,8 @@ class PywrHydraRunner(HydraToPywrNetwork):
         tmpdir = tempfile.gettempdir()
         self.results_location = os.getenv("PYWR_RESULTS_LOCATION", tmpdir)
         self.bucket_name = os.getenv("PYWR_RESULTS_S3_BUCKET", 'pywr-results')
-        self.s3_path = hash_with_key(self.scenario_id, os.getenv('PYWR_SECURITY_HASH', 'untQnPjA07r0S64rWzkHI72a0dY6KipWt70EqOWTB6F3izvRy9Ude8SOXshfq1vw'))
+        hashkey = os.getenv('PYWR_SECURITY_HASH', 'untQnPjA07r0S64rWzkHI72a0dY6KipWt70EqOWTB6F3izvRy9Ude8SOXshfq1vw').encode('utf-8')
+        self.s3_path = hmac.digest(hashkey, str(self.scenario_id).encode('utf-8'), "sha-256")
 
         self.resultstores = {}
 
@@ -669,8 +665,7 @@ class PywrHydraRunner(HydraToPywrNetwork):
                 df.columns = new_col_names
 
             if "__:" in recorder.name:
-                nodename = recorder.name.split(":")[0].replace("__", "")
-                attrname = recorder.name.split(":")[1]
+                nodename, attrname = parse_reference_key(recorder.name)
             else:
                 nodename = "network"
                 attrname = recorder.name
