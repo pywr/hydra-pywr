@@ -155,8 +155,7 @@ def hash_with_key(value, key):
     # Combine the value and key
     combined = str(value) + key
     # Hash the combined value using SHA-256
-    hashed_value = hashlib.sha256(combined.encode()).hexdigest()
-    return hashed_value
+    return hashlib.sha256(combined.encode()).hexdigest()
 
 
 class PywrHydraRunner(HydraToPywrNetwork):
