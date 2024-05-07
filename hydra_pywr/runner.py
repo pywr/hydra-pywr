@@ -16,6 +16,7 @@ from pywr.recorders.progress import ProgressRecorder
 
 from pywrparser.lib import PywrTypeJSONEncoder
 from pywrparser.utils import parse_reference_key
+from random import randbytes
 
 from .exporter import HydraToPywrNetwork
 
