@@ -1,9 +1,11 @@
+import hmac
 import pandas
 import yaml
 import tempfile
 import os
 import logging
 import json
+import hashlib
 from urllib.parse import urlparse
 
 from pywr.model import Model
@@ -13,6 +15,8 @@ from pywr.recorders import NumpyArrayNodeRecorder, NumpyArrayStorageRecorder, Nu
 from pywr.recorders.progress import ProgressRecorder
 
 from pywrparser.lib import PywrTypeJSONEncoder
+from pywrparser.utils import parse_reference_key
+from random import randbytes
 
 from .exporter import HydraToPywrNetwork
 
@@ -27,12 +31,10 @@ domain_solvers = {
     "energy": "glpk-dcopf"
 }
 
-
 def run_file(filename, domain, output_file):
     pfr = PywrFileRunner(domain)
     pfr.load_pywr_model_from_file(filename)
     pfr.run_pywr_model(output_file)
-
 
 def run_network_scenario(client, scenario_id, template_id, domain,
                          output_frequency=None, solver=None, data_dir='/tmp'):
@@ -152,7 +154,6 @@ class PywrFileRunner():
         df = model.to_dataframe()
         df.to_csv(outfile)
 
-
 class PywrHydraRunner(HydraToPywrNetwork):
     """ An extension of `HydraToPywrNetwork` that adds methods for running a Pywr model. """
 
@@ -179,6 +180,14 @@ class PywrHydraRunner(HydraToPywrNetwork):
         self.make_attr_unit_map()
 
         self.limit_nodes_recording = False
+
+        tmpdir = tempfile.gettempdir()
+        self.results_location = os.getenv("PYWR_RESULTS_LOCATION", tmpdir)
+        self.bucket_name = os.getenv("PYWR_RESULTS_S3_BUCKET", 'pywr-results')
+        hashkey = hashlib.sha256(randbytes(56)).hexdigest()
+        self.s3_path = hmac.digest(hashkey, str(self.scenario_id).encode('utf-8'), "sha-256")
+
+        self.resultstores = {}
 
     def _copy_scenario(self):
         # Now construct a scenario object
@@ -215,12 +224,14 @@ class PywrHydraRunner(HydraToPywrNetwork):
             from . import hydra_pywr_custom_module
         except (ModuleNotFoundError, ImportError) as e:
             pass
-
-        solver = domain_solvers[self.domain]
+            
+        if solver is None:
+            solver = domain_solvers[self.domain]
 
         #data = self.build_pywr_network()
         #pnet = PywrNetwork(data)
         pywr_data = pywr_network.as_json()
+
         model = Model.loads(pywr_data, solver=solver)
 
         tmp = tempfile.gettempdir()
@@ -241,7 +252,7 @@ class PywrHydraRunner(HydraToPywrNetwork):
         """
         try:
             node_recorder_attribute = self._get_attribute_from_name('record_nodes')
-        except KeyError:
+        except (KeyError, ValueError):
             return []
 
         for network_ra in self.data['attributes']:
@@ -306,6 +317,21 @@ class PywrHydraRunner(HydraToPywrNetwork):
         self._df_recorders = df_recorders
         self._non_df_recorders = non_df_recorders
 
+        log.info(run_stats)
+
+    def save_results_to_s3(self):
+        """
+            upload the h5 file results to s3
+        """
+        resultfiles = list(self.resultstores.keys())
+        for f in os.listdir(self.results_location):
+            if f not in resultfiles:
+                continue
+            log.info("Saving %s to bucket %s s3", f, self.bucket_name)
+            import boto3    
+            s3 = boto3.client('s3')
+            s3.upload_file(os.path.join(self.results_location, f), Bucket=self.bucket_name, Key=f"{self.s3_path}/{f}")
+            log.info("%s saved to s3 bucket %s", f, self.bucket_name)
 
     def get_do_config(self):
         do_config_prefix = "do_"
@@ -475,6 +501,9 @@ class PywrHydraRunner(HydraToPywrNetwork):
 
     def save_pywr_results(self):
         """ Save the outputs from a Pywr model run to Hydra. """
+
+
+
         # Ensure all the results from previous run are removed.
         self._delete_resource_scenarios()
 
@@ -518,6 +547,13 @@ class PywrHydraRunner(HydraToPywrNetwork):
                 resource_scenarios = data)
             i = i+chunk+1
 
+        #flush the results to the h5 file
+        for resultstore in self.resultstores.values():
+            resultstore.close()
+
+        log.info("Results stored to: %s", self.results_location)
+
+        self.save_results_to_s3()   
 
     def add_resource_attributes(self, recorders, is_dataframe):
         """
@@ -629,15 +665,35 @@ class PywrHydraRunner(HydraToPywrNetwork):
                     new_col_names.append(colname.split(':')[1].strip())
                 df.columns = new_col_names
 
+            if "__:" in recorder.name:
+                nodename, attrname = parse_reference_key(recorder.name)
+            else:
+                nodename = "network"
+                attrname = recorder.name
+
+            filename = f'{attrname}.h5'
+            resultstore = self.resultstores.get(filename)
+            if resultstore is None:
+                resultstore = pandas.HDFStore(os.path.join(self.results_location, filename), mode='w')
+                self.resultstores[filename] = resultstore
+
+            resultstore.put(f"{nodename}", df)
+            resultstore[f"{nodename}"].attrs['pandas_type'] = 'frame'
+
             # Convert to JSON for saving in hydra
-            value = df.to_json(date_format='iso', date_unit='s')
+            value = json.dumps({
+                "data":
+                {
+                    "url": f"s3://{self.bucket_name}/{self.s3_path}/{attrname}.h5",
+                    "group": f"{nodename}"
+                }
+            })
 
             #Use this later so we can create sensible labels and metadata
             #for when the data is back in hydra
             is_timeseries=False
             if isinstance(df.index, pandas.DatetimeIndex):
                 is_timeseries=True
-
 
             resource_scenario = self._make_recorder_resource_scenario(recorder,
                                                                       value,
