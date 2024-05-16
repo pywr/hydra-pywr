@@ -1,32 +1,4 @@
 import json
-from hydra_base.lib.HydraTypes.Types import Scalar, Array, Descriptor, Dataframe
-from hydra_pywr_common.datatypes import PywrParameterPatternReference, PywrParameter
-from pywr.schema.fields import ParameterField, ParameterReferenceField, ParameterValuesField, NodeField, \
-    ScenarioReferenceField
-from marshmallow.fields import Number, Integer, List
-from .nodes import DataFrameField
-
-# TODO move this to template.py
-def data_type_from_field(field):
-    """ Return the appropriate Hydra DataType for a given node's attribute. """
-
-    if isinstance(field, (ParameterReferenceField, ParameterField)):
-        data_type = PywrParameter.tag
-    elif isinstance(field, (NodeField, ScenarioReferenceField)):
-        data_type = Descriptor.tag
-    elif isinstance(field, ParameterValuesField):
-        # TODO support this data type properly.
-        data_type = Scalar.tag
-    elif isinstance(field, (Number, Integer)):
-        data_type = Scalar.tag
-    elif isinstance(field, List):
-        data_type = Array.tag
-    elif isinstance(field, DataFrameField):
-        data_type = Dataframe.tag
-    else:
-        raise ValueError('No data type found for field: {}'.format(field))
-
-    return data_type.lower()
 
 
 class BasePywrHydra:

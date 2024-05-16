@@ -1,5 +1,11 @@
+import os
 import pandas
+from urllib.parse import urlparse
 from hydra_network_utils import data as data_utils
+
+import logging
+log = logging.getLogger(__name__)
+
 
 
 def import_dataframe(client, dataframe, scenario_id, attribute_id, create_new=False, data_type='PYWR_DATAFRAME', column=None):
@@ -154,3 +160,113 @@ def progress_start_end_dates(client, scenario_id):
     # Now update the database with the new data
     for data in timestepper_data.values():
         client.add_data_to_attribute(scenario_id, data['resource_attribute_id'], data['dataset'])
+
+"""
+  Compatibility patches: these update the Pywr data output of
+  get_pywr_data to replace deprecated syntax with that of current
+  Pywr versions.
+"""
+def unnest_parameter_key(param_data, key="pandas_kwargs"):
+    """
+        Relocates all keys inside parameters' <key> arg
+        to the top level of that parameter and removes the
+        original <key>.
+    """
+    if key in param_data:
+        for k, v in param_data[key].items():
+            param_data[k] = v
+        del param_data[key]
+
+    return param_data
+
+def add_interp_kwargs(param_data):
+    """
+        Replaces the deprecated `kind` key of interpolatedvolume
+        parameters with the nested `interp_kwargs` key.
+    """
+    ptype = "interpolatedvolume"
+    new_key = "interp_kwargs"
+
+    if param_data.get('type') is None:
+        return param_data
+
+    if param_data["type"].lower().startswith(ptype) and "kind" in param_data:
+        param_data[new_key] = {"kind": param_data["kind"]}
+        del param_data["kind"]
+
+    return param_data
+
+def file_to_s3(elem_data, s3prefix):
+    """
+      Transforms local url references to point to s3 storage
+    """
+    if "url" not in elem_data:
+        return
+    url = elem_data["url"]
+    path, filename = os.path.split(url)
+    s3url = os.path.join(s3prefix, filename)
+    elem_data["url"] = s3url
+
+
+def url_to_local_path(url, datadir):
+    u = urlparse(url)
+    filepath = f"{u.netloc}{u.path}"
+
+    fullpath = os.path.join(datadir, filepath)
+
+    os.makedirs(os.path.dirname(fullpath), exist_ok=True)
+
+    return fullpath
+
+
+def retrieve_url(url, urldir):
+    import shutil
+    from urllib.request import urlopen
+
+    if not os.path.exists(urldir):
+        try:
+            os.makedirs(urldir)
+        except OSError as err:
+            raise OSError(f"Unable to create URL retrieval directory at {urldir}: {err}")
+    elif not os.path.isdir(urldir):
+        raise OSError(f"Destination '{urldir}' is not a directory")
+
+    filedest = url_to_local_path(url, urldir)
+    log.info(f"Retrieving {url} to {filedest} ...")
+
+    with urlopen(url) as resp, open(filedest, "wb") as fp:
+        shutil.copyfileobj(resp, fp)
+
+    log.info(f"Retrieved {filedest} ({os.stat(filedest).st_size} bytes)")
+    return filedest
+
+
+def retrieve_s3(s3path, datadir):
+    try:
+        import s3fs
+    except ImportError:
+        log.error("Retrieval from S3 url requires the s3fs module")
+        raise
+
+    filedest = url_to_local_path(s3path, datadir)
+
+    if not os.path.exists(datadir):
+        try:
+            os.makedirs(datadir)
+        except OSError as err:
+            raise OSError(f"Unable to create S3 retrieval directory at {datadir}: {err}")
+    elif not os.path.isdir(datadir):
+        raise OSError(f"Destination '{datadir}' is not a directory")
+
+    #assume credential are in the ~/.aws/credentials file
+    fs = s3fs.S3FileSystem()
+    log.info(f"Retrieving {s3path} to {filedest} ...")
+
+    try:
+        fs.get(s3path, filedest)
+    except Exception as e:
+        raise Exception(f"Unable to access data in s3 bucket {s3path}. Error is {e}")
+
+    log.info(f"Retrieved {filedest} ({os.stat(filedest).st_size} bytes)")
+
+    return filedest
