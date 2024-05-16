@@ -276,14 +276,33 @@ class HydraToPywrNetwork():
         #assume credential are in the ~/.aws/credentials file
         fs = s3fs.S3FileSystem()
 
+        self.filedict = {}
+
+        appdata = self.data.get('appdata', {})
+
+        #Files uploaded to the USER_FILE_UPLOAD_DIR are synchronized with the USER_FILE_ROOT_DIR
+        #So they are then downloaded from the USER_FILE_ROOT_DIR
+        if None not in (appdata.get('data_s3_bucket'), appdata.get('data_uuid')):
+
+            network_data_path = appdata.get('data_uuid')
+
+            bucket_path = f"{data_s3_bucket}/data/projectdata/{network_data_path}"
+
+            try:
+                #create a mapping from the files nams in the project_data_path directory
+                #to to their full s3 path
+                networkfiles = fs.ls(bucket_path)
+                for s3filepath in networkfiles:
+                    self.filedict[os.path.basename(s3filepath)] = s3filepath
+            except (FileNotFoundError, PermissionError):
+                log.warning("Unable to access bucket %s. Continuing.", bucket_path)
+
         #First get the project hierarchy
         project_hierarchy = self.hydra.get_project_hierarchy(project_id=self.data['project_id'])
 
         #start from the top down. Files with the same name, at a lower level
         #take precedence.
         project_hierarchy.reverse()
-
-        self.filedict = {}
 
         for proj_in_hierarchy in project_hierarchy:
             #Files uploaded to the USER_FILE_UPLOAD_DIR are synchronized with the USER_FILE_ROOT_DIR
