@@ -678,7 +678,7 @@ class PywrHydraRunner(HydraToPywrNetwork):
                 resultstore = pandas.HDFStore(os.path.join(self.results_location, filename), mode='w')
                 self.resultstores[filename] = resultstore
 
-            noderef = re.sub(r'[^a-zA-Z0-9]', '', nodename)
+            noderef = re.sub(r'^[^a-zA-Z_]+|[^a-zA-Z0-9_]', '', nodename)
             resultstore.put(f"{noderef}", df)
             resultstore[f"{noderef}"].attrs['pandas_type'] = 'frame'
 
