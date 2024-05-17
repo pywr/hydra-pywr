@@ -6,6 +6,7 @@ import os
 import logging
 import json
 import hashlib
+import re
 from urllib.parse import urlparse
 
 from pywr.model import Model
@@ -184,7 +185,7 @@ class PywrHydraRunner(HydraToPywrNetwork):
         tmpdir = tempfile.gettempdir()
         self.results_location = os.getenv("PYWR_RESULTS_LOCATION", tmpdir)
         self.bucket_name = os.getenv("PYWR_RESULTS_S3_BUCKET", 'pywr-results')
-        hashkey = hashlib.sha256(randbytes(56)).hexdigest()
+        hashkey = hashlib.sha256(randbytes(56)).hexdigest().encode('utf-8')
         self.s3_path = hmac.digest(hashkey, str(self.scenario_id).encode('utf-8'), "sha-256")
 
         self.resultstores = {}
@@ -677,15 +678,16 @@ class PywrHydraRunner(HydraToPywrNetwork):
                 resultstore = pandas.HDFStore(os.path.join(self.results_location, filename), mode='w')
                 self.resultstores[filename] = resultstore
 
-            resultstore.put(f"{nodename}", df)
-            resultstore[f"{nodename}"].attrs['pandas_type'] = 'frame'
+            noderef = re.sub(r'[^a-zA-Z0-9]', '', nodename)
+            resultstore.put(f"{noderef}", df)
+            resultstore[f"{noderef}"].attrs['pandas_type'] = 'frame'
 
             # Convert to JSON for saving in hydra
             value = json.dumps({
                 "data":
                 {
                     "url": f"s3://{self.bucket_name}/{self.s3_path}/{attrname}.h5",
-                    "group": f"{nodename}"
+                    "group": f"{noderef}"
                 }
             })
 
