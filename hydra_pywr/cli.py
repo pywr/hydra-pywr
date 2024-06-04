@@ -133,8 +133,7 @@ def run(obj, scenario_id, template_id, domain, output_frequency, solver, data_di
                                 scenario_id,
                                 template_id,
                                 domain,
-                                output_frequency=output_frequency,
-                                solver=solver,
+                                output_frequency,
                                 data_dir=data_dir)
 
 
