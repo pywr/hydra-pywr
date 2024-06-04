@@ -37,49 +37,17 @@ def run_file(filename, domain, output_file):
     pfr.load_pywr_model_from_file(filename)
     pfr.run_pywr_model(output_file)
 
+
 def run_network_scenario(client, scenario_id, template_id, domain,
-                         output_frequency=None, solver=None, data_dir='/tmp'):
+                         solver=None, data_dir='/tmp'):
 
     runner = PywrHydraRunner.from_scenario_id(client, scenario_id,
-                                             template_id=template_id)
-
-    network_data = runner.build_pywr_network()
-    pywr_network = PywrNetwork(network_data)
-    pywr_network.promote_inline_parameters()
-    pywr_network.detach_parameters()
-
-    url_refs = pywr_network.url_references()
-    for url, refs in url_refs.items():
-        u = urlparse(url)
-        filedest = None
-        if u.scheme == "s3":
-            filedest = utils.retrieve_s3(url, data_dir)
-        elif u.scheme.startswith("http"):
-            filedest = utils.retrieve_url(url, data_dir)
-        else:
-            #'/file.csv' -> ('', file.csv)
-            spliturl = url.strip(os.sep).split(os.sep)
-            #If the url is 'file.csv'
-            if len(spliturl) == 1:
-
-                full_path = runner.filedict.get(spliturl[0])
-                if full_path is not None:
-                    filedest = utils.retrieve_s3(full_path, data_dir)
-        if filedest is not None:
-            for ref in refs:
-                ref.data["url"] = filedest
-
-    if data_dir is not None:
-        save_pywr_file(pywr_network.as_dict(), data_dir, network_data.data['id'], scenario_id)
-
-    pywr_data = runner.load_pywr_model(pywr_network, solver=solver)
-
-    network_id = runner.data.id
-
+                                             template_id=template_id,
+                                             data_dir=data_dir)
+    runner.setup(solver=solver)
     runner.run_pywr_model()
     runner.save_pywr_results()
-
-    log.info(f'Pywr model run success. Network ID: {network_id}, Scenario ID: {scenario_id}')
+    log.info(f'Pywr model run success. Network ID: {runner.data.id}, Scenario ID: {scenario_id}')
 
 
 def save_pywr_file(data, data_dir, network_id=None, scenario_id=None):
@@ -103,6 +71,7 @@ def save_pywr_file(data, data_dir, network_id=None, scenario_id=None):
 
     log.info(f'Successfully exported "{filename}". Network ID: {network_id}, Scenario ID: {scenario_id}')
 
+    return filename
 
 class PywrFileRunner():
     def __init__(self, domain="water"):
@@ -178,6 +147,8 @@ class PywrHydraRunner(HydraToPywrNetwork):
 
         self.attr_name_map = self.make_attr_name_map()
 
+        self.solver = kwargs.get('solver')
+
         self.make_attr_unit_map()
 
         self.limit_nodes_recording = False
@@ -189,6 +160,42 @@ class PywrHydraRunner(HydraToPywrNetwork):
         self.s3_path = hmac.digest(hashkey, str(self.scenario_id).encode('utf-8'), "sha-256")
 
         self.resultstores = {}
+
+    def setup(self, solver=None):
+        """
+            Having exported the model, now update the model by doing such things as
+            retrieving any external files referenced in the model
+        """
+        network_data = self.build_pywr_network()
+        pywr_network = PywrNetwork(network_data)
+        pywr_network.promote_inline_parameters()
+        pywr_network.detach_parameters()
+
+        url_refs = pywr_network.url_references()
+        for url, refs in url_refs.items():
+            u = urlparse(url)
+            filedest = None
+            if u.scheme == "s3":
+                filedest = utils.retrieve_s3(url, self.data_dir)
+            elif u.scheme.startswith("http"):
+                filedest = utils.retrieve_url(url, self.data_dir)
+            else:
+                #'/file.csv' -> ('', file.csv)
+                spliturl = url.strip(os.sep).split(os.sep)
+                #If the url is 'file.csv'
+                if len(spliturl) == 1:
+
+                    full_path = self.filedict.get(spliturl[0])
+                    if full_path is not None:
+                        filedest = utils.retrieve_s3(full_path, self.data_dir)
+            if filedest is not None:
+                for ref in refs:
+                    ref.data["url"] = filedest
+
+        if self.data_dir is not None:
+            self.modelfile = save_pywr_file(pywr_network.as_dict(), self.data_dir, self.data['id'], self.scenario_id)
+
+        self.load_pywr_model(pywr_network, solver=solver)
 
     def _copy_scenario(self):
         # Now construct a scenario object
@@ -225,7 +232,7 @@ class PywrHydraRunner(HydraToPywrNetwork):
             from . import hydra_pywr_custom_module
         except (ModuleNotFoundError, ImportError) as e:
             pass
-            
+
         if solver is None:
             solver = domain_solvers[self.domain]
 
@@ -329,7 +336,7 @@ class PywrHydraRunner(HydraToPywrNetwork):
             if f not in resultfiles:
                 continue
             log.info("Saving %s to bucket %s s3", f, self.bucket_name)
-            import boto3    
+            import boto3
             s3 = boto3.client('s3')
             s3.upload_file(os.path.join(self.results_location, f), Bucket=self.bucket_name, Key=f"{self.s3_path}/{f}")
             log.info("%s saved to s3 bucket %s", f, self.bucket_name)
@@ -339,7 +346,7 @@ class PywrHydraRunner(HydraToPywrNetwork):
         no_config_errtxt = f"No DO settings found on network {self.data['name']}"
 
         for attr in self.data["attributes"]:
-            if attr["name"].startswith(do_config_prefix):
+            if attr["name"].lower().startswith(do_config_prefix):
                 do_config_attr = attr
                 break
         else:
@@ -351,6 +358,22 @@ class PywrHydraRunner(HydraToPywrNetwork):
         else:
             return yaml.safe_load(rs[0].dataset.value)
 
+    def get_moea_config(self):
+        config_prefix = "moea"
+        no_config_errtxt = f"No MOEA settings found on network {self.data['name']}"
+
+        for attr in self.data["attributes"]:
+            if attr["name"].lower().startswith(config_prefix):
+                config_prefix = attr
+                break
+        else:
+            raise RuntimeError(no_config_errtxt)
+
+        rs = [rs for rs in self.data['scenarios'][0]['resourcescenarios'] if rs.resource_attr_id == config_prefix.id]
+        if len(rs) == 0:
+            raise RuntimeError(no_config_errtxt)
+        else:
+            return yaml.safe_load(rs[0].dataset.value)
 
     def _get_resource_attribute_id(self, node_name, attribute_name):
 
@@ -372,7 +395,7 @@ class PywrHydraRunner(HydraToPywrNetwork):
         dimension_id = self.attr_dimension_map.get(name)
 
         for attribute_id, attribute in self.attributes.items():
-            if attribute['name'] == name and attribute.get('dimension_id') == dimension_id:
+            if attribute['name'].lower() == name.lower() and attribute.get('dimension_id') == dimension_id:
                 return attribute
         raise ValueError('No attribute with name "{}" found.'.format(name))
 
@@ -554,7 +577,7 @@ class PywrHydraRunner(HydraToPywrNetwork):
 
         log.info("Results stored to: %s", self.results_location)
 
-        self.save_results_to_s3()   
+        self.save_results_to_s3()
 
     def add_resource_attributes(self, recorders, is_dataframe):
         """

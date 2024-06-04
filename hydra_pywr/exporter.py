@@ -548,16 +548,19 @@ class HydraToPywrNetwork():
 
         return scenario_combinations
 
+    def _get_attribute(self, attr_id):
+        attribute = self.attributes.get(attr_id)                
+        if attribute is None:
+            attribute = self.hydra.get_attribute_by_id(attr_id=attr_id)
+            self.attributes[attr_id] = attribute
+        return attribute
     def build_parameters_recorders(self):
         parameters = {} # {name: P()}
         recorders = {} # {name: R()}
 
         for resource_attr in filter(lambda x:x.attr_is_var!='Y', self.data.attributes):
 
-            attribute = self.attributes.get(resource_attr["attr_id"])
-
-            if attribute is None:
-                continue
+            attribute = self._get_attribute(resource_attr["attr_id"])                
 
             ds = self.get_dataset_by_resource_attr_id(resource_attr.id)
 
@@ -634,7 +637,8 @@ class HydraToPywrNetwork():
 
         for resource_attribute in filter(lambda x:x.attr_is_var!='Y', nodedata["attributes"]):
 
-            attribute = self.attributes[resource_attribute["attr_id"]]
+            attribute = self._get_attribute(resource_attribute["attr_id"])
+
             try:
                 resource_scenario = self._get_resource_scenario(resource_attribute["id"])
             except ValueError:
