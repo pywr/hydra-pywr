@@ -157,7 +157,7 @@ class PywrHydraRunner(HydraToPywrNetwork):
         self.results_location = os.getenv("PYWR_RESULTS_LOCATION", tmpdir)
         self.bucket_name = os.getenv("PYWR_RESULTS_S3_BUCKET", 'pywr-results')
         hashkey = hashlib.sha256(randbytes(56)).hexdigest().encode('utf-8')
-        self.s3_path = hmac.digest(hashkey, str(self.scenario_id).encode('utf-8'), hashlib.sha256)
+        self.s3_path = hmac.digest(hashkey, str(self.scenario_id).encode('utf-8'), hashlib.sha256).hex()
 
         self.resultstores = {}
 
