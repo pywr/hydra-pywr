@@ -136,14 +136,14 @@ class Reservoir(Storage, metaclass=NodeMeta):
         bathymetry = kwargs.pop('bathymetry', None)
         volume = kwargs.pop('volume', None)
         level = kwargs.pop('level', None)
-        area = kwargs.pop('area', None)
-        self.weather_cost = kwargs.pop('weather_cost', -999)
+        self.area = kwargs.pop('area', None)
         self.evaporation_cost = kwargs.pop('evaporation_cost', -999)
-        self.rainfall_cost = kwargs.pop('rainfall_cost', -999)
         const = kwargs.pop('const', 1e6 * 1e-3 * 1e-6)
 
         # Pywr Storage does not expect a 'weather' kwargs, so move this to instance
         self.weather = kwargs.pop("weather", None)
+        self.evaporation = kwargs.pop("evaporation", None)
+        self.rainfall = kwargs.pop("rainfall", None)
 
         super().__init__(model, name, **kwargs)
 
@@ -181,6 +181,12 @@ class Reservoir(Storage, metaclass=NodeMeta):
             node.area = InterpolatedVolumeParameter(model, node, volumes, areas)
         if node.weather is not None:
             node._make_weather_nodes(model, node.weather, node.weather_cost)
+        else:
+            if node.evaporation is not None:
+                node._make_evaporation_node(model, node.evaporation, node.evaporation_cost)
+            
+            if node.rainfall is not None:
+                node._make_rainfall_node(model, node.rainfall)
         setattr(node, "_Loadable__parameters_to_load", {})
         return node
 
