@@ -161,7 +161,7 @@ class Reservoir(Storage, metaclass=NodeMeta):
         bathymetry = data.pop("bathymetry", None)
         name = data.pop("name")
         node = cls(name=name, model=model, **data)
-
+        volumes = None
         if bathymetry is not None:
             if isinstance(bathymetry, str):
                 bathymetry = load_parameter(model, bathymetry)
