@@ -239,7 +239,7 @@ class Reservoir(Storage, metaclass=NodeMeta):
         self.evaporation_recorder = NumpyArrayNodeRecorder(model, evaporation_node,
                                                            name=f'__{evaporation_node.name}__:evaporation')
 
-    def _make_rainfall_node(self, model, rainfall, cost):
+    def _make_rainfall_node(self, model, rainfall):
 
         if not isinstance(self.area, Parameter):
             log.warning('Weather nodes can be created only if an area Parameter is given.')
@@ -264,7 +264,6 @@ class Reservoir(Storage, metaclass=NodeMeta):
         # Create the nodes to provide the flows
         rainfall_node = Input(model, '{}.rainfall'.format(self.name), parent=self)
         rainfall_node.max_flow = rainfall_flow_param
-        rainfall_node.cost = cost
 
         rainfall_node.connect(self)
         self.rainfall_node = rainfall_node
