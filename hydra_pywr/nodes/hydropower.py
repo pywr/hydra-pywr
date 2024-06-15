@@ -205,7 +205,7 @@ class Reservoir(Storage, metaclass=NodeMeta):
         evaporation = weather['evaporation'].astype(np.float64)
 
         self._make_evaporation_node(model, evaporation, cost)
-        self._make_rainfall_node(model, rainfall, cost)
+        self._make_rainfall_node(model, rainfall)
 
 
     def _make_evaporation_node(self, model, evaporation, cost):
