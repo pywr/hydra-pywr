@@ -560,7 +560,7 @@ class HydraToPywrNetwork():
 
         for resource_attr in filter(lambda x:x.attr_is_var!='Y', self.data.attributes):
 
-            attribute = self._get_attribute(resource_attr["attr_id"])                
+            attribute = self._get_attribute(resource_attr["attr_id"])            
 
             ds = self.get_dataset_by_resource_attr_id(resource_attr.id)
 
@@ -658,7 +658,7 @@ class HydraToPywrNetwork():
 
                 #If this is a basic hydra dataframe, transform it into a pywr
                 #dataframe so the model can read it
-                if dataset_type.lower() == 'dataframe':
+                if dataset_type.lower() == 'dataframe' and attribute_name != 'bathymetry':
                     typedval = {
                         'type': 'dataframeparameter',
                         'data': typedval,
@@ -671,11 +671,13 @@ class HydraToPywrNetwork():
                 typedval = value
 
             #If the attribute name is defined on the node type, put it on the node
-            if attribute_name in node_type_attribute_names:
+            if attribute_name in node_type_attribute_names or attribute_name == 'bathymetry':
                 nodedata[attribute_name] = typedval
             else:
                 #Otherwise put it in the global paramter list, with a name that reflects the original source
                 #e.g. "__node name__:attribute_name"
+                if attribute_name == 'bathymetry':
+                    breakpoint()
                 resource_attribute['name'] = f"__{nodedata['name']}__:{attribute_name}"
                 self.data.attributes.append(resource_attribute)
 

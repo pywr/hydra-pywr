@@ -66,16 +66,19 @@ class LinearStorageReleaseControl(Link, metaclass=NodeMeta):
     def __init__(self, model, name, storage_node, release_values, scenario=None, **kwargs):
 
         if isinstance(release_values, str):
-            release_values = load_parameter(model, release_values).dataframe.astype(np.float64)
+            release_values = load_parameter(model, release_values)
         else:
             release_values = pd.DataFrame.from_dict(release_values)
 
         storage_node = model.pre_load_node(storage_node)
 
-        if scenario is None:
+        if isinstance(release_values, ControlCurveInterpolatedParameter):
+            max_flow_param = release_values
+
+        elif scenario is None:
             # Only one control curve should be defined. Get it explicitly
-            control_curves = release_values['volume'].iloc[1:-1].astype(np.float64)
-            values = release_values['value'].astype(np.float64)
+            control_curves = release_values.control_curves
+            values = release_values.values
             max_flow_param = ControlCurveInterpolatedParameter(model, storage_node, control_curves, values)
         else:
             # There should be multiple control curves defined.
@@ -220,6 +223,8 @@ class Reservoir(Storage, metaclass=NodeMeta):
             except KeyError:
                 log.warning(f"Please specify evaporation or weather on node {self.name}")
                 return
+        elif isinstance(evaporation, str):
+            evaporation_param = load_parameter(model, evaporation)
         elif isinstance(evaporation, pd.DataFrame) or isinstance(evaporation, pd.Series):
             evaporation = evaporation.astype(np.float64)
             evaporation_param = MonthlyProfileParameter(model, evaporation)
@@ -251,6 +256,8 @@ class Reservoir(Storage, metaclass=NodeMeta):
             except KeyError:
                 log.warning(f"Please specify rainfall or weather on node {self.name}")
                 return
+        elif isinstance(rainfall, str):
+            rainfall_param = load_parameter(model, rainfall)
         elif isinstance(rainfall, pd.DataFrame) or isinstance(rainfall, pd.Series):
             rainfall = rainfall.astype(np.float64)
             rainfall_param = MonthlyProfileParameter(model, rainfall)
