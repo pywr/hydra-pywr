@@ -136,14 +136,12 @@ class LinearStorageReleaseControl(Link, metaclass=NodeMeta):
 
 class Reservoir(Storage, metaclass=NodeMeta):
 
-    def __init__(self, model, name, **kwargs):
-        bathymetry = kwargs.pop('bathymetry', None)
-        volume = kwargs.pop('volume', None)
-        level = kwargs.pop('level', None)
-        self.area = kwargs.pop('area', None)
+    def __init__(self, model, **kwargs):
+
+        self.bathymetry = kwargs.pop('bathymetry', None)
         self.evaporation_cost = kwargs.pop('evaporation_cost', -999)
-        self.max_volume = load_parameter(model, kwargs.pop('max_volume', 0))
         const = kwargs.pop('const', 1e6 * 1e-3 * 1e-6)
+        name = kwargs.pop('name')
 
         # Pywr Storage does not expect a 'weather' kwargs, so move this to instance
         self.weather = kwargs.pop("weather", None)
@@ -163,18 +161,17 @@ class Reservoir(Storage, metaclass=NodeMeta):
     @classmethod
     def pre_load(cls, model, data):
 
-        bathymetry = data.pop("bathymetry", None)
-        name = data.pop("name")
-        node = cls(name=name, model=model, **data)
+        node = super().pre_load(model, data)
         volumes = None
-        if bathymetry is not None:
-            if isinstance(bathymetry, str):
-                bathymetry = load_parameter(model, bathymetry)
+        levels = None
+        if node.bathymetry is not None:
+            if isinstance(node.bathymetry, str):
+                bathymetry = load_parameter(model, node.bathymetry)
                 volumes = bathymetry.dataframe['volume'].astype(np.float64)
                 levels = bathymetry.dataframe['level'].astype(np.float64)
                 areas = bathymetry.dataframe['area'].astype(np.float64)
             else:
-                bathymetry = pd.DataFrame.from_dict(bathymetry)
+                bathymetry = pd.DataFrame.from_dict(node.bathymetry)
                 volumes = bathymetry['volume'].astype(np.float64)
                 levels = bathymetry['level'].astype(np.float64)
                 areas = bathymetry['area'].astype(np.float64)
@@ -192,7 +189,6 @@ class Reservoir(Storage, metaclass=NodeMeta):
 
             if node.rainfall is not None:
                 node._make_rainfall_node(model, node.rainfall)
-        setattr(node, "_Loadable__parameters_to_load", {})
 
         return node
 

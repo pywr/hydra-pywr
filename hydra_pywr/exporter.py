@@ -209,7 +209,6 @@ class HydraToPywrNetwork():
         filename = os.path.join(os.path.dirname(__file__), "hydra_pywr_custom_module.py")
 
         prelude = (
-            "print ('Loading module')",
             "from pywr import recorders",
             "from pywr import parameters",
             "from pywr.parameters import *",
@@ -248,8 +247,6 @@ class HydraToPywrNetwork():
                         raise PermissionError(f"Use of <{forbid}> forbidden in custom rules.")
                 fp.write(rule["value"])
                 fp.write("\n\n")
-
-            fp.write("print('module loaded')")
 
     def get_external_files(self):
         """
