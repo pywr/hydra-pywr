@@ -72,13 +72,14 @@ class LinearStorageReleaseControl(Link, metaclass=NodeMeta):
 
         storage_node = model.pre_load_node(storage_node)
 
+
         if isinstance(release_values, ControlCurveInterpolatedParameter):
             max_flow_param = release_values
 
         elif scenario is None:
-            # Only one control curve should be defined. Get it explicitly
-            control_curves = release_values.control_curves
-            values = release_values.values
+            control_curves = release_values['volume'].astype(float).values[1:-1]
+            values =  release_values['value'].astype(float).values
+
             max_flow_param = ControlCurveInterpolatedParameter(model, storage_node, control_curves, values)
         else:
             # There should be multiple control curves defined.
@@ -141,6 +142,7 @@ class Reservoir(Storage, metaclass=NodeMeta):
         level = kwargs.pop('level', None)
         self.area = kwargs.pop('area', None)
         self.evaporation_cost = kwargs.pop('evaporation_cost', -999)
+        self.max_volume = load_parameter(model, kwargs.pop('max_volume', 0))
         const = kwargs.pop('const', 1e6 * 1e-3 * 1e-6)
 
         # Pywr Storage does not expect a 'weather' kwargs, so move this to instance
@@ -183,14 +185,15 @@ class Reservoir(Storage, metaclass=NodeMeta):
         if volumes is not None and areas is not None:
             node.area = InterpolatedVolumeParameter(model, node, volumes, areas)
         if node.weather is not None:
-            node._make_weather_nodes(model, node.weather, node.weather_cost)
+            node._make_weather_nodes(model, node.weather, node.evaporation_cost)
         else:
             if node.evaporation is not None:
                 node._make_evaporation_node(model, node.evaporation, node.evaporation_cost)
-            
+
             if node.rainfall is not None:
                 node._make_rainfall_node(model, node.rainfall)
         setattr(node, "_Loadable__parameters_to_load", {})
+
         return node
 
 

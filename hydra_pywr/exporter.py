@@ -209,6 +209,7 @@ class HydraToPywrNetwork():
         filename = os.path.join(os.path.dirname(__file__), "hydra_pywr_custom_module.py")
 
         prelude = (
+            "print ('Loading module')",
             "from pywr import recorders",
             "from pywr import parameters",
             "from pywr.parameters import *",
@@ -247,6 +248,8 @@ class HydraToPywrNetwork():
                         raise PermissionError(f"Use of <{forbid}> forbidden in custom rules.")
                 fp.write(rule["value"])
                 fp.write("\n\n")
+
+            fp.write("print('module loaded')")
 
     def get_external_files(self):
         """
@@ -549,7 +552,7 @@ class HydraToPywrNetwork():
         return scenario_combinations
 
     def _get_attribute(self, attr_id):
-        attribute = self.attributes.get(attr_id)                
+        attribute = self.attributes.get(attr_id)
         if attribute is None:
             attribute = self.hydra.get_attribute_by_id(attr_id=attr_id)
             self.attributes[attr_id] = attribute
@@ -560,7 +563,7 @@ class HydraToPywrNetwork():
 
         for resource_attr in filter(lambda x:x.attr_is_var!='Y', self.data.attributes):
 
-            attribute = self._get_attribute(resource_attr["attr_id"])            
+            attribute = self._get_attribute(resource_attr["attr_id"])
 
             ds = self.get_dataset_by_resource_attr_id(resource_attr.id)
 
@@ -658,7 +661,7 @@ class HydraToPywrNetwork():
 
                 #If this is a basic hydra dataframe, transform it into a pywr
                 #dataframe so the model can read it
-                if dataset_type.lower() == 'dataframe' and attribute_name != 'bathymetry':
+                if dataset_type.lower() == 'dataframe' and attribute_name not in ('weather', 'bathymetry', 'release_values'):
                     typedval = {
                         'type': 'dataframeparameter',
                         'data': typedval,
@@ -671,13 +674,11 @@ class HydraToPywrNetwork():
                 typedval = value
 
             #If the attribute name is defined on the node type, put it on the node
-            if attribute_name in node_type_attribute_names or attribute_name == 'bathymetry':
+            if attribute_name in node_type_attribute_names or attribute_name in ('weather', 'bathymetry', 'release_values'):
                 nodedata[attribute_name] = typedval
             else:
                 #Otherwise put it in the global paramter list, with a name that reflects the original source
                 #e.g. "__node name__:attribute_name"
-                if attribute_name == 'bathymetry':
-                    breakpoint()
                 resource_attribute['name'] = f"__{nodedata['name']}__:{attribute_name}"
                 self.data.attributes.append(resource_attribute)
 
