@@ -121,8 +121,11 @@ class PywrFileRunner():
         run_stats = model.run()
         log.info(run_stats)
 
-        df = model.to_dataframe()
-        df.to_csv(outfile)
+        try:
+            df = model.to_dataframe()
+            df.to_csv(outfile)
+        except ValueError:
+            print("Unable to output the model dataframe results.")
 
 class PywrHydraRunner(HydraToPywrNetwork):
     """ An extension of `HydraToPywrNetwork` that adds methods for running a Pywr model. """
@@ -154,7 +157,8 @@ class PywrHydraRunner(HydraToPywrNetwork):
         self.limit_nodes_recording = False
 
         tmpdir = tempfile.gettempdir()
-        self.results_location = os.getenv("PYWR_RESULTS_LOCATION", tmpdir)
+        self.results_location = os.path.join(os.getenv("PYWR_RESULTS_LOCATION", tmpdir), str(self.scenario_id))
+        os.makedirs(self.results_location, exist_ok=True)
         self.bucket_name = os.getenv("PYWR_RESULTS_S3_BUCKET", 'pywr-results')
         hashkey = hashlib.sha256(randbytes(56)).hexdigest().encode('utf-8')
         self.s3_path = hmac.digest(hashkey, str(self.scenario_id).encode('utf-8'), hashlib.sha256).hex()
@@ -826,10 +830,19 @@ class PywrHydraRunner(HydraToPywrNetwork):
 
         metadata['json_encoded'] = encode_to_json
 
+
+        datasetvalue = json.dumps(value) if encode_to_json is True else value
+
+        if data_type == 'scalar':
+            try:
+                float(datasetvalue)
+            except:
+                datasetvalue = -999
+        
         # Create a dataset representing the value
         dataset = {
             'name': name,
-            'value': json.dumps(value) if encode_to_json is True else value,
+            'value': datasetvalue,
             "hidden": "N",
             "type": data_type,
             "unit_id": unit_id,
