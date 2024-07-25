@@ -313,6 +313,9 @@ class PywrHydraRunner(HydraToPywrNetwork):
             if hasattr(recorder, "value") or hasattr(recorder, "values"):
                 non_df_recorders.append(recorder)
 
+        
+
+
         # Force a setup regardless of whether the model has been run or setup before
         model.setup()
 
@@ -565,15 +568,13 @@ class PywrHydraRunner(HydraToPywrNetwork):
         for resource_scenario in self.generate_array_recorder_resource_scenarios():
             scenario['resourcescenarios'].append(resource_scenario)
 
-        chunk = 100
-        i = 0
-        while i < len(scenario['resourcescenarios']):
-            data = scenario['resourcescenarios'][i:i+chunk]
-            log.info('Saving %s datasets', chunk)
-            self.hydra.bulk_update_resourcedata(
-                scenario_ids = [scenario['id']],
-                resource_scenarios = data)
-            i = i+chunk+1
+        for i in range(0, len(scenario['resourcescenarios']), 100):
+                chunk = scenario['resourcescenarios'][i:i+100]
+                log.info('Saving %s datasets', len(chunk))
+                self.hydra.bulk_update_resourcedata(
+                    scenario_ids=[scenario['id']],
+                    resource_scenarios=chunk
+                )
 
         #flush the results to the h5 file
         for resultstore in self.resultstores.values():
@@ -672,6 +673,7 @@ class PywrHydraRunner(HydraToPywrNetwork):
 
 
         for recorder in self._df_recorders:
+
             df = recorder.to_dataframe()
 
             columns = []
