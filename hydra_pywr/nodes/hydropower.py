@@ -186,8 +186,10 @@ class Reservoir(PywrReservoir, metaclass=NodeMeta):
         else:
             weather = pd.DataFrame.from_dict(weather)
 
-        rainfall = weather['rainfall'].astype(np.float64)
-        evaporation = weather['evaporation'].astype(np.float64)
+        weather.index = weather.index.astype(int)
+        weather = weather.sort_index()
+        rainfall = MonthlyProfileParameter(self.model, weather['rainfall'].astype(np.float64))
+        evaporation = MonthlyProfileParameter(self.model, weather['evaporation'].astype(np.float64))
 
         self._make_evaporation_node(evaporation, cost)
         self._make_rainfall_node(rainfall)
