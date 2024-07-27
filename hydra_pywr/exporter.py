@@ -554,6 +554,7 @@ class HydraToPywrNetwork():
             attribute = self.hydra.get_attribute_by_id(attr_id=attr_id)
             self.attributes[attr_id] = attribute
         return attribute
+
     def build_parameters_recorders(self):
         parameters = {} # {name: P()}
         recorders = {} # {name: R()}
@@ -579,6 +580,10 @@ class HydraToPywrNetwork():
                 value = json.loads(ds['value'])
                 value = utils.unnest_parameter_key(value, key="pandas_kwargs")
                 value = utils.add_interp_kwargs(value)
+
+                if value.get('__recorder__') is not None:
+                    self._parameter_recorder_flags[name] = value.pop('__recorder__')
+
                 p = PywrParameter(name, value)
                 assert p.name not in parameters    # Disallow overwriting
                 parameters[p.name] = p
@@ -655,6 +660,9 @@ class HydraToPywrNetwork():
 
             try:
                 typedval = json.loads(value)
+
+                if isinstance(typedval, dict) and typedval.get('__recorder__') is not None:
+                    self._parameter_recorder_flags[f"__{nodedata['name']}__:{attribute_name}"] = typedval.pop('__recorder__')
 
                 #If this is a basic hydra dataframe, transform it into a pywr
                 #dataframe so the model can read it
