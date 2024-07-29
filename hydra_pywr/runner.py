@@ -561,7 +561,16 @@ class PywrHydraRunner(HydraToPywrNetwork):
             })
 
         # The response attributes have ids now.
-        response_attributes = self.hydra.add_attributes(attrs=attributes)
+        try:
+            response_attributes = self.hydra.add_attributes(attrs=attributes)
+        except Exception as e:
+            if hasattr(e, 'message') and 'permission denied' in e.message.lower():
+                for a in attributes:
+                    a['project_id'] = None
+                    a['network_id'] = self.data['id']
+                response_attributes = self.hydra.add_attributes(attrs=attributes)
+
+            
         # Update the attribute mapping
         self.attributes.update({attr.id: attr for attr in response_attributes})
 
