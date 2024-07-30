@@ -21,6 +21,8 @@ from pywrparser.types import (
     PywrEdge
 )
 
+from pywrparser.types.exceptions import PywrParserException
+
 from .config import CACHE_DIR
 from .rules import exec_rules
 from .template import PYWR_SPLIT_LINK_TYPES
@@ -583,8 +585,14 @@ class HydraToPywrNetwork():
 
                 if value.get('__recorder__') is not None:
                     self._parameter_recorder_flags[name] = value.pop('__recorder__')
+                try:
+                    p = PywrParameter(name, value)
+                except PywrParserException as e:
+                    msg = f"!!Output: An error occurred parsing parameter '{name}'. Value is '{value}'. Error is: '{e.message}' Exiting."
+                    logging.critical(msg)
+                    print(f"!!Output: {msg}")
+                    exit(1)
 
-                p = PywrParameter(name, value)
                 assert p.name not in parameters    # Disallow overwriting
                 parameters[p.name] = p
             elif ds["type"].upper().startswith(RECORDER_TYPES):
