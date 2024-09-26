@@ -695,7 +695,8 @@ class HydraToPywrNetwork():
                 resource_attribute['name'] = f"__{nodedata['name']}__:{attribute_name}"
                 self.data.attributes.append(resource_attribute)
 
-        nodedata["type"] = pywr_node_type['name']
+        #Ensure the node type name is lower case, and has all spaces and non-characters removed.
+        nodedata["type"] = re.sub(r'[^a-zA-Z]', '', pywr_node_type['name']).lower()
         node_attr_data = {a:v for a,v in nodedata.items() if a not in self.exclude_hydra_attrs}
         position = {"geographic": [ nodedata.get("x",0), nodedata.get("y",0) ]}
         node_attr_data["position"] = position
