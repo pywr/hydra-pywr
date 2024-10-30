@@ -31,6 +31,8 @@ from . import utils
 from hydra_base.lib.objects import JSONObject
 from hydra_base.exceptions import ResourceNotFoundError
 
+from hydra_client.exception import RequestError
+
 from pywrparser.lib import PywrTypeJSONEncoder
 
 
@@ -85,7 +87,7 @@ def export_json(client, data_dir, scenario_id, use_cache, json_sort_keys, json_i
             ref.data["url"] = filedest
 
     pnet_title = pywr_network.metadata.data["title"]
-    outfile = os.path.join(data_dir, f"{pnet_title.replace(' ', '_')}.json")
+    outfile = os.path.join(data_dir, f"{pnet_title.replace(' ', '_').replace('/', '_')}.json")
     with open(outfile, mode='w') as fp:
         json.dump(pywr_network.as_dict(), fp, sort_keys=json_sort_keys, indent=2, cls=PywrTypeJSONEncoder)
 
@@ -499,7 +501,7 @@ class HydraToPywrNetwork():
 
     def build_metadata(self):
         metadata = {
-            "title": self.data['name'],
+            "title": self.data['name'].replace(' ', '_').replace('/', '_'),
             "description": self.data['description']
         }
         for attr in self.data["attributes"]:
@@ -532,12 +534,12 @@ class HydraToPywrNetwork():
 
         return PywrMetadata(metadata)
 
-
     def build_scenarios(self):
         try:
             scenarios_dataset = self.get_network_attr(self.scenario_id, self.data["id"], "scenarios")
             scenarios = [ PywrScenario(scenario) for scenario in scenarios_dataset["scenarios"] ]
-        except (ResourceNotFoundError, ValueError, KeyError):
+        except Exception as e:
+            log.warning("Unable to build scenarios")
             scenarios = []
 
         return scenarios
@@ -546,9 +548,9 @@ class HydraToPywrNetwork():
     def build_scenario_combinations(self):
         try:
             s_c_dataset = self.get_network_attr(self.scenario_id, self.data["id"], "scenario_combinations")
-
             scenario_combinations = [ PywrScenarioCombination(sc) for sc in s_c_dataset["scenario_combinations"] ]
-        except (ResourceNotFoundError, ValueError, KeyError):
+        except Exception as e:
+            log.warning("Unable to build scenario combinations")
             scenario_combinations = []
 
         return scenario_combinations
@@ -592,7 +594,7 @@ class HydraToPywrNetwork():
                     p = PywrParameter(name, value)
                 except PywrParserException as e:
                     msg = f"!!Output: An error occurred parsing parameter '{name}'. Value is '{value}'. Error is: '{e.message}' Exiting."
-                    logging.critical(msg)
+                    log.critical(msg)
                     print(f"!!Output: {msg}")
                     exit(1)
 
