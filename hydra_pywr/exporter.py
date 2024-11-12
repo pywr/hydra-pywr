@@ -123,6 +123,33 @@ class HydraToPywrNetwork():
         for tt in self.template.templatetypes:
             self.type_id_map[tt.id] = tt
 
+        # Some types may be defined on parent templates
+        # Identify these and add to type_id_map
+
+        pending_types = {}
+        for tt in self.type_id_map.values():
+            parent_type = None
+            if hasattr(tt, "parent_id") and tt.parent_id is not None and tt.resource_type != "NETWORK":
+                parent_template_id = self.template.parent_id
+                while parent_template_id and not parent_type:
+                    try:
+                        parent_type = self.hydra.get_templatetype_by_name(
+                                      template_id=parent_template_id,
+                                      type_name=tt.name)
+                        break
+                    except RequestError:
+                        # Type is not defined on immediate parent, so ascend
+                        ptemp = self.hydra.get_template(template_id=parent_template_id)
+                        parent_template_id = ptemp.parent_id
+
+                if parent_type:
+                    pending_types[parent_type.id] = parent_type
+                else:
+                    raise TypeError(f"Type '{tt.name}' with id {tt.id} not defined "
+                                    f"on template {self.template.id} or any parent template")
+
+        self.type_id_map.update(pending_types)
+
         self.attr_unit_map = {}
         self.hydra_node_by_id = {}
 
