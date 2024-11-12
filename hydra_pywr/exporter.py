@@ -7,6 +7,8 @@ from datetime import datetime
 from pywrparser.types.network import PywrNetwork
 import subprocess
 
+import pandas as pd
+
 from urllib.parse import urlparse
 
 from pywrparser.types import (
@@ -94,6 +96,23 @@ def export_json(client, data_dir, scenario_id, use_cache, json_sort_keys, json_i
     log.info(f"Network: {network_id}, Scenario: {scenario_id} exported to `{outfile}`")
 
     return outfile
+
+def validate_timestep(timestep):
+    try:
+        start = pd.to_datetime(timestep["start"])
+        end = pd.to_datetime(timestep["end"])
+    except pd._libs.tslibs.parsing.DateParseError as dpe:
+        which = None
+        try:
+            start
+        except NameError:
+            which = "start"
+        else:
+            which = "end"
+        raise ValueError(f"Timestepper {timestep} does not define a valid {which} value")
+
+    if not start < end:
+        raise ValueError(f"Timestepper {timestep} start value not earlier than end value")
 
 """
     Hydra => PywrNetwork
@@ -474,6 +493,7 @@ class HydraToPywrNetwork():
             if ds and ds["type"].upper().startswith("PYWR_TIMESTEPPER"):
                 # New style Timestep type: single dictionary value
                 value = json.loads(ds["value"])
+                validate_timestep(value)
                 return PywrTimestepper(value)
             elif ds:
                 # Deprecated multi-attr Timestep, must aggregate
@@ -496,6 +516,7 @@ class HydraToPywrNetwork():
         except ValueError:
             tv = ts_val
         timestep["timestep"] = tv
+        validate_timestep(timestep)
         return PywrTimestepper(timestep)
 
 
