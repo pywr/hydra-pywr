@@ -563,6 +563,7 @@ class HydraToPywrNetwork():
         return attribute
 
     def build_parameters_recorders(self):
+        log.info("Building parameters and recorders")
         parameters = {} # {name: P()}
         recorders = {} # {name: R()}
 

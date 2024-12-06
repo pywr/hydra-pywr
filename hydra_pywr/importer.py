@@ -126,11 +126,11 @@ class PywrToHydraNetwork():
                 return t
 
     def get_hydra_attrid_by_name(self, attr_name):
-        if attr_name in self.template_attributes:
+        if attr_name.lower() in [a.lower() for a in self.template_attributes]:
             return self.template_attributes[attr_name]
 
         for attr in self.hydra_attributes:
-            if attr["name"] == attr_name:
+            if attr["name"].lower() == attr_name.lower():
                 return attr["id"]
         log.critical(f"Attr {attr_name} not registered")
 
@@ -454,7 +454,7 @@ class PywrToHydraNetwork():
                     continue
                 ra, rs = self.make_resource_attr_and_scenario(node, attr_name)
                 if ra["attr_id"] == None:
-                    raise ValueError(f"Node '{node.name}' attr '{attr_name}' has invalid attr id: '{attr_id}'")
+                    raise ValueError(f"Node '{node.name}' attr '{attr_name}' has invalid attr id: \'{ra['attr_id']}\'")
                 resource_attributes.append(ra)
                 resource_scenarios.append(rs)
 

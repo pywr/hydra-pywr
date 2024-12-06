@@ -262,9 +262,11 @@ class PywrHydraRunner(HydraToPywrNetwork):
         """
         Get the nodes to record in the network.
         """
-        try:
-            node_recorder_attribute = self._get_attribute_from_name('record_nodes')
-        except (KeyError, ValueError):
+
+        record_nodes_attr = list(filter(lambda x:x['name'] == 'record_nodes', self.attributes.values()))
+        if len(record_nodes_attr) > 0:
+            node_recorder_attribute = record_nodes_attr[0]
+        else:
             return []
 
         for network_ra in self.data['attributes']:
@@ -274,12 +276,14 @@ class PywrHydraRunner(HydraToPywrNetwork):
                 if len(rs) > 0:
                     try:
                         value = json.loads(rs[0]['dataset']['value'])
-                        if len(value) > 0:
-                            self.limit_nodes_recording = True
+                        self.limit_nodes_recording = True
+                        #in case, the original value was, for example, "'[]'"
+                        if isinstance(value, str):
+                            value = json.loads(value)
                     except:
                         self.log.critical(f"Unable to read which nodes to record. Value should be an array of node names or IDS. The value is: {rs[0]['dataset']['value']}")
                         return []
-                return []
+                return value
 
 
     def run_pywr_model(self, domain="water"):
@@ -313,7 +317,7 @@ class PywrHydraRunner(HydraToPywrNetwork):
             if hasattr(recorder, "value") or hasattr(recorder, "values"):
                 non_df_recorders.append(recorder)
 
-        
+
 
 
         # Force a setup regardless of whether the model has been run or setup before
@@ -570,7 +574,7 @@ class PywrHydraRunner(HydraToPywrNetwork):
                     a['network_id'] = self.data['id']
                 response_attributes = self.hydra.add_attributes(attrs=attributes)
 
-            
+
         # Update the attribute mapping
         self.attributes.update({attr.id: attr for attr in response_attributes})
 
@@ -690,7 +694,6 @@ class PywrHydraRunner(HydraToPywrNetwork):
                 columns.append([f'{name}: {v}' for v in df.columns.get_level_values(name)])
 
             df.columns = [', '.join(values) for values in zip(*columns)]
-
             # Resample timeseries if required
             if isinstance(df.index, pandas.DatetimeIndex) and self.output_resample_freq is not None:
                 df = df.resample(self.output_resample_freq).mean()
@@ -849,7 +852,7 @@ class PywrHydraRunner(HydraToPywrNetwork):
                 float(datasetvalue)
             except:
                 datasetvalue = -999
-        
+
         # Create a dataset representing the value
         dataset = {
             'name': name,
