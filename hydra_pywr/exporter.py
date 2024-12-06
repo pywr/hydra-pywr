@@ -9,6 +9,8 @@ import subprocess
 
 from urllib.parse import urlparse
 
+import pandas as pd
+
 from pywrparser.types import (
     PywrParameter,
     PywrRecorder,
@@ -681,10 +683,7 @@ class HydraToPywrNetwork():
                 #If this is a basic hydra dataframe, transform it into a pywr
                 #dataframe so the model can read it
                 if dataset_type.lower() == 'dataframe' and attribute_name not in ('weather', 'bathymetry', 'release_values'):
-                    typedval = {
-                        'type': 'dataframeparameter',
-                        'data': typedval,
-                    }
+                    typedval = hydra_dataframe_to_pywr_dataframe(typedval)
 
                 if isinstance(typedval, dict):
                     typedval = utils.unnest_parameter_key(typedval, key="pandas_kwargs")
@@ -712,3 +711,25 @@ class HydraToPywrNetwork():
         node = PywrNode(node_attr_data)
         self.nodes[node.name] = node
 
+def hydra_dataframe_to_pywr_dataframe(hydra_df):
+    kwargs = {"parse_dates": True}
+    typedval = {
+        "type": "dataframeparameter",
+        "data": hydra_df
+    }
+    pdf = pd.DataFrame.from_dict(hydra_df)
+    if pdf.index.dtype.name.startswith(("int", "float")):
+        # This is a scalar index which *could* be cast
+        # to epoch-based Datetimes but probably shouldn't be
+        return typedval
+    try:
+        # Pywr will call to_period when resampling a df
+        # Ensure anything parseable as a Datetime has the
+        # parse_dates kwarg so to_period is supported
+        pd.DatetimeIndex(pdf.index)
+        typedval.update(kwargs)
+    except (ValueError, pd._libs.tslibs.parsing.DateParseError):
+        # hydra_df index cannot be cast to Datetime so
+        # omit parse_dates kwarg to Pywr
+        pass
+    return typedval
