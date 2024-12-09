@@ -273,6 +273,7 @@ class PywrHydraRunner(HydraToPywrNetwork):
             if network_ra['attr_id'] == node_recorder_attribute['id']:
                 rs = list(filter(lambda x:x.resource_attr_id==network_ra['id'],
                                  self.data.scenarios[0].resourcescenarios))
+                value = []
                 if len(rs) > 0:
                     try:
                         value = json.loads(rs[0]['dataset']['value'])
