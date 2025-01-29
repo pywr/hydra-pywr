@@ -202,7 +202,7 @@ class HydraToPywrNetwork():
         network.scenarios = [scenario]
         network.rules = client.get_resource_rules(ref_key='NETWORK', ref_id=network_id)
 
-        attributes = client.get_attributes(network_id=network.id, project_id=network.project_id, include_global=True)
+        attributes = client.get_attributes(network_id=network.id, project_id=network.project_id, include_hierarchy=True, include_global=True)
         attributes = {attr.id: attr for attr in attributes}
 
         log.info(f"Retreiving template {network.types[index].template_id}")
