@@ -52,6 +52,54 @@ RECORDER_TYPES = (
     "PYWR_RECORDER",
 )
 
+def find_missing_parameters(pywr_network):
+    missing_params = set()
+    if not (params := getattr(pywr_network, "parameters", None)):
+        return missing_params
+
+    for param in params.values():
+        if not (ref_params := param.data.get("parameters")):
+            continue
+        for rp in ref_params:
+            if not isinstance(rp, str):
+                continue
+            if rp not in params:
+                missing_params.add(rp)
+
+    return missing_params
+
+
+def param_name_to_canonical(param_name):
+    """
+      Attempts to derive a canonical __param__:attr name
+      from its argument, under the assumption that the
+      attr corresponds to a single whitespace-delineated
+      set of characters appearing at the end of the name.
+
+      Returns the original parameter name in the event of
+      an argument not matching this format.
+    """
+    try:
+        node_name, attr = param_name.rsplit(maxsplit=1)
+    except ValueError:
+        return param_name
+
+    return f"__{node_name}__:{attr}"
+
+
+def rewrite_ref_parameters(pywr_network, param_names):
+    for param_name in param_names:
+        cname = param_name_to_canonical(param_name)
+        for param in pywr_network.parameters.values():
+            if not (ref_params := param.data.get("parameters")):
+                continue
+            for rp in ref_params:
+                if not isinstance(rp, str):
+                    continue
+                if param_name_to_canonical(rp) == cname:
+                    idx = param.data["parameters"].index(rp)
+                    param.data["parameters"][idx] = cname
+
 
 def export_json(client, data_dir, scenario_id, use_cache, json_sort_keys, json_indent):
     """
@@ -65,6 +113,10 @@ def export_json(client, data_dir, scenario_id, use_cache, json_sort_keys, json_i
 
     pywr_network.promote_inline_parameters()
     pywr_network.detach_parameters()
+
+    missing_params = find_missing_parameters(pywr_network)
+    if len(missing_params) > 0:
+        rewrite_ref_parameters(pywr_network, missing_params)
 
     url_refs = pywr_network.url_references()
 
