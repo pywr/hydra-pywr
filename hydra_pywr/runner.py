@@ -19,7 +19,7 @@ from pywrparser.lib import PywrTypeJSONEncoder
 from pywrparser.utils import parse_reference_key
 from random import randbytes
 
-from .exporter import HydraToPywrNetwork
+from .exporter import HydraToPywrNetwork, find_missing_parameters, rewrite_ref_parameters
 
 from pywrparser.types.network import PywrNetwork
 from hydra_pywr.nodes import *
@@ -174,6 +174,10 @@ class PywrHydraRunner(HydraToPywrNetwork):
         pywr_network = PywrNetwork(network_data)
         pywr_network.promote_inline_parameters()
         pywr_network.detach_parameters()
+
+        missing_params = find_missing_parameters(pywr_network)
+        if len(missing_params) > 0:
+            rewrite_ref_parameters(pywr_network, missing_params)
 
         url_refs = pywr_network.url_references()
         for url, refs in url_refs.items():
