@@ -7,6 +7,8 @@ from datetime import datetime
 from pywrparser.types.network import PywrNetwork
 import subprocess
 
+import pandas as pd
+
 from urllib.parse import urlparse
 
 import pandas as pd
@@ -50,6 +52,54 @@ RECORDER_TYPES = (
     "PYWR_RECORDER",
 )
 
+def find_missing_parameters(pywr_network):
+    missing_params = set()
+    if not (params := getattr(pywr_network, "parameters", None)):
+        return missing_params
+
+    for param in params.values():
+        if not (ref_params := param.data.get("parameters")):
+            continue
+        for rp in ref_params:
+            if not isinstance(rp, str):
+                continue
+            if rp not in params:
+                missing_params.add(rp)
+
+    return missing_params
+
+
+def param_name_to_canonical(param_name):
+    """
+      Attempts to derive a canonical __param__:attr name
+      from its argument, under the assumption that the
+      attr corresponds to a single whitespace-delineated
+      set of characters appearing at the end of the name.
+
+      Returns the original parameter name in the event of
+      an argument not matching this format.
+    """
+    try:
+        node_name, attr = param_name.rsplit(maxsplit=1)
+    except ValueError:
+        return param_name
+
+    return f"__{node_name}__:{attr}"
+
+
+def rewrite_ref_parameters(pywr_network, param_names):
+    for param_name in param_names:
+        cname = param_name_to_canonical(param_name)
+        for param in pywr_network.parameters.values():
+            if not (ref_params := param.data.get("parameters")):
+                continue
+            for rp in ref_params:
+                if not isinstance(rp, str):
+                    continue
+                if param_name_to_canonical(rp) == cname:
+                    idx = param.data["parameters"].index(rp)
+                    param.data["parameters"][idx] = cname
+
 
 def export_json(client, data_dir, scenario_id, use_cache, json_sort_keys, json_indent):
     """
@@ -63,6 +113,10 @@ def export_json(client, data_dir, scenario_id, use_cache, json_sort_keys, json_i
 
     pywr_network.promote_inline_parameters()
     pywr_network.detach_parameters()
+
+    missing_params = find_missing_parameters(pywr_network)
+    if len(missing_params) > 0:
+        rewrite_ref_parameters(pywr_network, missing_params)
 
     url_refs = pywr_network.url_references()
 
@@ -97,6 +151,23 @@ def export_json(client, data_dir, scenario_id, use_cache, json_sort_keys, json_i
 
     return outfile
 
+def validate_timestep(timestep):
+    try:
+        start = pd.to_datetime(timestep["start"])
+        end = pd.to_datetime(timestep["end"])
+    except pd._libs.tslibs.parsing.DateParseError as dpe:
+        which = None
+        try:
+            start
+        except NameError:
+            which = "start"
+        else:
+            which = "end"
+        raise ValueError(f"Timestepper {timestep} does not define a valid {which} value")
+
+    if not start < end:
+        raise ValueError(f"Timestepper {timestep} start value not earlier than end value")
+
 """
     Hydra => PywrNetwork
 """
@@ -124,6 +195,33 @@ class HydraToPywrNetwork():
         self.type_id_map = {}
         for tt in self.template.templatetypes:
             self.type_id_map[tt.id] = tt
+
+        # Some types may be defined on parent templates
+        # Identify these and add to type_id_map
+
+        pending_types = {}
+        for tt in self.type_id_map.values():
+            parent_type = None
+            if hasattr(tt, "parent_id") and tt.parent_id is not None and tt.resource_type != "NETWORK":
+                parent_template_id = self.template.parent_id
+                while parent_template_id and not parent_type:
+                    try:
+                        parent_type = self.hydra.get_templatetype_by_name(
+                                      template_id=parent_template_id,
+                                      type_name=tt.name)
+                        break
+                    except RequestError:
+                        # Type is not defined on immediate parent, so ascend
+                        ptemp = self.hydra.get_template(template_id=parent_template_id)
+                        parent_template_id = ptemp.parent_id
+
+                if parent_type:
+                    pending_types[parent_type.id] = parent_type
+                else:
+                    raise TypeError(f"Type '{tt.name}' with id {tt.id} not defined "
+                                    f"on template {self.template.id} or any parent template")
+
+        self.type_id_map.update(pending_types)
 
         self.attr_unit_map = {}
         self.hydra_node_by_id = {}
@@ -202,7 +300,7 @@ class HydraToPywrNetwork():
         network.scenarios = [scenario]
         network.rules = client.get_resource_rules(ref_key='NETWORK', ref_id=network_id)
 
-        attributes = client.get_attributes(network_id=network.id, project_id=network.project_id, include_global=True)
+        attributes = client.get_attributes(network_id=network.id, project_id=network.project_id, include_hierarchy=True, include_global=True)
         attributes = {attr.id: attr for attr in attributes}
 
         log.info(f"Retreiving template {network.types[index].template_id}")
@@ -476,6 +574,7 @@ class HydraToPywrNetwork():
             if ds and ds["type"].upper().startswith("PYWR_TIMESTEPPER"):
                 # New style Timestep type: single dictionary value
                 value = json.loads(ds["value"])
+                validate_timestep(value)
                 return PywrTimestepper(value)
             elif ds:
                 # Deprecated multi-attr Timestep, must aggregate
@@ -498,6 +597,7 @@ class HydraToPywrNetwork():
         except ValueError:
             tv = ts_val
         timestep["timestep"] = tv
+        validate_timestep(timestep)
         return PywrTimestepper(timestep)
 
 
