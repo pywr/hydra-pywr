@@ -151,7 +151,6 @@ class Reservoir(PywrReservoir, metaclass=NodeMeta):
 
     def finalise_load(self):
 
-        super(Reservoir, self).finalise_load()
 
         if self.bathymetry is not None:
             volumes = None
@@ -172,6 +171,8 @@ class Reservoir(PywrReservoir, metaclass=NodeMeta):
 
             if volumes is not None and areas is not None:
                 self.area = InterpolatedVolumeParameter(self.model, self, volumes, areas)
+                
+        super(Reservoir, self).finalise_load()
 
         if self.weather is not None:
             self._make_weather_nodes(self.weather, self.evaporation_cost)
