@@ -776,13 +776,18 @@ class PywrHydraRunner(HydraToPywrNetwork):
 
         for recorder in self._non_df_recorders:
             try:
+                recorder.values()
+            except NotImplementedError:
+                continue
+
+            try:
                 data_type = "array"
                 value = list(recorder.values())
                 if len(value) == 1:
                     value = value[0]
                     data_type = "scalar"
                 value = json.dumps(value)
-            except NotImplementedError:
+            except (NotImplementedError,  TypeError):
                 continue
             else:
                 try:
