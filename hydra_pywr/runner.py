@@ -286,7 +286,7 @@ class PywrHydraRunner(HydraToPywrNetwork):
                         if isinstance(value, str):
                             value = json.loads(value)
                     except:
-                        self.log.critical(f"Unable to read which nodes to record. Value should be an array of node names or IDS. The value is: {rs[0]['dataset']['value']}")
+                        log.critical(f"Unable to read which nodes to record. Value should be an array of node names or IDS. The value is: {rs[0]['dataset']['value']}")
                         return []
                 return value
 
@@ -609,8 +609,8 @@ class PywrHydraRunner(HydraToPywrNetwork):
         """
 
         resource_attributes_to_add = []
-        recorder_ra_map = {}
-        recorder_ra_id_map={}
+        self.recorder_ra_map = {}
+        self.recorder_ra_id_map={}
 
         for recorder in recorders:
 
@@ -659,7 +659,7 @@ class PywrHydraRunner(HydraToPywrNetwork):
                                 break
 
             if resource_attribute_id is not None:
-                recorder_ra_id_map[recorder_name] = resource_attribute_id
+                self.recorder_ra_id_map[recorder_name] = resource_attribute_id
                 continue
             else:
 
@@ -669,16 +669,28 @@ class PywrHydraRunner(HydraToPywrNetwork):
                                                                 attr_id=attribute['id'],
                                                                 is_var='Y',
                                                                 error_on_duplicate='N'))
-                recorder_ra_map[(resource_type, resource_id, attribute['id'])] = recorder_name
+                self.recorder_ra_map[(resource_type, resource_id, attribute['id'])] = recorder_name
 
         if len(resource_attributes_to_add) > 0:
-            new_resource_attributes = self.hydra.add_resource_attributes(resource_attributes=resource_attributes_to_add)
+            log.info('Adding %s new resource attributes', len(resource_attributes_to_add))
+            self._add_resource_attributes(resource_attributes_to_add)
+        return self.recorder_ra_id_map
+
+    def _add_resource_attributes(self, resource_attributes_to_add):
+        from itertools import islice
+
+        def chunked_iterable(iterable, size):
+            iterator = iter(iterable)
+            while chunk := list(islice(iterator, size)):
+                yield chunk
+
+        for chunk in chunked_iterable(resource_attributes_to_add, 100):
+            new_resource_attributes = self.hydra.add_resource_attributes(resource_attributes=chunk)
             for new_ra in new_resource_attributes:
-                recorder_name = recorder_ra_map[(new_ra['ref_key'], new_ra.get('node_id', new_ra.get('network_id')), new_ra['attr_id'])]
-                recorder_ra_id_map[recorder_name] = new_ra['id']
-
-        return recorder_ra_id_map
-
+                recorder_name = self.recorder_ra_map[
+                    (new_ra['ref_key'], new_ra.get('node_id', new_ra.get('network_id')), new_ra['attr_id'])
+                ]
+                self.recorder_ra_id_map[recorder_name] = new_ra['id']
     def generate_array_recorder_resource_scenarios(self):
         """ Generate resource scenario data from NumpyArrayXXX recorders. """
         if self._df_recorders is None:
