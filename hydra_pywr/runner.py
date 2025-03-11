@@ -703,8 +703,11 @@ class PywrHydraRunner(HydraToPywrNetwork):
 
 
         for recorder in self._df_recorders:
-
-            df = recorder.to_dataframe()
+            
+            try:
+                df = recorder.to_dataframe()
+            except NotImplementedError:
+                continue
 
             columns = []
             for name in df.columns.names:
