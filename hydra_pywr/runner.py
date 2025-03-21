@@ -41,13 +41,21 @@ def run_file(filename, domain, output_file):
 def run_network_scenario(client, scenario_id, template_id, domain,
                          solver=None, data_dir='/tmp'):
 
+    for log_src in ("pywr", "hydra_client", __name__):
+        logger = logging.getLogger(log_src)
+        client.nc.set_logger(logger)
     runner = PywrHydraRunner.from_scenario_id(client, scenario_id,
                                              template_id=template_id,
                                              data_dir=data_dir)
+    runner.client = client
     runner.setup(solver=solver)
+    client.nc.stage(client.nc.STAGE_OK)
     runner.run_pywr_model()
+    client.nc.stage(client.nc.STAGE_OK)
     runner.save_pywr_results()
+    client.nc.stage(client.nc.STAGE_OK)
     log.info(f'Pywr model run success. Network ID: {runner.data.id}, Scenario ID: {scenario_id}')
+    client.nc.stage(client.nc.STAGE_OK)
 
 
 def save_pywr_file(data, data_dir, network_id=None, scenario_id=None):
@@ -599,6 +607,7 @@ class PywrHydraRunner(HydraToPywrNetwork):
             resultstore.close()
 
         log.info("Results stored to: %s", self.results_location)
+        self.client.nc.stage(self.client.nc.STAGE_OK)
 
         self.save_results_to_s3()
 

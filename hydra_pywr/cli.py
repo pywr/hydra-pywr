@@ -124,10 +124,14 @@ def purge_cache(cache_path):
 @click.option('--data-dir', default='/tmp')
 def run(obj, scenario_id, template_id, domain, output_frequency, solver, data_dir):
     """ Export, run and save a Pywr model from Hydra. """
-    client = get_logged_in_client(obj)
-
     if scenario_id is None:
         raise Exception('No scenario specified')
+
+    from notifyclient import NotifyClient
+    nc = NotifyClient("hydra_pywr_jobid", workflow="Hydra-Pywr model run")
+    client = get_logged_in_client(obj)
+    client.nc = nc
+    client.nc.stage(client.nc.STAGE_OK)
 
     runner.run_network_scenario(client,
                                 scenario_id,
@@ -136,6 +140,7 @@ def run(obj, scenario_id, template_id, domain, output_frequency, solver, data_di
                                 output_frequency,
                                 data_dir=data_dir)
 
+    client.nc.stage(client.nc.STAGE_OK)
 
 """
   Miscellaneous Utilities - to be reviewed and/or relocated

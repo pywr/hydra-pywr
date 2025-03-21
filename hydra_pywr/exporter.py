@@ -101,7 +101,7 @@ def rewrite_ref_parameters(pywr_network, param_names):
 
 def export_json(client, data_dir, scenario_id, use_cache, json_sort_keys, json_indent):
     """
-        A utility function to uxport a Pywr JSON from Hydra.
+        A utility function to export a Pywr JSON from Hydra.
     """
 
     exporter = HydraToPywrNetwork.from_scenario_id(client, scenario_id, use_cache=use_cache, data_dir=data_dir)
@@ -210,6 +210,7 @@ class HydraToPywrNetwork():
                 log.info(f"Using cached scenario updated at {mod_dt}")
                 with open(scen_cache_path, 'r') as fp:
                     scenario = JSONObject(json.load(fp))
+                client.nc.stage(client.nc.STAGE_OK)
             else:
                     scenario = client.get_scenario(scenario_id=scenario_id,
                                                    include_data=True,
@@ -221,7 +222,9 @@ class HydraToPywrNetwork():
                         json.dump(scenario, fp)
 
                     log.info(f"Cached scenario written to '{scen_cache_path}'")
+                    client.nc.stage(client.nc.STAGE_OK)
 
+            client.nc.stage(client.nc.STAGE_OK)
             network_id = scenario.network_id
             net_cache_file = f"network_{scenario.network_id}.json"
             net_cache_path = os.path.join(CACHE_DIR, net_cache_file)
@@ -231,6 +234,7 @@ class HydraToPywrNetwork():
                 log.info(f"Using cached network updated at {mod_dt}")
                 with open(net_cache_path, 'r') as fp:
                     network = JSONObject(json.load(fp))
+                client.nc.stage(client.nc.STAGE_OK)
             else:
                 network = client.get_network(
                             network_id=network_id,
@@ -241,8 +245,10 @@ class HydraToPywrNetwork():
                 with open(net_cache_path, 'w') as fp:
                     json.dump(JSONObject(network), fp)
                 log.info(f"Cached network written to '{net_cache_path}'")
+                client.nc.stage(client.nc.STAGE_OK)
         else:
             scenario = client.get_scenario(scenario_id=scenario_id, include_data=True, include_results=False, include_metadata=True, include_attr=False)
+            client.nc.stage(client.nc.STAGE_OK)
             network_id = scenario.network_id
             network = client.get_network(
                         network_id=network_id,
@@ -250,15 +256,19 @@ class HydraToPywrNetwork():
                         include_results=False,
                         template_id=template_id,
                         include_attributes=True)
+            client.nc.stage(client.nc.STAGE_OK)
 
         network.scenarios = [scenario]
         network.rules = client.get_resource_rules(ref_key='NETWORK', ref_id=network_id)
+        client.nc.stage(client.nc.STAGE_OK)
 
         attributes = client.get_attributes(network_id=network.id, project_id=network.project_id, include_hierarchy=True, include_global=True)
         attributes = {attr.id: attr for attr in attributes}
+        client.nc.stage(client.nc.STAGE_OK)
 
         log.info(f"Retreiving template {network.types[index].template_id}")
         template = client.get_template(template_id=network.types[index].template_id)
+        client.nc.stage(client.nc.STAGE_OK)
 
         return cls(client, network, network_id, scenario_id, attributes, template, kwargs.get('data_dir'))
 
