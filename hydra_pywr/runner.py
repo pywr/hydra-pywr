@@ -146,7 +146,7 @@ class PywrHydraRunner(HydraToPywrNetwork):
             self.node_lookup[n.name] = n
             self.node_attr_lookup[n.name] = {}
             for a in n['attributes']:
-                self.node_attr_lookup[a.attr_id] = a
+                self.node_attr_lookup[n.name][a.attr_id] = a
 
         self.attr_name_map = self.make_attr_name_map()
 
@@ -205,6 +205,37 @@ class PywrHydraRunner(HydraToPywrNetwork):
 
         self.load_pywr_model(pywr_network, solver=solver)
 
+    def save_to_s3(self):
+        """
+            Upload the pywr model to S3
+        """
+        if self.modelfile is None:
+            log.info("No model file to upload to S3")
+            return
+
+        import boto3
+        s3 = boto3.client('s3')
+        s3.upload_file(self.modelfile, Bucket=self.bucket_name, Key=f"{self.s3_path}/{os.path.basename(self.modelfile)}")
+        log.info("Model file saved to s3 bucket %s", self.bucket_name)
+        self.using_s3 = True
+
+    def get_file(self):
+        if self.using_s3:
+            #get the file from s3
+            import boto3
+            s3 = boto3.client('s3')
+            #check if the file exists
+            try:
+                s3.head_object(Bucket=self.bucket_name, Key=f"{self.s3_path}/{os.path.basename(self.modelfile)}")
+            except Exception as e:
+                log.info("Model file not found in s3 bucket %s", self.bucket_name)
+                return None
+            #sync to the bucket location
+            s3.download_file(self.bucket_name, f"{self.s3_path}/{os.path.basename(self.modelfile)}", self.modelfile)
+            log.info("Model file downloaded from s3 bucket %s", self.bucket_name)
+            
+        return self.modelfile
+        
     def _copy_scenario(self):
         # Now construct a scenario object
         scenario = self.data.scenarios[0]
@@ -637,6 +668,12 @@ class PywrHydraRunner(HydraToPywrNetwork):
                     if network_ra['attr_id'] == attribute['id']:
                         resource_attribute_id = network_ra['id']
             else:
+                # try:
+                #     self._get_resource_attribute_id(recorder_node.name, attribute_name)
+                # except:
+                #     breakpoint()
+                #     self._get_resource_attribute_id(recorder_node.name,attribute_name)
+
                 try:
                     resource_attribute_id = self._get_resource_attribute_id(recorder_node.name,
                                                                             attribute_name)
@@ -666,6 +703,8 @@ class PywrHydraRunner(HydraToPywrNetwork):
                 # Try to get the resource attribute
                 resource_attributes_to_add.append(dict(resource_type=resource_type,
                                                                 resource_id=resource_id,
+                                                                ref_key=resource_type,
+                                                                ref_id=resource_id,
                                                                 attr_id=attribute['id'],
                                                                 is_var='Y',
                                                                 error_on_duplicate='N'))
@@ -685,8 +724,15 @@ class PywrHydraRunner(HydraToPywrNetwork):
                 yield chunk
 
         for chunk in chunked_iterable(resource_attributes_to_add, 100):
-            new_resource_attributes = self.hydra.add_resource_attributes(resource_attributes=chunk)
-            for new_ra in new_resource_attributes:
+            new_ids = self.hydra.add_resource_attributes(resource_attributes=chunk)
+            for i, new_ra in enumerate(chunk):
+                new_ra['id'] = new_ids[i]
+                if new_ra['resource_type'] == 'NETWORK':
+                    # We need to set the network ID for the resource attribute
+                    new_ra['network_id'] = new_ra['resource_id']
+                if new_ra['resource_type'] == 'NODE':
+                    # We need to set the node ID for the resource attribute
+                    new_ra['node_id'] = new_ra['resource_id']
                 recorder_name = self.recorder_ra_map[
                     (new_ra['ref_key'], new_ra.get('node_id', new_ra.get('network_id')), new_ra['attr_id'])
                 ]

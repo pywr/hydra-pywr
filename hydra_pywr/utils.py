@@ -1,6 +1,7 @@
 import os
 import pandas
 from urllib.parse import urlparse
+import hashlib
 from hydra_network_utils import data as data_utils
 
 import logging
@@ -240,6 +241,12 @@ def retrieve_url(url, urldir):
     log.info(f"Retrieved {filedest} ({os.stat(filedest).st_size} bytes)")
     return filedest
 
+def file_hash(filepath):
+    hasher = hashlib.md5()
+    with open(filepath, 'rb') as f:
+        buf = f.read()
+        hasher.update(buf)
+    return hasher.hexdigest()
 
 def retrieve_s3(s3path, datadir):
     try:
@@ -247,7 +254,7 @@ def retrieve_s3(s3path, datadir):
     except ImportError:
         log.error("Retrieval from S3 url requires the s3fs module")
         raise
-
+    log.info("Downloading Data Files...")
     filedest = url_to_local_path(s3path, datadir)
 
     if not os.path.exists(datadir):
@@ -258,15 +265,57 @@ def retrieve_s3(s3path, datadir):
     elif not os.path.isdir(datadir):
         raise OSError(f"Destination '{datadir}' is not a directory")
 
-    #assume credential are in the ~/.aws/credentials file
+    # Assume credentials are in the ~/.aws/credentials file
     fs = s3fs.S3FileSystem()
-    log.info(f"Retrieving {s3path} to {filedest} ...")
+    log.info(f"Checking if {filedest} needs to be retrieved...")
 
     try:
+        if os.path.exists(filedest):
+            with fs.open(s3path, 'rb') as s3file:
+                s3_hash = hashlib.md5(s3file.read()).hexdigest()
+            local_hash = file_hash(filedest)
+            if s3_hash == local_hash:
+                log.info(f"File {filedest} is already up-to-date.")
+                return filedest
+            else:
+                log.info(f"File {filedest} differs from the S3 version. Downloading new version...")
+        else:
+            log.info(f"File {filedest} does not exist. Downloading...")
+
         fs.get(s3path, filedest)
     except Exception as e:
-        raise Exception(f"Unable to access data in s3 bucket {s3path}. Error is {e}")
+        raise Exception(f"Unable to access data in S3 bucket {s3path}. Error is {e}")
 
     log.info(f"Retrieved {filedest} ({os.stat(filedest).st_size} bytes)")
 
     return filedest
+
+# def retrieve_s3(s3path, datadir):
+#     try:
+#         import s3fs
+#     except ImportError:
+#         log.error("Retrieval from S3 url requires the s3fs module")
+#         raise
+
+#     filedest = url_to_local_path(s3path, datadir)
+
+#     if not os.path.exists(datadir):
+#         try:
+#             os.makedirs(datadir)
+#         except OSError as err:
+#             raise OSError(f"Unable to create S3 retrieval directory at {datadir}: {err}")
+#     elif not os.path.isdir(datadir):
+#         raise OSError(f"Destination '{datadir}' is not a directory")
+
+#     #assume credential are in the ~/.aws/credentials file
+#     fs = s3fs.S3FileSystem()
+#     log.info(f"Retrieving {s3path} to {filedest} ...")
+
+#     try:
+#         fs.get(s3path, filedest)
+#     except Exception as e:
+#         raise Exception(f"Unable to access data in s3 bucket {s3path}. Error is {e}")
+
+#     log.info(f"Retrieved {filedest} ({os.stat(filedest).st_size} bytes)")
+
+#     return filedest

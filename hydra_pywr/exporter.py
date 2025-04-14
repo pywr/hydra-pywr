@@ -198,7 +198,7 @@ class HydraToPywrNetwork():
 
         # Some types may be defined on parent templates
         # Identify these and add to type_id_map
-
+        self.parent_templates = {}
         pending_types = {}
         for tt in self.type_id_map.values():
             parent_type = None
@@ -206,13 +206,15 @@ class HydraToPywrNetwork():
                 parent_template_id = self.template.parent_id
                 while parent_template_id and not parent_type:
                     try:
-                        parent_type = self.hydra.get_templatetype_by_name(
-                                      template_id=parent_template_id,
-                                      type_name=tt.name)
-                        break
+                        parent_template = self.get_parent_template(parent_template_id)
+
+                        for pt in parent_template.templatetypes:
+                            if pt.name == tt.name:
+                                parent_type = pt
+                                break
                     except RequestError:
                         # Type is not defined on immediate parent, so ascend
-                        ptemp = self.hydra.get_template(template_id=parent_template_id)
+                        ptemp = self.parent_templates[parent_template_id]
                         parent_template_id = ptemp.parent_id
 
                 if parent_type:
@@ -238,6 +240,13 @@ class HydraToPywrNetwork():
         self.scenarios = []
         self.scenario_combinations = None
 
+    def get_parent_template(self, parent_template_id):
+        if parent_template_id not in self.parent_templates:
+            parent_template = self.hydra.get_template(template_id=parent_template_id)
+            self.parent_templates[parent_template_id] = parent_template
+        else:
+            parent_template = self.parent_templates[parent_template_id]
+        return parent_template
 
     @classmethod
     def from_scenario_id(cls, client, scenario_id, template_id=None, index=0, **kwargs):
@@ -260,7 +269,7 @@ class HydraToPywrNetwork():
                     scenario = client.get_scenario(scenario_id=scenario_id,
                                                    include_data=True,
                                                    include_results=False,
-                                                   include_metadata=True,
+                                                   include_metadata=False,
                                                    include_attr=False)
 
                     with open(scen_cache_path, 'w') as fp:
@@ -288,7 +297,12 @@ class HydraToPywrNetwork():
                     json.dump(JSONObject(network), fp)
                 log.info(f"Cached network written to '{net_cache_path}'")
         else:
-            scenario = client.get_scenario(scenario_id=scenario_id, include_data=True, include_results=False, include_metadata=True, include_attr=False)
+            scenario = client.get_scenario(
+                scenario_id=scenario_id,
+                include_data=True,
+                include_results=False,
+                include_metadata=False,
+                include_attr=False)
             network_id = scenario.network_id
             network = client.get_network(
                         network_id=network_id,
@@ -386,6 +400,16 @@ class HydraToPywrNetwork():
         self.filedict = {}
 
         appdata = self.data.get('appdata', {})
+
+        if appdata is None:
+            appdata = {}
+
+        if isinstance(appdata, str):
+            try:
+                appdata = json.loads(appdata)
+            except:
+                log.warning("Unable to parse appdata: %s. Defaulting to {}", appdata)
+                appdata = {}
 
         #Files uploaded to the USER_FILE_UPLOAD_DIR are synchronized with the USER_FILE_ROOT_DIR
         #So they are then downloaded from the USER_FILE_ROOT_DIR
