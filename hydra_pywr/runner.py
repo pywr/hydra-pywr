@@ -747,7 +747,6 @@ class PywrHydraRunner(HydraToPywrNetwork):
         df_recorder_ra_id_map = self.add_resource_attributes(self._df_recorders, is_dataframe=True)
         non_df_recorder_ra_id_map = self.add_resource_attributes(self._non_df_recorders, is_dataframe=False)
 
-
         for recorder in self._df_recorders:
             
             try:
@@ -842,6 +841,9 @@ class PywrHydraRunner(HydraToPywrNetwork):
                         data_type = "scalar"
                 except NotImplementedError:
                     continue
+
+            if non_df_recorder_ra_id_map.get(recorder.name+'_value') is None:
+                continue
 
             resource_scenario = self._make_recorder_resource_scenario(recorder,
                                                                       value,
