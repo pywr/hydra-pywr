@@ -772,7 +772,7 @@ class HydraToPywrNetwork():
             Get the dataset for a resource attribute id. If the dataset is not in the map,
             search the scenario for the resource scenario with the matching resource attribute id.
         """
-        if self.ra_dataset_map is None:
+        if len(self.ra_dataset_map) == 0:
             self.make_ra_dataset_map()
         # Check if the resource attribute id is in the map
         if ra_id in self.ra_dataset_map:
