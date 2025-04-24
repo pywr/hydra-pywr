@@ -199,6 +199,7 @@ class HydraToPywrNetwork():
         # Some types may be defined on parent templates
         # Identify these and add to type_id_map
         self.parent_templates = {}
+        self.ra_dataset_map = {}
         pending_types = {}
         for tt in self.type_id_map.values():
             parent_type = None
@@ -589,6 +590,7 @@ class HydraToPywrNetwork():
         return tables
 
     def build_timestepper(self):
+        log.info("Building timestepper")
         timestep = {}
         ts_attr_prefix = "timestepper"
         ts_keys = ("start", "end", "timestep")
@@ -622,6 +624,7 @@ class HydraToPywrNetwork():
             tv = ts_val
         timestep["timestep"] = tv
         validate_timestep(timestep)
+        log.info("Timestepper built.")
         return PywrTimestepper(timestep)
 
 
@@ -758,9 +761,24 @@ class HydraToPywrNetwork():
 
         return attr_data # NB: String keys
 
+    def make_ra_dataset_map(self):
+        scenario = self.data.scenarios[0]
+        for rs in scenario.resourcescenarios:
+            if rs.resource_attr_id not in self.ra_dataset_map:
+                self.ra_dataset_map[rs.resource_attr_id] = rs.dataset
 
     def get_dataset_by_resource_attr_id(self, ra_id):
-
+        """
+            Get the dataset for a resource attribute id. If the dataset is not in the map,
+            search the scenario for the resource scenario with the matching resource attribute id.
+        """
+        if len(self.ra_dataset_map) == 0:
+            self.make_ra_dataset_map()
+        # Check if the resource attribute id is in the map
+        if ra_id in self.ra_dataset_map:
+            return self.ra_dataset_map[ra_id]
+        
+        # If not in the map, we need to search the scenario
         scenario = self.data.scenarios[0]
         for rs in scenario.resourcescenarios:
             if rs.resource_attr_id == ra_id:
