@@ -762,8 +762,8 @@ class HydraToPywrNetwork():
         return attr_data # NB: String keys
 
     def make_ra_dataset_map(self):
-
-        for rs in secenario.resourcescenarios:
+        scenario = self.data.scenarios[0]
+        for rs in scenario.resourcescenarios:
             if rs.resource_attr_id not in self.ra_dataset_map:
                 self.ra_dataset_map[rs.resource_attr_id] = rs.dataset
 
