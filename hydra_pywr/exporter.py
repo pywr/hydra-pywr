@@ -830,8 +830,11 @@ class HydraToPywrNetwork():
                 if isinstance(typedval, dict):
                     typedval = utils.unnest_parameter_key(typedval, key="pandas_kwargs")
                     typedval = utils.add_interp_kwargs(typedval)
-            except json.decoder.JSONDecodeError as e:
+            except (json.decoder.JSONDecodeError, TypeError) as e:
                 typedval = value
+            except Exception as e:
+                log.critical(f"Error parsing value for attribute {attribute_name} on node {nodedata['name']}: {e}")
+                exit(1)
 
             #If the attribute name is defined on the node type, put it on the node
             if attribute_name in node_type_attribute_names or attribute_name in ('weather', 'bathymetry', 'release_values'):

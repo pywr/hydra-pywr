@@ -773,7 +773,11 @@ class PywrHydraRunner(HydraToPywrNetwork):
                 df.columns = new_col_names
 
             if "__:" in recorder.name:
-                nodename, attrname = parse_reference_key(recorder.name)
+                try:
+                    nodename, attrname = parse_reference_key(recorder.name)
+                except Exception as e:
+                    log.critical(f"Unable to process result for recorder recorder {recorder.name}: Unable to parse the name.")
+                    continue
             else:
                 nodename = "network"
                 attrname = recorder.name
