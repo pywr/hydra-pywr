@@ -726,7 +726,10 @@ class PywrHydraRunner(HydraToPywrNetwork):
         for chunk in chunked_iterable(resource_attributes_to_add, 100):
             new_ids = self.hydra.add_resource_attributes(resource_attributes=chunk)
             for i, new_ra in enumerate(chunk):
-                new_ra['id'] = new_ids[i]
+                key = (new_ra["resource_id"], new_ra["attr_id"])
+                if key not in new_ids:
+                    continue
+                new_ra['id'] = new_ids[key]
                 if new_ra['resource_type'] == 'NETWORK':
                     # We need to set the network ID for the resource attribute
                     new_ra['network_id'] = new_ra['resource_id']
@@ -748,7 +751,6 @@ class PywrHydraRunner(HydraToPywrNetwork):
         non_df_recorder_ra_id_map = self.add_resource_attributes(self._non_df_recorders, is_dataframe=False)
 
         for recorder in self._df_recorders:
-            
             try:
                 df = recorder.to_dataframe()
             except NotImplementedError:
