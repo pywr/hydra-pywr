@@ -219,6 +219,15 @@ class PywrHydraRunner(HydraToPywrNetwork):
         log.info("Model file saved to s3 bucket %s", self.bucket_name)
         self.using_s3 = True
 
+    def zip_results(self):
+        import zipfile
+        zip_path = os.path.join(self.data_dir, f"results_{self.scenario_id}.zip")
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for file in os.listdir(self.results_location):
+                if file.endswith('.h5'):
+                    abs_path = os.path.join(self.results_location, file)
+                    zipf.write(abs_path, arcname=file)
+
     def get_file(self):
         if self.using_s3:
             #get the file from s3
@@ -630,8 +639,10 @@ class PywrHydraRunner(HydraToPywrNetwork):
             resultstore.close()
 
         log.info("Results stored to: %s", self.results_location)
-
+        
         self.save_results_to_s3()
+
+        self.zip_results()
 
     def add_resource_attributes(self, recorders, is_dataframe):
         """
@@ -706,7 +717,7 @@ class PywrHydraRunner(HydraToPywrNetwork):
                                                                 ref_key=resource_type,
                                                                 ref_id=resource_id,
                                                                 attr_id=attribute['id'],
-                                                                is_var='Y',
+                                                                attr_is_var='Y',
                                                                 error_on_duplicate='N'))
                 self.recorder_ra_map[(resource_type, resource_id, attribute['id'])] = recorder_name
 
