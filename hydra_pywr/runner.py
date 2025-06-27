@@ -242,9 +242,9 @@ class PywrHydraRunner(HydraToPywrNetwork):
             #sync to the bucket location
             s3.download_file(self.bucket_name, f"{self.s3_path}/{os.path.basename(self.modelfile)}", self.modelfile)
             log.info("Model file downloaded from s3 bucket %s", self.bucket_name)
-            
+
         return self.modelfile
-        
+
     def _copy_scenario(self):
         # Now construct a scenario object
         scenario = self.data.scenarios[0]
@@ -639,7 +639,7 @@ class PywrHydraRunner(HydraToPywrNetwork):
             resultstore.close()
 
         log.info("Results stored to: %s", self.results_location)
-        
+
         self.save_results_to_s3()
 
         self.zip_results()
@@ -735,7 +735,14 @@ class PywrHydraRunner(HydraToPywrNetwork):
                 yield chunk
 
         for chunk in chunked_iterable(resource_attributes_to_add, 100):
-            new_ids = self.hydra.add_resource_attributes(resource_attributes=chunk)
+            returned_new_ids = self.hydra.add_resource_attributes(resource_attributes=chunk)
+
+            #based on the data returned by add_resource_attributes, we need to reverse the map
+            #to make lookups easier, so the key is the (resource_id, attr_id) tuple and the value is the new resource attribute ID
+            new_ids = {}
+            for ra_id, metadata in returned_new_ids.items():
+                new_ids[tuple(metadata)] = ra_id
+
             for i, new_ra in enumerate(chunk):
                 key = (new_ra["resource_id"], new_ra["attr_id"])
                 if key not in new_ids:
