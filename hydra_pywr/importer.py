@@ -19,7 +19,6 @@ from .datatypes import (
 
 from pywrparser.types.network import PywrNetwork
 
-from hydra_base.lib.objects import JSONObject
 
 import logging
 log = logging.getLogger(__name__)
@@ -58,8 +57,8 @@ def import_json(client, filename, project_id, template_id, network_name, *args, 
         pnet.add_recorder_references()
         pnet.promote_inline_parameters()
         pnet.promote_inline_recorders()
-        pnet.attach_reference_parameters()
-        pnet.attach_reference_recorders()
+        # pnet.attach_reference_parameters()
+        # pnet.attach_reference_recorders()
         #pnet.detach_parameters()
 
 
@@ -132,7 +131,13 @@ class PywrToHydraNetwork():
         for attr in self.hydra_attributes:
             if attr["name"].lower() == attr_name.lower():
                 return attr["id"]
-        log.critical(f"Attr {attr_name} not registered")
+
+        log.warning(f"Attr {attr_name} not registered. Attempting to register...")
+
+        attr = self.hydra.add_attribute(attr={'name': attr_name})
+        self.hydra_attributes.append(attr)
+
+        return attr['id']
 
     def get_next_node_id(self):
         self._next_node_id -= 1
@@ -150,6 +155,8 @@ class PywrToHydraNetwork():
         for node in self.hydra_nodes:
             if node["name"] == name:
                 return node
+        else:
+            raise ValueError(f"Node with name '{name}' not found in the model.")
 
     def make_hydra_attr(self, name, desc=None):
         return { "name": name,
@@ -205,7 +212,7 @@ class PywrToHydraNetwork():
 
         """ Assemble complete network """
         network_name = self.network.metadata.data["title"]
-        network_description = self.network.metadata.data["description"]
+        network_description = self.network.metadata.data.get("description", "")
         self.network_hydratype = self.get_hydra_network_type()
 
         self.hydra_network = {
@@ -342,7 +349,9 @@ class PywrToHydraNetwork():
 
 
     def make_typed_resource_scenario(self, element, attr_name, local_attr_id):
+
         hydra_datatype = self.lookup_hydra_datatype(element)
+
         dataset = { "name":  attr_name,
                     "type":  hydra_datatype,
                     "value": element.as_json(),
@@ -361,6 +370,7 @@ class PywrToHydraNetwork():
     def make_network_resource_scenario(self, element, attr_name, local_attr_id):
 
         value = element.data[attr_name]
+
         hydra_datatype = self.lookup_hydra_datatype(value)
 
         dataset = { "name":  attr_name,
@@ -399,6 +409,9 @@ class PywrToHydraNetwork():
     def make_resource_scenario(self, element, attr_name, local_attr_id):
 
         value = element.data[attr_name]
+        if value is None:
+            return None
+
         hydra_datatype = self.lookup_hydra_datatype(value)
 
         dataset = { "name":  attr_name,
@@ -418,12 +431,18 @@ class PywrToHydraNetwork():
 
 
     def lookup_hydra_datatype(self, attr_value):
-        if isinstance(attr_value, Number):
+
+        if attr_value is None:
+            return None
+        elif isinstance(attr_value, Number):
             return "SCALAR"
         elif isinstance(attr_value, list):
             return "ARRAY"
         elif isinstance(attr_value, dict):
+            if 'index' in attr_value and 'table' in attr_value:
+                return "DESCRIPTOR"
             return "DATAFRAME"
+        
         elif isinstance(attr_value, str):
             return "DESCRIPTOR"
         elif isinstance(attr_value, PywrTable):
@@ -436,7 +455,6 @@ class PywrToHydraNetwork():
             return lookup_parameter_hydra_datatype(attr_value)
         elif isinstance(attr_value, PywrRecorder):
             return lookup_recorder_hydra_datatype(attr_value)
-
         raise ValueError(f"Unknown data type: '{attr_value}'")
 
 
@@ -456,7 +474,8 @@ class PywrToHydraNetwork():
                 if ra["attr_id"] == None:
                     raise ValueError(f"Node '{node.name}' attr '{attr_name}' has invalid attr id: \'{ra['attr_id']}\'")
                 resource_attributes.append(ra)
-                resource_scenarios.append(rs)
+                if rs is not None:
+                    resource_scenarios.append(rs)
 
             hydra_node = {}
             hydra_node["resource_type"] = "NODE"
@@ -471,15 +490,15 @@ class PywrToHydraNetwork():
                                   }]
             if "position" in node.data:
                 proj_data = node.data["position"]
-                for coords in proj_data.values():
-                    if "geographic" in coords:
-                        coords = coords["geographic"]
-                    elif "schematic" in coords:
-                        coords = coords["schematic"]
-                    if isinstance(coords, list):
-                        x, y = coords[0], coords[1]
-                    elif isinstance(coords, dict):
-                        hydra_node['layout']['geojson'] = coords
+                if "geographic" in proj_data:
+                    coords = proj_data["geographic"]
+                elif "schematic" in proj_data:
+                    coords = proj_data["schematic"]
+
+                if isinstance(coords, list):
+                    x, y = coords[0], coords[1]
+                elif isinstance(coords, dict):
+                    hydra_node['layout']['geojson'] = coords
                 hydra_node["x"] = x
                 hydra_node["y"] = y
             else:
@@ -563,8 +582,7 @@ class PywrToHydraNetwork():
 
     def add_network_to_hydra(self):
         """ Pass network to Hydra"""
-        network = JSONObject(self.hydra_network)
-        network_summary = self.hydra.add_network({"net": network})
+        network_summary = self.hydra.add_network({"net": self.hydra_network})
         return network_summary
 
 

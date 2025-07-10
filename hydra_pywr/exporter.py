@@ -545,9 +545,19 @@ class HydraToPywrNetwork():
 
             if hydra_edge["types"][0]["name"].lower() == "slottededge":
                 for slot in ("src_slot", "dest_slot"):
-                    slot_id = [attr.id for attr in hydra_edge["attributes"] if attr.name == slot][0]
-                    slot_ds = self.get_dataset_by_resource_attr_id(slot_id)
-                    verts.append(slot_ds.value if slot_ds else None)
+                    slot_id = [attr.id for attr in hydra_edge["attributes"] if attr.name == slot]
+                    if not slot_id:
+                        log.warning(f"Edge {hydra_edge['name']} missing slot attribute {slot}")
+                        verts.append(None)
+                        continue
+                    slot_ds = self.get_dataset_by_resource_attr_id(slot_id[0])
+                    if slot_ds:
+                        val = slot_ds.value
+                        if val == "None":
+                            val = None
+                        verts.append(val)
+                    else:
+                        verts.append(None)
 
             edge = PywrEdge(verts)
             edges.append(edge)
