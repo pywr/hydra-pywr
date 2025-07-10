@@ -38,12 +38,13 @@ def run_file(filename, domain, output_file):
     pfr.run_pywr_model(output_file)
 
 
-def run_network_scenario(client, scenario_id, template_id, domain,
-                         solver=None, data_dir='/tmp'):
+def run_network_scenario(client, scenario_id, template_id,
+                         solver=None, data_dir='/tmp', use_cache=False, **kwargs):
 
     runner = PywrHydraRunner.from_scenario_id(client, scenario_id,
                                              template_id=template_id,
-                                             data_dir=data_dir)
+                                             data_dir=data_dir,
+                                             use_cache=use_cache)
     runner.setup(solver=solver)
     runner.run_pywr_model()
     runner.save_pywr_results()
@@ -91,7 +92,7 @@ class PywrFileRunner():
         if warnings:
             for component, warns in warnings.items():
                 for warn in warns:
-                    log.info(warn)
+                    log.warning(warn)
 
         if errors:
             for component, errs in errors.items():
@@ -531,10 +532,7 @@ class PywrHydraRunner(HydraToPywrNetwork):
                         name = '__{}__:{}'.format(node.name, 'simulated_volume')
                         NumpyArrayStorageRecorder(model, node, name=name)
                     else:
-                        import warnings
-                        warnings.warn('Unrecognised node subclass "{}" with name "{}" for timeseries recording. Skipping '
-                                      'recording this node.'.format(node.__class__.__name__, node.name),
-                                      RuntimeWarning)
+                        log.warning(f'Unrecognised node subclass "{node.__class__.__name__}" with name "{node.name}" for timeseries recording. Skipping recording this node.')
 
                 elif flag == 'deficit':
                     if isinstance(node, Node):
@@ -542,10 +540,7 @@ class PywrHydraRunner(HydraToPywrNetwork):
                         name = '__{}__:{}'.format(node.name, 'simulated_deficit')
                         NumpyArrayParameterRecorder(model, deficit_parameter, name=name)
                     else:
-                        import warnings
-                        warnings.warn('Unrecognised node subclass "{}" with name "{}" for deficit recording. Skipping '
-                                      'recording this node.'.format(node.__class__.__name__, node.name),
-                                      RuntimeWarning)
+                        log.warning(f'Unrecognised node subclass "{node.__class__.__name__}" with name "{node.name}" for deficit recording. Skipping recording this node.')
 
     def _add_parameter_flagged_recorders(self, model):
         for parameter_name, flags in self._parameter_recorder_flags.items():
@@ -774,6 +769,10 @@ class PywrHydraRunner(HydraToPywrNetwork):
             except NotImplementedError:
                 continue
 
+            if len(df.columns) == 0:
+                log.warning(f"Recorder {recorder.name} has no data to save.")
+                continue
+
             columns = []
             for name in df.columns.names:
                 columns.append([f'{name}: {v}' for v in df.columns.get_level_values(name)])
@@ -791,6 +790,7 @@ class PywrHydraRunner(HydraToPywrNetwork):
                 for colname in df.columns:
                     new_col_names.append(colname.split(':')[1].strip())
                 df.columns = new_col_names
+
 
             if "__:" in recorder.name:
                 try:
