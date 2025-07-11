@@ -132,7 +132,6 @@ def run(obj, scenario_id, template_id, domain, output_frequency, solver, data_di
     runner.run_network_scenario(client,
                                 scenario_id,
                                 template_id,
-                                domain,
                                 output_frequency,
                                 data_dir=data_dir)
 
