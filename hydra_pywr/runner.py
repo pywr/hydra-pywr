@@ -679,16 +679,25 @@ class PywrHydraRunner(HydraToPywrNetwork):
                     if network_ra['attr_id'] == attribute['id']:
                         resource_attribute_id = network_ra['id']
             else:
-                # try:
-                #     self._get_resource_attribute_id(recorder_node.name, attribute_name)
-                # except:
-                #     breakpoint()
-                #     self._get_resource_attribute_id(recorder_node.name,attribute_name)
+                resource_attribute_id = None
 
                 try:
                     resource_attribute_id = self._get_resource_attribute_id(recorder_node.name,
                                                                             attribute_name)
                 except ValueError:
+                    log.info("Unable to find resource attribute for node {} and attribute {}. Trying parent node.".format(recorder_node.name, attribute_name))
+                
+                if resource_attribute_id is None:
+
+                    try:
+                        if hasattr(recorder_node, 'parent') and recorder_node.parent is not None:
+                             resource_attribute_id = self._get_resource_attribute_id(recorder_node.parent.name,attribute_name)
+                        else:
+                            log.info("Node {} does not have a parent, and the attribute {} is not defined for it.".format(recorder_node.name, attribute_name))
+                    except ValueError:
+                        log.info("Unable to find resource attribute for node {} and attribute {}. Trying parent node.".format(recorder_node.name, attribute_name))
+                
+                if resource_attribute_id is None:
                     if recorder_node is None:
                         recorder_node_name = recorder.name.split('__:')[0].replace('__', '')
                     else:
