@@ -3,7 +3,7 @@ import pandas
 
 from hydra_client.connection import RemoteJSONConnection
 
-from hydra_client.click import hydra_app, make_plugins, write_plugins
+from hydra_client.click import hydra_app
 
 from . import runner
 from . import exporter
@@ -132,7 +132,6 @@ def run(obj, scenario_id, template_id, domain, output_frequency, solver, data_di
     runner.run_network_scenario(client,
                                 scenario_id,
                                 template_id,
-                                domain,
                                 output_frequency,
                                 data_dir=data_dir)
 
@@ -195,16 +194,6 @@ def step_game(obj, scenario_id, child_scenario_ids, filename, attribute_name, in
         utils.import_dataframe(client, dataframe, new_scenario_id, attribute_name,
                                create_new=create_new, data_type=data_type, column=column_name)
         utils.progress_start_end_dates(client, new_scenario_id)
-
-
-@cli.command()
-@click.pass_obj
-@click.argument('docker-image', type=str, default=None)
-def register(obj, docker_image):
-    """ Register the app with the Hydra installation. """
-    plugins = make_plugins(cli, 'hydra-pywr', docker_image=docker_image)
-    app_name = docker_image.replace('/', '-').replace(':', '-')
-    write_plugins(plugins, app_name)
 
 
 @cli.group()
