@@ -3,11 +3,12 @@ import pandas
 
 from hydra_client.connection import RemoteJSONConnection
 
-from hydra_client.click import hydra_app, make_plugins, write_plugins
+from hydra_client.click import hydra_app
 
 from . import runner
 from . import exporter
 from . import importer
+from . import resultsprocessor
 
 from .template import register_template, unregister_template, migrate_network_template, TemplateExistsError
 from . import utils
@@ -110,7 +111,6 @@ def purge_cache(cache_path):
     fc = FileCache(cache_path)
     fc.purge_all()
 
-
 @hydra_app(category='model', name='Run Pywr')
 @cli.command(context_settings=dict(
     ignore_unknown_options=True,
@@ -195,54 +195,3 @@ def step_game(obj, scenario_id, child_scenario_ids, filename, attribute_name, in
         utils.import_dataframe(client, dataframe, new_scenario_id, attribute_name,
                                create_new=create_new, data_type=data_type, column=column_name)
         utils.progress_start_end_dates(client, new_scenario_id)
-
-
-@cli.command()
-@click.pass_obj
-@click.argument('docker-image', type=str, default=None)
-def register(obj, docker_image):
-    """ Register the app with the Hydra installation. """
-    plugins = make_plugins(cli, 'hydra-pywr', docker_image=docker_image)
-    app_name = docker_image.replace('/', '-').replace(':', '-')
-    write_plugins(plugins, app_name)
-
-
-@cli.group()
-def template():
-    pass
-
-
-@template.command('register')
-@click.option('-c', '--config', type=str, default='full')
-@click.option('--update/--no-update', default=False)
-@click.pass_obj
-def template_register(obj, config, update):
-    """ Register a Pywr template with Hydra. """
-
-    client = get_logged_in_client(obj)
-    try:
-        register_template(client, config_name=config, update=update)
-    except TemplateExistsError:
-        click.echo('The template is already registered. To force an updated use the --update option.')
-
-
-@template.command('unregister')
-@click.option('-c', '--config', type=str, default='full')
-@click.pass_obj
-def template_unregister(obj, config):
-    """ Unregister a Pywr template with Hydra. """
-    client = get_logged_in_client(obj)
-    if click.confirm('Are you sure you want to remove the template? '
-                     'This will invalidate any existing networks that use the template.'):
-        unregister_template(client, config_name=config)
-
-
-@template.command('migrate')
-@click.argument('network-id', type=int)
-@click.option('--template-name', type=str, default=None)
-@click.option('--template-id', type=int, default=None)
-@click.pass_obj
-def template_migrate(obj, network_id, template_name, template_id):
-    client = get_logged_in_client(obj)
-    if click.confirm('Are you sure you want to migrate network {} to a new template?'.format(network_id)):
-        migrate_network_template(client, network_id, template_name=template_name, template_id=template_id)
