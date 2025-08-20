@@ -205,11 +205,25 @@ class PywrToHydraNetwork():
 
         """ Assemble complete network """
         network_name = self.network.metadata.data["title"]
+
+        project = self.hydra.get_project(project_id=self.project_id)
+        network_names = [n["name"] for n in project["networks"]]
+        hydra_network_name = network_name
+        for i in range(1, 100):
+            try:
+                if i == 0:
+                    hydra_network_name = network_name
+                else:
+                    hydra_network_name = f"{network_name} ({i})"
+                if hydra_network_name not in network_names:
+                    break
+            except Exception as e:
+                continue
         network_description = self.network.metadata.data["description"]
         self.network_hydratype = self.get_hydra_network_type()
 
         self.hydra_network = {
-            "name": network_name,
+            "name": hydra_network_name,
             "description": network_description,
             "project_id": self.project_id,
             "nodes": self.hydra_nodes,

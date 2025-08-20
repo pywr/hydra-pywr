@@ -1,0 +1,75 @@
+[
+    {
+        "_id": "RUN_UUID",
+        "scenario_id": 12345,
+        "cr_date": "2023-10-01T12:00:00Z"
+    }
+],
+[ // name of this collection is RUN_UUID
+    {
+        "_id": "12345",
+        "type": "scenario",
+        "scenario_id": 12345,
+        "cr_date": "2023-10-01T12:00:00Z"
+    },
+    {   
+        "type": "attribute",
+        "_id": "simulated_evaporation",
+        "label": "Simulated Evaporation",
+        "description": "Simulated evaporation rate",
+        "unit": "m/s"
+    },
+    {
+        "_id": "bucket1",
+        "type": "bucket",
+        "prefix": "s3://path_to_bucket_/bucket_uuid/"
+    },
+    {
+        "type": "node",
+        "_id": "1",
+        "attributes": {
+            "simulated_evaporation": {
+                "value": "{buckets:bucket1}/simulated_evaporation.h5",
+                "metadata": {
+                    "xAxisLabel": "Simulated Evaporation"
+                }
+            }
+        }
+    },
+        {
+        "type": "node",
+        "_id": "2",
+        "attributes": {
+            "simulated_flow": {
+                "value": "{buckets:bucket1}/simulated_evaporation.h5",
+                "metadata": {
+                    "xAxisLabel": "Simulated Evaporation"
+                }
+            }
+        }
+    },
+    {
+        "type": "link",
+        "_id": "1",
+        "attributes": {
+            "simulated_evaporation": {
+                "value": 100,
+                "metadata": {
+                    "source": "sensor"
+                }
+            }
+        }
+    },
+    {
+        "type": "network",
+        "_id": "1",
+        "attributes": {
+            "simulated_evaporation": {
+                "value": 100,
+                "metadata": {
+                    "source": "sensor"
+                }
+            }
+        }
+    }
+]
