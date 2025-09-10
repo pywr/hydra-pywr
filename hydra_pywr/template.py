@@ -1,13 +1,9 @@
 """ Module to generate a Hydra template from Pywr.
 """
-from pywr.domains.river import *
-from pywr.recorders import NumpyArrayNodeRecorder, NumpyArrayStorageRecorder
-import pywr
 import os
 import json
-import copy
-from hydra_base.exceptions import HydraError
 
+import copy
 PYWR_EDGE_LINK_NAME = 'edge'
 PYWR_SPLIT_LINK_TYPES = ['riversplit', 'riversplitwithgauge', 'multisplitlink']
 PYWR_CONSTRAINED_EDGE_LINK_NAME = 'constrained edge'
@@ -15,18 +11,28 @@ PYWR_CONSTRAINED_EDGE_ATTRIBUTES = ('min_flow', 'max_flow', 'cost')
 
 PYWR_PROTECTED_NODE_KEYS = ('name', 'comment', 'type', 'position')
 
-PYWR_ARRAY_RECORDER_ATTRIBUTES = {
-    NumpyArrayNodeRecorder: 'simulated_flow',
-    NumpyArrayStorageRecorder: 'simulated_volume'
-}
 
-PYWR_OUTPUT_ATTRIBUTES = list(PYWR_ARRAY_RECORDER_ATTRIBUTES.values())
-PYWR_TIMESTEPPER_ATTRIBUTES = ('start', 'end', 'timestep')
-PYWR_DEFAULT_DATASETS = {
-    'start': {'data_type': 'descriptor', 'val': '2018-01-01', 'name': 'Default start date'},
-    'end': {'data_type': 'descriptor', 'val': '2018-12-31', 'name': 'Default end date'},
-    'timestep': {'data_type': 'scalar', 'val': 1, 'name': 'Default timestep'},
-}
+try:
+    from pywr.domains.river import *
+    from pywr.recorders import NumpyArrayNodeRecorder, NumpyArrayStorageRecorder
+    import pywr
+    from hydra_base.exceptions import HydraError
+
+
+    PYWR_ARRAY_RECORDER_ATTRIBUTES = {
+        NumpyArrayNodeRecorder: 'simulated_flow',
+        NumpyArrayStorageRecorder: 'simulated_volume'
+    }
+
+    PYWR_OUTPUT_ATTRIBUTES = list(PYWR_ARRAY_RECORDER_ATTRIBUTES.values())
+    PYWR_TIMESTEPPER_ATTRIBUTES = ('start', 'end', 'timestep')
+    PYWR_DEFAULT_DATASETS = {
+        'start': {'data_type': 'descriptor', 'val': '2018-01-01', 'name': 'Default start date'},
+        'end': {'data_type': 'descriptor', 'val': '2018-12-31', 'name': 'Default end date'},
+        'timestep': {'data_type': 'scalar', 'val': 1, 'name': 'Default timestep'},
+    }
+except ImportError:
+    print("Unable to import PYWR")
 
 CONFIG_DIR = os.path.join(os.path.dirname(__file__), 'template_configs')
 

@@ -510,6 +510,7 @@ class HydraToPywrNetwork():
 
 
     def build_pywr_nodes(self):
+        log.info("Building Pywr nodes")
 
         for node in self.data["nodes"]:
             pywr_node = {"name": node["name"]}
@@ -527,6 +528,7 @@ class HydraToPywrNetwork():
 
 
     def build_edges(self):
+        log.info("Building Pywr edges")
         edges = []
 
         for hydra_edge in self.data["links"]:
@@ -777,7 +779,7 @@ class HydraToPywrNetwork():
         # Check if the resource attribute id is in the map
         if ra_id in self.ra_dataset_map:
             return self.ra_dataset_map[ra_id]
-        
+
         # If not in the map, we need to search the scenario
         scenario = self.data.scenarios[0]
         for rs in scenario.resourcescenarios:

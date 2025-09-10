@@ -626,8 +626,9 @@ class PywrHydraRunner(HydraToPywrNetwork):
         for resource_scenario in self.generate_array_recorder_resource_scenarios():
             scenario['resourcescenarios'].append(resource_scenario)
 
-        for i in range(0, len(scenario['resourcescenarios']), 100):
-                chunk = scenario['resourcescenarios'][i:i+100]
+        chunk_size = 1000
+        for i in range(0, len(scenario['resourcescenarios']), chunk_size):
+                chunk = scenario['resourcescenarios'][i:i+chunk_size]
                 log.info('Saving %s datasets', len(chunk))
                 self.hydra.bulk_update_resourcedata(
                     scenario_ids=[scenario['id']],
@@ -734,7 +735,8 @@ class PywrHydraRunner(HydraToPywrNetwork):
             while chunk := list(islice(iterator, size)):
                 yield chunk
 
-        for chunk in chunked_iterable(resource_attributes_to_add, 100):
+        chunk_size = 1000
+        for chunk in chunked_iterable(resource_attributes_to_add, chunk_size):
             returned_new_ids = self.hydra.add_resource_attributes(resource_attributes=chunk)
 
             #based on the data returned by add_resource_attributes, we need to reverse the map
@@ -758,6 +760,7 @@ class PywrHydraRunner(HydraToPywrNetwork):
                     (new_ra['ref_key'], new_ra.get('node_id', new_ra.get('network_id')), new_ra['attr_id'])
                 ]
                 self.recorder_ra_id_map[recorder_name] = new_ra['id']
+
     def generate_array_recorder_resource_scenarios(self):
         """ Generate resource scenario data from NumpyArrayXXX recorders. """
         if self._df_recorders is None:
