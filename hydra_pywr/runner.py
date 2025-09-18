@@ -159,7 +159,7 @@ class PywrHydraRunner(HydraToPywrNetwork):
         tmpdir = tempfile.gettempdir()
         self.results_location = os.path.join(os.getenv("PYWR_RESULTS_LOCATION", tmpdir), str(self.scenario_id))
         os.makedirs(self.results_location, exist_ok=True)
-        self.bucket_name = os.getenv("PYWR_RESULTS_S3_BUCKET", 'pywr-results')
+        self.bucket_name = os.getenv("PYWR_RESULTS_S3_BUCKET", 'waterstrategy-results')
         hashkey = hashlib.sha256(randbytes(56)).hexdigest().encode('utf-8')
         self.s3_path = hmac.digest(hashkey, str(self.scenario_id).encode('utf-8'), hashlib.sha256).hex()
 
@@ -687,7 +687,7 @@ class PywrHydraRunner(HydraToPywrNetwork):
                                                                             attribute_name)
                 except ValueError:
                     log.info("Unable to find resource attribute for node {} and attribute {}. Trying parent node.".format(recorder_node.name, attribute_name))
-                
+
                 if resource_attribute_id is None:
 
                     try:
@@ -697,7 +697,7 @@ class PywrHydraRunner(HydraToPywrNetwork):
                             log.info("Node {} does not have a parent, and the attribute {} is not defined for it.".format(recorder_node.name, attribute_name))
                     except ValueError:
                         log.info("Unable to find resource attribute for node {} and attribute {}. Trying parent node.".format(recorder_node.name, attribute_name))
-                
+
                 if resource_attribute_id is None:
                     if recorder_node is None:
                         recorder_node_name = recorder.name.split('__:')[0].replace('__', '')
