@@ -89,6 +89,7 @@ class ResultsProcessor():
         """
             upload the h5 file results to s3
         """
+        log.info("Uploading results to s3 bucket %s", self.s3_path)
         resultfiles = list(self.resultstores.keys())
         for f in os.listdir(self.results_location):
             if f not in resultfiles:
