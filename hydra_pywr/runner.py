@@ -38,12 +38,12 @@ def run_file(filename, domain, output_file):
     pfr.run_pywr_model(output_file)
 
 
-def run_network_scenario(client, scenario_id, template_id, domain,
-                         solver=None, data_dir='/tmp'):
+def run_network_scenario(client, scenario_id, template_id,
+                         solver=None, data_dir='/tmp', use_cache=False):
 
     runner = PywrHydraRunner.from_scenario_id(client, scenario_id,
                                              template_id=template_id,
-                                             data_dir=data_dir)
+                                             data_dir=data_dir,use_cache=use_cache)
     runner.setup(solver=solver)
     runner.run_pywr_model()
     runner.save_results()
@@ -102,9 +102,9 @@ class PywrFileRunner():
         pywr_data = pnet.as_dict()
 
         model = Model.load(
-            pywr_data, 
+            pywr_data,
             solver=domain_solvers[self.domain] if solver is None else solver)
-        
+
         self.model = model
         return pywr_data
 
@@ -112,7 +112,7 @@ class PywrFileRunner():
     def run_pywr_model(self, outfile="output.csv"):
         if self.domain == "energy":
             from pywr_dcopf import core
-        
+
         if self.model is None:
             raise RuntimeError("Unable to run pywr model. No Pywr model loaded. Please load a model before running it.")
 
@@ -148,7 +148,7 @@ class PywrHydraRunner(HydraToPywrNetwork):
         tmpdir = tempfile.gettempdir()
         self.results_location = os.path.join(os.getenv("PYWR_RESULTS_LOCATION", tmpdir), str(self.scenario_id))
         os.makedirs(self.results_location, exist_ok=True)
-        self.bucket_name = os.getenv("PYWR_RESULTS_S3_BUCKET", 'pywr-results')
+        self.bucket_name = os.getenv("PYWR_RESULTS_S3_BUCKET", 'waterstrategy-results')
         hashkey = hashlib.sha256(randbytes(56)).hexdigest().encode('utf-8')
         self.s3_path = hmac.digest(hashkey, str(self.scenario_id).encode('utf-8'), hashlib.sha256).hex()
 
@@ -421,11 +421,11 @@ class PywrHydraRunner(HydraToPywrNetwork):
                     elif isinstance(node, (Storage)):
                         name = '__{}__:{}'.format(node.name, 'simulated_volume')
                         NumpyArrayStorageRecorder(model, node, name=name)
-                    else:
-                        import warnings
-                        warnings.warn('Unrecognised node subclass "{}" with name "{}" for timeseries recording. Skipping '
-                                      'recording this node.'.format(node.__class__.__name__, node.name),
-                                      RuntimeWarning)
+                    # else:
+                    #     import warnings
+                    #     warnings.warn('Unrecognised node subclass "{}" with name "{}" for timeseries recording. Skipping '
+                    #                   'recording this node.'.format(node.__class__.__name__, node.name),
+                    #                   RuntimeWarning)
 
                 elif flag == 'deficit':
                     if isinstance(node, Node):

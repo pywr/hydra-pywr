@@ -8,9 +8,18 @@ import json
 from pywrparser.utils import parse_reference_key
 import os
 import re
+import warnings
 from hydra_client.connection import RemoteJSONConnection
 
+# Suppress FutureWarning about deprecated 'A' frequency alias
+warnings.filterwarnings('ignore', 
+                       message="'A' is deprecated and will be removed in a future version, please use 'Y' instead.", 
+                       category=FutureWarning)
+
 log = logging.getLogger(__name__)
+
+class DebugError(Exception):
+    pass
 
 def get_results_processor(scenario_id:int,
                           df_recorders:list,
@@ -34,12 +43,13 @@ def get_results_processor(scenario_id:int,
         output_resample_freq=output_resample_freq,
         data_dir=data_dir
     )
+
     mongoResultsProcessor.connect()
     if mongoResultsProcessor.mongo_client is not None:
         return mongoResultsProcessor
     else:
         from .hydra import HydraResultsProcessor
-        hydraResultsProcessor = HydraResultsProcessor(        
+        hydraResultsProcessor = HydraResultsProcessor(
             scenario_id=scenario_id,
             df_recorders=df_recorders,
             non_df_recorders=non_df_recorders,
@@ -63,7 +73,7 @@ class ResultsProcessor():
         tmpdir = tempfile.gettempdir()
         self.results_location = os.path.join(os.getenv("PYWR_RESULTS_LOCATION", tmpdir), str(self.scenario_id))
         os.makedirs(self.results_location, exist_ok=True)
-        self.bucket_name = os.getenv("PYWR_RESULTS_S3_BUCKET", 'pywr-results')
+        self.bucket_name = os.getenv("PYWR_RESULTS_S3_BUCKET", 'waterstrategy-results')
         hashkey = hashlib.sha256(randbytes(56)).hexdigest().encode('utf-8')
         self.s3_path = hmac.digest(hashkey, str(self.scenario_id).encode('utf-8'), hashlib.sha256).hex()
         self.output_resample_freq = kwargs.get('output_resample_freq')
@@ -71,6 +81,7 @@ class ResultsProcessor():
         self.hydra_client = kwargs['hydra_client']
         self.hydra_template = kwargs['hydra_template']
         self.data_dir = kwargs.get('data_dir', '/tmp')
+        self.save_to_s3 = False
 
         self.node_lookup = {}
         self.node_attr_lookup = {}
@@ -112,7 +123,7 @@ class ResultsProcessor():
                 if file.endswith('.h5'):
                     abs_path = os.path.join(self.results_location, file)
                     zipf.write(abs_path, arcname=file)
-    
+
     def process_df_recorder(self, recorder):
 
         try:
@@ -153,25 +164,30 @@ class ResultsProcessor():
             nodename = "network"
             attrname = recorder.name
 
-        filename = f'{attrname}.h5'
-        resultstore = self.resultstores.get(filename)
-        if resultstore is None:
-            resultstore = pd.HDFStore(os.path.join(self.results_location, filename), mode='w')
-            self.resultstores[filename] = resultstore
+        #round to 3 decimal places
+        df = df.round(3)
 
-        noderef = re.sub(r'^[^a-zA-Z_]+|[^a-zA-Z0-9_]', '', nodename)
-        resultstore.put(f"{noderef}", df)
-        resultstore[f"{noderef}"].attrs['pandas_type'] = 'frame'
+        if self.save_to_s3 is True:
+            filename = f'{attrname}.h5'
+            resultstore = self.resultstores.get(filename)
+            if resultstore is None:
+                resultstore = pd.HDFStore(os.path.join(self.results_location, filename), mode='w')
+                self.resultstores[filename] = resultstore
 
-        # Convert to JSON for saving in hydra
-        value = json.dumps({
-            "data":
-            {
-                "url": f"s3://{self.bucket_name}/{self.s3_path}/{attrname}.h5",
-                "group": f"{noderef}"
-            }
-        })
+            noderef = re.sub(r'^[^a-zA-Z_]+|[^a-zA-Z0-9_]', '', nodename)
+            resultstore.put(f"{noderef}", df)
+            resultstore[f"{noderef}"].attrs['pandas_type'] = 'frame'
 
+            # Convert to JSON for saving in hydra
+            value = json.dumps({
+                "data":
+                {
+                    "url": f"s3://{self.bucket_name}/{self.s3_path}/{attrname}.h5",
+                    "group": f"{noderef}"
+                }
+            })
+        else:
+            value = df.to_json(date_format='iso', date_unit='s')
         #Use this later so we can create sensible labels and metadata
         #for when the data is back in hydra
         is_timeseries=False
@@ -257,16 +273,16 @@ class ResultsProcessor():
         return node
 
     def _get_hydra_node_from_recorder(self, recorder, pywr_node=None):
-        
+
         if pywr_node is None:
-            pywr_node = self._get_pywr_node_from_recorder(recorder) 
+            pywr_node = self._get_pywr_node_from_recorder(recorder)
 
         if pywr_node is None:
             return None
-        
+
         if pywr_node.name in self.node_lookup:
             return self.node_lookup[pywr_node.name]
         if pywr_node.parent is not None and pywr_node.parent.name in self.node_lookup:
             return self.node_lookup[pywr_node.parent.name]
-        
+
         return None

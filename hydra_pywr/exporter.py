@@ -777,7 +777,7 @@ class HydraToPywrNetwork():
         # Check if the resource attribute id is in the map
         if ra_id in self.ra_dataset_map:
             return self.ra_dataset_map[ra_id]
-        
+
         # If not in the map, we need to search the scenario
         scenario = self.data.scenarios[0]
         for rs in scenario.resourcescenarios:

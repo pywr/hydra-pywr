@@ -1,9 +1,5 @@
-import pandas as pd
 import logging
 import json
-from pywrparser.utils import parse_reference_key
-import os
-import re
 from . import ResultsProcessor
 
 log = logging.getLogger(__name__)
@@ -19,7 +15,7 @@ class HydraResultsProcessor(ResultsProcessor):
         self.hydra_client = kwargs['hydra_client']
         self.hydra_template = kwargs.get('hydra_template', None)
         self.hydra_attributes = kwargs['hydra_attributes']
-        
+
         self.attr_name_map = self.make_attr_name_map()
         self.attr_unit_map = self.make_attr_unit_map()
 
@@ -35,9 +31,9 @@ class HydraResultsProcessor(ResultsProcessor):
         # First add any new attributes required
         attribute_names = []
         for recorder in self.df_recorders:
-            attribute_names.append(self._get_attribute_name_from_recorder(recorder, is_dataframe=True))
+            attribute_names.append(self._get_attribute_name_from_recorder(recorder, is_dataframe=True)[0])
         for recorder in self.non_df_recorders:
-            attribute_names.append(self._get_attribute_name_from_recorder(recorder))
+            attribute_names.append(self._get_attribute_name_from_recorder(recorder)[0])
 
         attribute_names = set(attribute_names)
         attributes = []
@@ -115,8 +111,9 @@ class HydraResultsProcessor(ResultsProcessor):
 
         #get a mapping from recorder names to resource attribute IDs
         self.df_recorder_ra_id_map = self.add_resource_attributes(self.df_recorders, is_dataframe=True)
+
         self.non_df_recorder_ra_id_map = self.add_resource_attributes(self.non_df_recorders, is_dataframe=False)
-    
+
         for recorder in self.df_recorders:
             recorder_data = self.process_df_recorder(recorder)
 
@@ -156,7 +153,6 @@ class HydraResultsProcessor(ResultsProcessor):
     def make_dataset_resource_scenario(self, name, value, data_type, resource_attribute_id,
                                         unit_id=None, encode_to_json=False, metadata={}):
         """ A helper method to make a dataset, resource attribute and resource scenario. """
-        import json
 
         if data_type.lower() in ("descriptor", "scalar"):
             encode_to_json = False
@@ -191,8 +187,8 @@ class HydraResultsProcessor(ResultsProcessor):
         return resource_scenario
 
     def _make_recorder_resource_scenario(self, recorder, value, resource_attribute_id, data_type, is_timeseries=False, is_dataframe=False):
-        # Get the attribute and its ID
-        attribute_name = self._get_attribute_name_from_recorder(recorder, is_dataframe=is_dataframe)
+
+        attribute_name, recorder_node = self._get_attribute_name_from_recorder(recorder, is_dataframe=is_dataframe)
 
         attribute = self._get_attribute_from_name(attribute_name)
 
@@ -224,47 +220,42 @@ class HydraResultsProcessor(ResultsProcessor):
         self.recorder_ra_id_map={}
 
         for recorder in recorders:
-
             resource_attribute_id=None
             resource_type = 'NETWORK'
             resource_id = self.hydra_network['id']
-            attribute_name = self._get_attribute_name_from_recorder(
+            attribute_name, recorder_node = self._get_attribute_name_from_recorder(
                 recorder,
                 is_dataframe=is_dataframe
             )
+
+            attribute = self._get_attribute_from_name(attribute_name)
+
             recorder_name = recorder.name
             if attribute_name.endswith('value'):
                 recorder_name = recorder.name + '_value'
 
-            attribute = self._get_attribute_from_name(attribute_name)
+            network_attribute_ids = {ra['attr_id']:ra for ra in self.hydra_network['attributes']}
 
-            try:
-                recorder_node = self._get_pywr_node_from_recorder(recorder)
-            except AttributeError:
-                recorder_node=None
-
-            if recorder_node is None:
-                for network_ra in self.hydra_network['attributes']:
-                    if network_ra['attr_id'] == attribute['id']:
-                        resource_attribute_id = network_ra['id']
+            if attribute['id'] in network_attribute_ids:
+                resource_attribute_id = network_attribute_ids[attribute['id']]['id']
             else:
                 resource_attribute_id = None
-
-                try:
-                    resource_attribute_id = self._get_resource_attribute_id(recorder_node.name,
-                                                                            attribute_name)
-                except ValueError:
-                    log.info("Unable to find resource attribute for node {} and attribute {}. Trying parent node.".format(recorder_node.name, attribute_name))
-
-                if resource_attribute_id is None:
-
+                if recorder_node is not None:
                     try:
-                        if hasattr(recorder_node, 'parent') and recorder_node.parent is not None:
-                             resource_attribute_id = self._get_resource_attribute_id(recorder_node.parent.name,attribute_name)
-                        else:
-                            log.info("Node {} does not have a parent, and the attribute {} is not defined for it.".format(recorder_node.name, attribute_name))
+                        resource_attribute_id = self._get_resource_attribute_id(recorder_node.name,
+                                                                                attribute_name)
                     except ValueError:
                         log.info("Unable to find resource attribute for node {} and attribute {}. Trying parent node.".format(recorder_node.name, attribute_name))
+
+                    if resource_attribute_id is None:
+
+                        try:
+                            if hasattr(recorder_node, 'parent') and recorder_node.parent is not None:
+                                resource_attribute_id = self._get_resource_attribute_id(recorder_node.parent.name,attribute_name)
+                            else:
+                                log.info("Node {} does not have a parent, and the attribute {} is not defined for it.".format(recorder_node.name, attribute_name))
+                        except ValueError:
+                            log.info("Unable to find resource attribute for node {} and attribute {}. Trying parent node.".format(recorder_node.name, attribute_name))
 
                 if resource_attribute_id is None:
 
@@ -370,6 +361,10 @@ class HydraResultsProcessor(ResultsProcessor):
                 attribute_name = recorder.name.split('.')[0]
             else:
                 attribute_name = recorder.name
+        #If the attribute can be associated to a node, then great. If not, use the full recorder name and put it on the network
+        node = self._get_pywr_node_from_recorder(recorder)
+        if node is None:
+            attribute_name = recorder.name
 
         if not attribute_name.startswith(simulated_prefix):
             attribute_name = f'{simulated_prefix}_{attribute_name}'
@@ -377,7 +372,8 @@ class HydraResultsProcessor(ResultsProcessor):
         if is_dataframe is False and not attribute_name.endswith(scalar_suffix):
             attribute_name = f"{attribute_name}_{scalar_suffix}"
 
-        return attribute_name
+
+        return attribute_name, node
 
     def _get_resource_attribute_id(self, node_name, attribute_name):
 
