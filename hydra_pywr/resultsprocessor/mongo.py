@@ -247,6 +247,12 @@ class MongoResultsProcessor(ResultsProcessor):
                     len(result.inserted_ids), self.run_id, self.mongo_collection)
         else:
             log.warning("No documents to save for run %s", self.run_id)
+        
+        self.flush()
+
+        log.info("Results stored to: %s", self.results_location)
+        
+        self.save_results_to_s3()
 
     def make_scenario_document(self):
         """
