@@ -8,9 +8,7 @@ from hydra_client.click import hydra_app
 from . import runner
 from . import exporter
 from . import importer
-from . import resultsprocessor
 
-from .template import register_template, unregister_template, migrate_network_template, TemplateExistsError
 from . import utils
 
 
@@ -52,7 +50,7 @@ def cli(obj, username, password, hostname, session):
 @click.pass_obj
 @click.option('--filename', type=click.Path(file_okay=True, dir_okay=False, exists=True))
 @click.option('-p', '--project-id', type=int)
-@click.option('--template-id', type=int)
+@click.option('-t', '--template-id', type=int)
 @click.option('--projection', type=str, default=None)
 @click.option('--network-name', type=str, default=None)
 @click.option('--rewrite-url-prefix', type=str, default=None)
@@ -69,6 +67,23 @@ def import_json(obj, filename, project_id, template_id, projection, network_name
                          *args,
                          rewrite_url_prefix=rewrite_url_prefix,
                          projection=projection)
+
+@hydra_app(category='import', name='Import Pywr JSON into a Hydra Scenario')
+@cli.command(name='import-scenario', context_settings=dict(
+    ignore_unknown_options=True,
+    allow_extra_args=True))
+@click.pass_obj
+@click.option('--filename', type=click.Path(file_okay=True, dir_okay=False, exists=True))
+@click.option('-n', '--network-id', type=int)
+def import_json_as_scenario(obj, filename, network_id, *args):
+    """ Add a scenario to an existing Hydra Network from a Pywr JSON file """
+
+    client = get_logged_in_client(obj)
+
+    importer.import_json_as_scenario(client,
+                         filename,
+                         network_id,
+                         *args)
 
 
 @hydra_app(category='export', name='Export to Pywr JSON')
@@ -192,4 +207,6 @@ def step_game(obj, scenario_id, child_scenario_ids, filename, attribute_name, in
     for new_scenario_id in new_scenario_ids:
         utils.import_dataframe(client, dataframe, new_scenario_id, attribute_name,
                                create_new=create_new, data_type=data_type, column=column_name)
+
         utils.progress_start_end_dates(client, new_scenario_id)
+

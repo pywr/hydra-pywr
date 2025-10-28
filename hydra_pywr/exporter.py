@@ -510,6 +510,7 @@ class HydraToPywrNetwork():
 
 
     def build_pywr_nodes(self):
+        log.info("Building Pywr nodes")
 
         for node in self.data["nodes"]:
             pywr_node = {"name": node["name"]}
@@ -527,6 +528,7 @@ class HydraToPywrNetwork():
 
 
     def build_edges(self):
+        log.info("Building Pywr edges")
         edges = []
 
         for hydra_edge in self.data["links"]:

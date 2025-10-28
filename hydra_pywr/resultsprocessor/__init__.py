@@ -86,10 +86,10 @@ class ResultsProcessor():
         self.node_lookup = {}
         self.node_attr_lookup = {}
         for n in self.hydra_network['nodes']:
-            self.node_lookup[n.name] = n
-            self.node_attr_lookup[n.name] = {}
+            self.node_lookup[str(n.name)] = n
+            self.node_attr_lookup[str(n.name)] = {}
             for a in n['attributes']:
-                self.node_attr_lookup[n.name][a.attr_id] = a
+                self.node_attr_lookup[str(n.name)][a.attr_id] = a
     def save(self):
         """
             Function to be overwritten by the subclass
@@ -176,6 +176,9 @@ class ResultsProcessor():
                 self.resultstores[filename] = resultstore
 
             noderef = re.sub(r'^[^a-zA-Z_]+|[^a-zA-Z0-9_]', '', nodename)
+            if noderef == '':
+                noderef = nodename
+
             resultstore.put(f"{noderef}", df)
             resultstore[f"{noderef}"].attrs['pandas_type'] = 'frame'
 
@@ -282,8 +285,8 @@ class ResultsProcessor():
             return None
 
         if pywr_node.name in self.node_lookup:
-            return self.node_lookup[pywr_node.name]
+            return self.node_lookup[str(pywr_node.name)]
         if pywr_node.parent is not None and pywr_node.parent.name in self.node_lookup:
-            return self.node_lookup[pywr_node.parent.name]
+            return self.node_lookup[str(pywr_node.parent.name)]
 
         return None

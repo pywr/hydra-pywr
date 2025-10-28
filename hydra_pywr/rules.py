@@ -11,18 +11,22 @@ import pandas
 import numpy as np
 import scipy
 
-from pywr.parameters import *
-from pywr.recorders import *
+try:
+    from pywr.parameters import *
+    from pywr.recorders import *
 
-from pywr.nodes import *
-from pywr.parameters.control_curves import *
-from pywr.parameters._thresholds import *
-from pywr.parameters._hydropower import *
-from pywr.domains.river import *
+    from pywr.nodes import *
+    from pywr.parameters.control_curves import *
+    from pywr.parameters._thresholds import *
+    from pywr.parameters._hydropower import *
+    from pywr.domains.river import *
 
-#In case use wants to namespace stuff by parameters/recorders, the recommended way.
-from pywr import recorders
-from pywr import parameters
+    #In case use wants to namespace stuff by parameters/recorders, the recommended way.
+    from pywr import recorders
+    from pywr import parameters
+
+except ImportError:
+    print("Unable to find Pywr!!!")
 
 import hydra_pywr
 
