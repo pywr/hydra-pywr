@@ -143,10 +143,10 @@ class PywrHydraRunner(HydraToPywrNetwork):
         self.node_lookup = {}
         self.node_attr_lookup = {}
         for n in self.data['nodes']:
-            self.node_lookup[n.name] = n
-            self.node_attr_lookup[n.name] = {}
+            self.node_lookup[str(n.name)] = n
+            self.node_attr_lookup[str(n.name)] = {}
             for a in n['attributes']:
-                self.node_attr_lookup[n.name][a.attr_id] = a
+                self.node_attr_lookup[str(n.name)][a.attr_id] = a
 
         self.attr_name_map = self.make_attr_name_map()
 
@@ -436,12 +436,12 @@ class PywrHydraRunner(HydraToPywrNetwork):
         attribute = self._get_attribute_from_name(attribute_name)
         attribute_id = attribute['id']
 
-        node = self.node_lookup.get(node_name)
+        node = self.node_lookup.get(str(node_name))
         if node is not None:
             resource_attributes = node['attributes']
         else:
             raise ValueError('Node name "{}" not found in network data.'.format(node_name))
-        node_attribute = self.node_attr_lookup[node.name].get(attribute_id)
+        node_attribute = self.node_attr_lookup[str(node.name)].get(attribute_id)
         if node_attribute is not None:
             return node_attribute['id']
         else:
@@ -705,13 +705,13 @@ class PywrHydraRunner(HydraToPywrNetwork):
                         recorder_node_name = recorder_node.name
 
                     for node in self.data['nodes']:
-                        if node['name'] == recorder_node_name:
+                        if str(node['name']) == str(recorder_node_name):
                             resource_id = node['id']
                             resource_type = 'NODE'
 
                             break
                         if recorder_node.parent is not None:
-                            if node['name'] == recorder_node.parent.name:
+                            if str(node['name']) == str(recorder_node.parent.name):
                                 resource_id = node['id']
                                 resource_type = 'NODE'
                                 break
@@ -821,7 +821,11 @@ class PywrHydraRunner(HydraToPywrNetwork):
                 self.resultstores[filename] = resultstore
 
             noderef = re.sub(r'^[^a-zA-Z_]+|[^a-zA-Z0-9_]', '', nodename)
+            if noderef == '':
+                noderef = str(nodename)
+
             resultstore.put(f"{noderef}", df)
+
             resultstore[f"{noderef}"].attrs['pandas_type'] = 'frame'
 
             # Convert to JSON for saving in hydra
