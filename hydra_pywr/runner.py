@@ -153,9 +153,6 @@ class PywrHydraRunner(HydraToPywrNetwork):
             for a in n['attributes']:
                 self.node_attr_lookup[str(n.name)][a.attr_id] = a
 
-        self.attr_name_map = self.make_attr_name_map()
-
-
         self.solver = kwargs.get('solver')
 
         self.limit_nodes_recording = False
@@ -382,52 +379,6 @@ class PywrHydraRunner(HydraToPywrNetwork):
             raise RuntimeError(no_config_errtxt)
         else:
             return yaml.safe_load(rs[0].dataset.value)
-
-    def _get_resource_attribute_id(self, node_name, attribute_name):
-
-        attribute = self._get_attribute_from_name(attribute_name)
-        attribute_id = attribute['id']
-
-        node = self.node_lookup.get(str(node_name))
-        if node is not None:
-            resource_attributes = node['attributes']
-        else:
-            raise ValueError('Node name "{}" not found in network data.'.format(node_name))
-        node_attribute = self.node_attr_lookup[str(node.name)].get(attribute_id)
-        if node_attribute is not None:
-            return node_attribute['id']
-        else:
-            raise ValueError('No resource attribute for node "{}" and attribute "{}" found.'.format(node_name, attribute))
-
-    def _get_attribute_from_name(self, name):
-        dimension_id = self.attr_dimension_map.get(name)
-
-        for attribute_id, attribute in self.attributes.items():
-            if attribute['name'].lower() == name.lower() and attribute.get('dimension_id') == dimension_id:
-                return attribute
-        raise ValueError('No attribute with name "{}" found.'.format(name))
-
-    def _get_node_from_recorder(self, recorder):
-
-        node = None
-        if recorder.name is not None:
-            if ':' in recorder.name:
-                node_name, _ = recorder.name.rsplit(':', 1)
-                node_name = node_name.replace('__', '')
-                try:
-                    node = recorder.model.nodes[node_name]
-                except KeyError:
-                    pass
-
-        if node is None:
-            try:
-                node = recorder.node
-            except AttributeError:
-                try:
-                    node = recorder.parameter.node
-                except AttributeError:
-                    return None
-        return node
 
     def _add_node_flagged_recorders(self, model):
 
