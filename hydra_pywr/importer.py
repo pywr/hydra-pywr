@@ -75,9 +75,18 @@ def import_json(client, filename, project_id, template_id, network_name, *args, 
     importer.build_hydra_network(projection, appdata=appdata)
     network_summary = importer.add_network_to_hydra()
 
-    log.info(f"Imported {filename} to Project ID: {project_id} as Network ID: {network_summary['id']}")
 
-    log.info("Import complete: https://app.waterstrategy.org/network/{}".format(network_summary['id']))
+    new_network = importer.hydra_client.get_network(network_id=network_summary['id'],
+                             include_attributes=False,
+                             include_data=False)
+
+    network_id = network_summary['id']
+    scenario_id = new_network['scenarios'][0]['id']
+
+    log.info(f"Imported {filename} to Project ID: {project_id} as Network ID: {network_id}, Scenario ID: {scenario_id}")
+
+
+    log.info("Import complete: https://app.waterstrategy.org/network/{}/{}".format(network_id, scenario_id))
 
     return network_summary
 
@@ -448,6 +457,7 @@ class PywrToHydraNetwork():
 
 
     def build_hydra_network(self, projection=None, appdata={}):
+
         if projection:
             self.projection = projection
         else:
@@ -458,7 +468,7 @@ class PywrToHydraNetwork():
         if not self.projection:
             self.project = self.hydra_client.get_project(project_id=self.project_id)
             appdata = self.project.appdata
-            if "projection" in appdata:
+            if appdata and "projection" in appdata:
                 log.info("Setting projection from project appdata: %s", appdata["projection"])
                 self.projection = appdata["projection"]
         self.initialise_hydra_connection()
@@ -486,7 +496,7 @@ class PywrToHydraNetwork():
         """ Assemble complete network """
         network_name = self.network.metadata.data["title"]
 
-        project = self.hydra.get_project(project_id=self.project_id)
+        project = self.hydra_client.get_project(project_id=self.project_id)
         network_names = [n["name"] for n in project["networks"]]
         hydra_network_name = network_name
         for i in range(1, 100):
