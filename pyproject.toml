@@ -48,8 +48,8 @@ Repository = "https://github.com/pywr/hydra-pywr"
 "Bug Tracker" = "https://github.com/pywr/hydra-pywr/issues"
 
 [tool.setuptools]
-packages = ["hydra_pywr"]
+packages = ["hydra_pywr", "hydra_pywr.nodes", "hydra_pywr.resultsprocessor"]
 include-package-data = true
 
 [tool.setuptools.package-data]
-hydra_pywr = ["template_configs/*.json"]
+hydra_pywr = ["template_configs/*.json", "*.json"]
