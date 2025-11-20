@@ -1,0 +1,55 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hydra-pywr"
+version = "0.1.0"
+description = "Hydra plugins and library for import and exporting Pywr models"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+authors = [
+    {name = "Hydra Platform", email = "info@hydraplatform.org"}
+]
+keywords = ["hydra", "pywr", "water", "resources", "modeling"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering",
+]
+
+dependencies = [
+    "pyyaml>=5.4",
+    "hydra-base>=0.1.20",
+    "pywr>=1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=3.0",
+]
+
+[project.scripts]
+hydra-pywr = "hydra_pywr.cli:start_cli"
+
+[project.urls]
+Homepage = "https://github.com/pywr/hydra-pywr"
+Documentation = "https://hydraplatform.org"
+Repository = "https://github.com/pywr/hydra-pywr"
+"Bug Tracker" = "https://github.com/pywr/hydra-pywr/issues"
+
+[tool.setuptools]
+packages = ["hydra_pywr"]
+include-package-data = true
+
+[tool.setuptools.package-data]
+hydra_pywr = ["template_configs/*.json"]
