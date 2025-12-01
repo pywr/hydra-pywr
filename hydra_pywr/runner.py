@@ -39,11 +39,12 @@ def run_file(filename, domain, output_file):
 
 
 def run_network_scenario(client, scenario_id, template_id,
-                         solver=None, data_dir='/tmp', use_cache=False):
+                         solver=None, data_dir='/tmp', use_cache=False, disable_automatic_node_recorders=False):
 
     runner = PywrHydraRunner.from_scenario_id(client, scenario_id,
                                              template_id=template_id,
-                                             data_dir=data_dir,use_cache=use_cache)
+                                             data_dir=data_dir,use_cache=use_cache,
+                                             disable_automatic_node_recorders=disable_automatic_node_recorders)
     runner.setup(solver=solver)
     runner.run_pywr_model()
     runner.save_results()
@@ -136,6 +137,7 @@ class PywrHydraRunner(HydraToPywrNetwork):
 
     def __init__(self, *args, domain="water", **kwargs):
         self.output_resample_freq = kwargs.pop('output_resample_freq', None)
+        self.disable_automatic_node_recorders = kwargs.pop('disable_automatic_node_recorders', False)
         super(PywrHydraRunner, self).__init__(*args, **kwargs)
         self.domain = domain
         self.model = None
@@ -270,7 +272,10 @@ class PywrHydraRunner(HydraToPywrNetwork):
     def get_nodes_to_record(self):
         """
         Get the nodes to record in the network.
+        Returns an empty list if disable_automatic_node_recorders is True.
         """
+        if self.disable_automatic_node_recorders:
+            return []
 
         record_nodes_attr = list(filter(lambda x:x['name'] == 'record_nodes', self.attributes.values()))
         if len(record_nodes_attr) > 0:
@@ -313,7 +318,8 @@ class PywrHydraRunner(HydraToPywrNetwork):
         ProgressRecorder(model)
 
         # Add recorders for monitoring the simulated timeseries of nodes
-        self._add_node_flagged_recorders(model)
+        if self.disable_automatic_node_recorders is False:
+            self._add_node_flagged_recorders(model)
         # Add recorders for parameters that are flagged
         self._add_parameter_flagged_recorders(model)
 

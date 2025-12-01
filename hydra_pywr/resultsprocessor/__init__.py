@@ -12,8 +12,8 @@ import warnings
 from hydra_client.connection import RemoteJSONConnection
 
 # Suppress FutureWarning about deprecated 'A' frequency alias
-warnings.filterwarnings('ignore', 
-                       message="'A' is deprecated and will be removed in a future version, please use 'Y' instead.", 
+warnings.filterwarnings('ignore',
+                       message="'A' is deprecated and will be removed in a future version, please use 'Y' instead.",
                        category=FutureWarning)
 
 log = logging.getLogger(__name__)
@@ -81,7 +81,8 @@ class ResultsProcessor():
         self.hydra_client = kwargs['hydra_client']
         self.hydra_template = kwargs['hydra_template']
         self.data_dir = kwargs.get('data_dir', '/tmp')
-        self.save_to_s3 = False
+        self.save_to_s3 = True
+        self.attribute_centric_h5 = os.getenv('HYDRA_STORE_H5_ATTRIBUTE_CENTRIC', 'true').lower() in ('true', '1', 'yes')
 
         self.node_lookup = {}
         self.node_attr_lookup = {}
@@ -90,6 +91,49 @@ class ResultsProcessor():
             self.node_attr_lookup[str(n.name)] = {}
             for a in n['attributes']:
                 self.node_attr_lookup[str(n.name)][a.attr_id] = a
+
+    def _get_attribute_centric_h5_reference(self, nodename, attrname):
+        """
+        Get H5 file and group references using attribute-centric approach (old approach).
+        One file per attribute, with node name as group inside.
+
+        Returns:
+            tuple: (filename, groupname, fileref, groupref)
+        """
+        attrref = re.sub(r'^[^a-zA-Z_]+|[^a-zA-Z0-9_]', '', attrname)
+        if attrref == '':
+            attrref = attrname
+
+        noderef = re.sub(r'^[^a-zA-Z_]+|[^a-zA-Z0-9_]', '', nodename)
+        if noderef == '':
+            noderef = nodename
+
+        filename = f'{attrref}.h5'
+        groupname = noderef
+
+        return filename, groupname, attrref, noderef
+
+    def _get_node_centric_h5_reference(self, nodename, attrname):
+        """
+        Get H5 file and group references using node-centric approach (new approach).
+        One file per node, with attribute name as group inside.
+
+        Returns:
+            tuple: (filename, groupname, fileref, groupref)
+        """
+        noderef = re.sub(r'^[^a-zA-Z_]+|[^a-zA-Z0-9_]', '', nodename)
+        if noderef == '':
+            noderef = nodename
+
+        attrref = re.sub(r'^[^a-zA-Z_]+|[^a-zA-Z0-9_]', '', attrname)
+        if attrref == '':
+            attrref = attrname
+
+        filename = f'{noderef}.h5'
+        groupname = attrref
+
+        return filename, groupname, noderef, attrref
+
     def save(self):
         """
             Function to be overwritten by the subclass
@@ -169,25 +213,29 @@ class ResultsProcessor():
         df = df.round(3)
 
         if self.save_to_s3 is True:
-            filename = f'{attrname}.h5'
+            # Get H5 reference based on storage approach
+            if self.attribute_centric_h5:
+                #Use a different file for every attribute, with node name as group
+                filename, groupname, fileref, groupref = self._get_attribute_centric_h5_reference(nodename, attrname)
+            else:
+                #Use a different file for every node, with attribute name as group
+                #This (potentially) results in fewer files overall
+                filename, groupname, fileref, groupref = self._get_node_centric_h5_reference(nodename, attrname)
+
             resultstore = self.resultstores.get(filename)
             if resultstore is None:
                 resultstore = pd.HDFStore(os.path.join(self.results_location, filename), mode='w')
                 self.resultstores[filename] = resultstore
 
-            noderef = re.sub(r'^[^a-zA-Z_]+|[^a-zA-Z0-9_]', '', nodename)
-            if noderef == '':
-                noderef = nodename
-
-            resultstore.put(f"{noderef}", df)
-            resultstore[f"{noderef}"].attrs['pandas_type'] = 'frame'
+            resultstore.put(f"{groupname}", df)
+            resultstore[f"{groupname}"].attrs['pandas_type'] = 'frame'
 
             # Convert to JSON for saving in hydra
             value = json.dumps({
                 "data":
                 {
-                    "url": f"s3://{self.bucket_name}/{self.s3_path}/{attrname}.h5",
-                    "group": f"{noderef}"
+                    "url": f"s3://{self.bucket_name}/{self.s3_path}/{fileref}.h5",
+                    "group": f"{groupref}"
                 }
             })
         else:

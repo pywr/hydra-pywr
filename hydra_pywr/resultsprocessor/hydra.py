@@ -394,7 +394,9 @@ class HydraResultsProcessor(ResultsProcessor):
     def _get_attribute_from_name(self, name):
         dimension_id = self.attr_dimension_map.get(name)
 
+
         for attribute_id, attribute in self.hydra_attributes.items():
             if attribute['name'].lower() == name.lower() and attribute.get('dimension_id') == dimension_id:
                 return attribute
+
         raise ValueError('No attribute with name "{}" found.'.format(name))

@@ -321,7 +321,7 @@ class HydraToPywrNetwork():
         log.info(f"Retreiving template {network.types[index].template_id}")
         template = client.get_template(template_id=network.types[index].template_id)
 
-        return cls(client, network, network_id, scenario_id, attributes, template, kwargs.get('data_dir'))
+        return cls(client, network, network_id, scenario_id, attributes, template, kwargs.pop('data_dir'), **kwargs)
 
 
     def write_rules_as_module(self):

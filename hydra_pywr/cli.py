@@ -137,17 +137,18 @@ def purge_cache(cache_path):
 @click.option('--output-frequency', type=str, default=None)
 @click.option('--solver', type=str, default=None)
 @click.option('--data-dir', default='/tmp')
-def run(obj, scenario_id, template_id, domain, output_frequency, solver, data_dir):
+@click.option('--disable-automatic-node-recorders', is_flag=True, help='Disable automatic recording of flows on nodes')
+def run(obj, scenario_id, template_id, domain, output_frequency, solver, data_dir, disable_automatic_node_recorders):
     """ Export, run and save a Pywr model from Hydra. """
     client = get_logged_in_client(obj)
 
     if scenario_id is None:
         raise Exception('No scenario specified')
-
     runner.run_network_scenario(client,
                                 scenario_id,
                                 template_id,
-                                data_dir=data_dir)
+                                data_dir=data_dir,
+                                disable_automatic_node_recorders=disable_automatic_node_recorders)
 
 
 """

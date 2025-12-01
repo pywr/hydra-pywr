@@ -14,7 +14,7 @@ class MongoResultsProcessor(ResultsProcessor):
         super().__init__(*args, **kwargs)
         """
         Initialize the MongoDB results processor
-        Use the following env variables 
+        Use the following env variables
         export USE_MONGO=true
         export MONGO_URI="<URI>"
         export MONGO_USERNAME="<USERNAME>"
@@ -35,6 +35,7 @@ class MongoResultsProcessor(ResultsProcessor):
         self.mongo_attribute_definition_dict = {}
 
         self.resource_results_dict = {}
+        self.save_to_s3=False
 
     def connect(self):
         """
@@ -47,7 +48,7 @@ class MongoResultsProcessor(ResultsProcessor):
         except ImportError:
             log.error("pymongo is not installed")
             return None
-    
+
         mongo_uri = os.getenv("MONGO_URI")
         mongo_username = os.getenv("MONGO_USERNAME")
         mongo_password = os.getenv("MONGO_PASSWORD")
@@ -84,13 +85,13 @@ class MongoResultsProcessor(ResultsProcessor):
             return
 
         collection = self.mongo_client[self.mongo_database][self.mongo_collection]
-        
+
         # Get existing index information
         existing_indexes = collection.index_information()
         existing_index_names = set(existing_indexes.keys())
-        
+
         indexes_to_create = []
-        
+
         # Define all indexes we want to create
         desired_indexes = [
             {
@@ -100,7 +101,7 @@ class MongoResultsProcessor(ResultsProcessor):
             },
             {
                 "keys": [("scenario_id", 1), ("run_id", 1), ("element_type", 1)],
-                "name": "scenario_run_type", 
+                "name": "scenario_run_type",
                 "description": "Index for historical run lookups"
             },
             {
@@ -114,7 +115,7 @@ class MongoResultsProcessor(ResultsProcessor):
                 "description": "Index for full run data retrieval"
             }
         ]
-        
+
         # Check which indexes need to be created
         for index_spec in desired_indexes:
             if index_spec["name"] not in existing_index_names:
@@ -122,7 +123,7 @@ class MongoResultsProcessor(ResultsProcessor):
                 log.info("Will create index: %s - %s", index_spec["name"], index_spec["description"])
             else:
                 log.info("Index already exists: %s", index_spec["name"])
-        
+
         # Create missing indexes
         created_count = 0
         for index_spec in indexes_to_create:
@@ -132,7 +133,7 @@ class MongoResultsProcessor(ResultsProcessor):
                 log.info("Created index: %s", index_spec["name"])
             except Exception as e:
                 log.error("Failed to create index %s: %s", index_spec["name"], e)
-        
+
         if created_count > 0:
             log.info("Created %d new indexes for %s collection", created_count, self.mongo_collection)
         else:
@@ -141,11 +142,11 @@ class MongoResultsProcessor(ResultsProcessor):
     def get_latest_run_results(self, scenario_id, element_type=None):
         """
         Get results from the most recent run for a given scenario
-        
+
         Args:
             scenario_id: The scenario ID to query
             element_type: Optional filter by element type (node, link, network, etc.)
-            
+
         Returns:
             List of documents from the most recent run
         """
@@ -154,7 +155,7 @@ class MongoResultsProcessor(ResultsProcessor):
             return []
 
         collection = self.mongo_client[self.mongo_database][self.mongo_collection]
-        
+
         # Build query
         query = {"scenario_id": scenario_id}
         if element_type:
@@ -166,7 +167,7 @@ class MongoResultsProcessor(ResultsProcessor):
             {"run_id": 1, "run_timestamp": 1},
             sort=[("run_timestamp", -1)]
         )
-        
+
         if not latest_run:
             log.warning("No runs found for scenario %s", scenario_id)
             return []
@@ -174,20 +175,20 @@ class MongoResultsProcessor(ResultsProcessor):
         # Get all results for the latest run
         query["run_id"] = latest_run["run_id"]
         results = list(collection.find(query))
-        
-        log.info("Retrieved %d documents from latest run %s for scenario %s", 
+
+        log.info("Retrieved %d documents from latest run %s for scenario %s",
                 len(results), latest_run["run_id"], scenario_id)
-        
+
         return results
 
     def get_run_history(self, scenario_id, limit=10):
         """
         Get historical run information for a scenario
-        
+
         Args:
             scenario_id: The scenario ID to query
             limit: Maximum number of runs to return
-            
+
         Returns:
             List of run metadata documents
         """
@@ -196,18 +197,18 @@ class MongoResultsProcessor(ResultsProcessor):
             return []
 
         collection = self.mongo_client[self.mongo_database][self.mongo_collection]
-        
+
         # Get unique runs for this scenario, sorted by most recent
         pipeline = [
             {"$match": {"scenario_id": scenario_id, "element_type": "scenario"}},
             {"$sort": {"run_timestamp": -1}},
             {"$limit": limit}
         ]
-        
+
         results = list(collection.aggregate(pipeline))
-        
+
         log.info("Retrieved %d historical runs for scenario %s", len(results), scenario_id)
-        
+
         return results
 
     def save(self):
@@ -221,7 +222,7 @@ class MongoResultsProcessor(ResultsProcessor):
         # Create scenario document
         scenario_doc = self.make_scenario_document()
         self.model_results_documents.append(scenario_doc)
-        
+
         # Create bucket document
         bucket_doc = self.make_bucket_document()
         self.model_results_documents.append(bucket_doc)
@@ -243,15 +244,15 @@ class MongoResultsProcessor(ResultsProcessor):
         if self.model_results_documents:
             collection = self.mongo_client[self.mongo_database][self.mongo_collection]
             result = collection.insert_many(self.model_results_documents)
-            log.info("Inserted %d documents for run %s into %s collection", 
+            log.info("Inserted %d documents for run %s into %s collection",
                     len(result.inserted_ids), self.run_id, self.mongo_collection)
         else:
             log.warning("No documents to save for run %s", self.run_id)
-        
+
         self.flush()
 
         log.info("Results stored to: %s", self.results_location)
-        
+
         self.save_results_to_s3()
 
     def make_scenario_document(self):
