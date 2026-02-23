@@ -30,6 +30,7 @@ dependencies = [
     "pyyaml>=5.4",
     "hydra-base>=0.1.20",
     "pywr>=1.0",
+    "boto3",
 ]
 
 [project.optional-dependencies]
