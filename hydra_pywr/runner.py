@@ -626,7 +626,7 @@ class PywrHydraRunner(HydraToPywrNetwork):
         for resource_scenario in self.generate_array_recorder_resource_scenarios():
             scenario['resourcescenarios'].append(resource_scenario)
 
-        chunk_size = 1000
+        chunk_size = 250
         for i in range(0, len(scenario['resourcescenarios']), chunk_size):
                 chunk = scenario['resourcescenarios'][i:i+chunk_size]
                 log.info('Saving %s datasets', len(chunk))
@@ -864,7 +864,9 @@ class PywrHydraRunner(HydraToPywrNetwork):
                 recorder.values()
             except NotImplementedError:
                 continue
-
+            except Exception as e:
+                log.critical(f"Unable to process result for recorder recorder {recorder.name}: Unable to retrieve values. Error: {e}")
+                continue
             try:
                 data_type = "array"
                 value = list(recorder.values())
