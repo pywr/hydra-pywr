@@ -87,3 +87,5 @@ ENV/
 
 # Rope project settings
 .ropeproject
+
+hydra_pywr/hydra_pywr_custom_module.py
