@@ -5,7 +5,6 @@ import tempfile
 import pandas as pd
 import logging
 import json
-from pywrparser.utils import parse_reference_key
 import os
 import re
 import warnings
@@ -201,6 +200,7 @@ class ResultsProcessor():
 
         if "__:" in recorder.name:
             try:
+                from pywrparser.utils import parse_reference_key
                 nodename, attrname = parse_reference_key(recorder.name)
             except Exception as e:
                 log.critical(f"Unable to process result for recorder recorder {recorder.name}: Unable to parse the name.")
