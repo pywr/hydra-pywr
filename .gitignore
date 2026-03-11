@@ -88,4 +88,8 @@ ENV/
 # Rope project settings
 .ropeproject
 
+<<<<<<< HEAD
 hydra_pywr_custom_module.py
+=======
+hydra_pywr/hydra_pywr_custom_module.py
+>>>>>>> master

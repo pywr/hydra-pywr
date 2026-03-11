@@ -480,5 +480,3 @@ class PywrHydraRunner(HydraToPywrNetwork):
             output_resample_freq=self.output_resample_freq
         )
         resultsProcessor.save()
-
-
