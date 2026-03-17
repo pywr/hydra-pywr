@@ -133,7 +133,7 @@ class ResultsProcessor():
 
         return filename, groupname, noderef, attrref
 
-    def save(self):
+    def save(self, dry_run=False, update=False):
         """
             Function to be overwritten by the subclass
         """

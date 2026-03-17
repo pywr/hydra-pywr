@@ -211,7 +211,7 @@ class MongoResultsProcessor(ResultsProcessor):
 
         return results
 
-    def save(self):
+    def save(self, dry_run=False, update=False):
         """
         Save the results to MongoDB using the model_results collection schema
         """

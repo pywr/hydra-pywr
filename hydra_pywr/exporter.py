@@ -143,7 +143,9 @@ def export_json(client, data_dir, scenario_id, use_cache, json_sort_keys, json_i
             ref.data["url"] = filedest
 
     pnet_title = pywr_network.metadata.data["title"]
-    outfile = os.path.join(data_dir, f"{pnet_title.replace(' ', '_').replace('/', '_')}.json")
+    scenario_dir = os.path.join(data_dir, str(scenario_id))
+    os.makedirs(scenario_dir, exist_ok=True)
+    outfile = os.path.join(scenario_dir, f"{pnet_title.replace(' ', '_').replace('/', '_')}.json")
     with open(outfile, mode='w') as fp:
         json.dump(pywr_network.as_dict(), fp, sort_keys=json_sort_keys, indent=2, cls=PywrTypeJSONEncoder)
 
@@ -364,6 +366,8 @@ class HydraToPywrNetwork():
                 fp.write(f"{p}\n")
             fp.write("\n")
             for rule in self.data.rules:
+                if rule.status.upper() != 'A':
+                    continue
                 for forbid in forbidden:
                     if forbid in rule["value"]:
                         raise PermissionError(f"Use of <{forbid}> forbidden in custom rules.")

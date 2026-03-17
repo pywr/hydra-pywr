@@ -12,7 +12,7 @@ from urllib.parse import urlparse
 from . import resultsprocessor
 
 from pywr.model import Model
-from pywr.nodes import Node, Storage
+from pywr.nodes import Node, Storage, VirtualStorage, AggregatedNode
 from pywr.parameters import Parameter, DeficitParameter
 from pywr.recorders import NumpyArrayNodeRecorder, NumpyArrayStorageRecorder, NumpyArrayParameterRecorder
 from pywr.recorders.progress import ProgressRecorder
@@ -39,15 +39,23 @@ def run_file(filename, domain, output_file):
 
 
 def run_network_scenario(client, scenario_id, template_id,
-                         solver=None, data_dir='/tmp', use_cache=False, disable_automatic_node_recorders=False):
+                         solver=None, data_dir='/tmp', use_cache=False, disable_automatic_node_recorders=False, dry_run=False,
+                         update=False):
 
     runner = PywrHydraRunner.from_scenario_id(client, scenario_id,
                                              template_id=template_id,
                                              data_dir=data_dir,use_cache=use_cache,
                                              disable_automatic_node_recorders=disable_automatic_node_recorders)
-    runner.setup(solver=solver)
+
+    cached_model_file = runner.get_cached_model_file() if use_cache else None
+    if cached_model_file is not None:
+        log.info("Using cached exported model: %s", cached_model_file)
+        runner.load_pywr_model_from_file(cached_model_file, solver=solver)
+    else:
+        runner.setup(solver=solver)
+
     runner.run_pywr_model()
-    runner.save_results()
+    runner.save_results(dry_run=dry_run, update=update)
     log.info(f'Pywr model run success. Network ID: {runner.data.id}, Scenario ID: {scenario_id}')
     return runner
 
@@ -61,12 +69,16 @@ def save_pywr_file(data, data_dir, network_id=None, scenario_id=None):
 
     title = data['metadata']['title']
 
-    #check if the output folder exists and create it if not
-    if not os.path.isdir(data_dir):
-        #exist_ok sets unix the '-p' functionality to create the whole path
-        os.makedirs(data_dir, exist_ok=True)
+    output_dir = data_dir
+    if scenario_id is not None:
+        output_dir = os.path.join(data_dir, str(scenario_id))
 
-    filename = os.path.join(data_dir, f'{title}.json')
+    #check if the output folder exists and create it if not
+    if not os.path.isdir(output_dir):
+        #exist_ok sets unix the '-p' functionality to create the whole path
+        os.makedirs(output_dir, exist_ok=True)
+
+    filename = os.path.join(output_dir, f'{title}.json')
     with open(filename, mode='w') as fh:
         json.dump(data, fh, sort_keys=True, indent=2)
 
@@ -205,6 +217,59 @@ class PywrHydraRunner(HydraToPywrNetwork):
             self.modelfile = save_pywr_file(pywr_network.as_dict(), self.data_dir, self.data['id'], self.scenario_id)
 
         self.load_pywr_model(pywr_network, solver=solver)
+
+    def get_cached_model_file(self):
+        if self.data_dir is None:
+            return None
+
+        scenario_dir = os.path.join(self.data_dir, str(self.scenario_id))
+        if not os.path.isdir(scenario_dir):
+            return None
+
+        candidate_files = [
+            os.path.join(scenario_dir, filename)
+            for filename in os.listdir(scenario_dir)
+            if filename.lower().endswith('.json')
+        ]
+
+        if len(candidate_files) == 0:
+            return None
+
+        if len(candidate_files) > 1:
+            log.warning(
+                "Multiple cached model files found for scenario %s; using latest modified file.",
+                self.scenario_id,
+            )
+
+        return max(candidate_files, key=os.path.getmtime)
+
+    def load_pywr_model_from_file(self, filename, solver=None):
+        if self.domain == "energy":
+            from pywr_dcopf import core
+
+        try:
+            from . import hydra_pywr_custom_module
+        except (ModuleNotFoundError, ImportError):
+            pass
+
+        pnet, errors, warnings = PywrNetwork.from_file(filename)
+        if warnings:
+            for component, warns in warnings.items():
+                for warn in warns:
+                    log.info(warn)
+
+        if errors:
+            for component, errs in errors.items():
+                for err in errs:
+                    log.error(err)
+            raise RuntimeError(f"Errors found while loading cached model file: {filename}")
+
+        if solver is None:
+            solver = domain_solvers[self.domain]
+
+        self.model = Model.load(filename, solver=solver)
+        self.modelfile = filename
+        return pnet
 
     def save_model_to_s3(self):
         """
@@ -394,7 +459,7 @@ class PywrHydraRunner(HydraToPywrNetwork):
             from pywr_dcopf.core import Generator, Load, Line, Battery
             node_classes = (Node, Generator, Load, Line, Battery)
         else:
-            node_classes = (Node,)
+            node_classes = (Node, AggregatedNode)
 
         for node in model.nodes:
             if self.limit_nodes_recording is True and node.name not in nodes_to_record:
@@ -414,17 +479,17 @@ class PywrHydraRunner(HydraToPywrNetwork):
                     if isinstance(node, node_classes):
                         name = '__{}__:{}'.format(node.name, 'simulated_flow')
                         NumpyArrayNodeRecorder(model, node, name=name)
-                    elif isinstance(node, (Storage)):
+                    elif isinstance(node, (Storage, VirtualStorage)):
                         name = '__{}__:{}'.format(node.name, 'simulated_volume')
                         NumpyArrayStorageRecorder(model, node, name=name)
-                    # else:
-                    #     import warnings
-                    #     warnings.warn('Unrecognised node subclass "{}" with name "{}" for timeseries recording. Skipping '
-                    #                   'recording this node.'.format(node.__class__.__name__, node.name),
-                    #                   RuntimeWarning)
+                    else:
+                        import warnings
+                        warnings.warn('Unrecognised node subclass "{}" with name "{}" for timeseries recording. Skipping '
+                                      'recording this node.'.format(node.__class__.__name__, node.name),
+                                      RuntimeWarning)
 
                 elif flag == 'deficit':
-                    if isinstance(node, Node):
+                    if isinstance(node, node_classes):
                         deficit_parameter = DeficitParameter(model, node)
                         name = '__{}__:{}'.format(node.name, 'simulated_deficit')
                         NumpyArrayParameterRecorder(model, deficit_parameter, name=name)
@@ -466,7 +531,7 @@ class PywrHydraRunner(HydraToPywrNetwork):
             if record_ts:
                 NumpyArrayParameterRecorder(model, parameter, name=recorder_name)
 
-    def save_results(self):
+    def save_results(self, dry_run=False, update=False):
         """ Save the outputs from a Pywr model run to Hydra. """
         resultsProcessor = resultsprocessor.get_results_processor(
             self.scenario_id,
@@ -479,4 +544,4 @@ class PywrHydraRunner(HydraToPywrNetwork):
             data_dir=self.data_dir,
             output_resample_freq=self.output_resample_freq
         )
-        resultsProcessor.save()
+        resultsProcessor.save(dry_run=dry_run, update=update)

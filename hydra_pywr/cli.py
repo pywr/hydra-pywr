@@ -137,8 +137,11 @@ def purge_cache(cache_path):
 @click.option('--output-frequency', type=str, default=None)
 @click.option('--solver', type=str, default=None)
 @click.option('--data-dir', default='/tmp')
+@click.option('--cache', is_flag=True, default=False, help='Reuse previously exported Pywr JSON in data-dir/scenario-id when available')
 @click.option('--disable-automatic-node-recorders', is_flag=True, help='Disable automatic recording of flows on nodes')
-def run(obj, scenario_id, template_id, domain, output_frequency, solver, data_dir, disable_automatic_node_recorders):
+@click.option('--dry-run', is_flag=True, default=False, help='Run the model without saving results to Hydra')
+@click.option('--update', is_flag=True, default=False, help='Delete existing variable resource scenarios before saving new results to Hydra')
+def run(obj, scenario_id, template_id, domain, output_frequency, solver, data_dir, cache, disable_automatic_node_recorders, dry_run, update):
     """ Export, run and save a Pywr model from Hydra. """
     client = get_logged_in_client(obj)
 
@@ -148,7 +151,10 @@ def run(obj, scenario_id, template_id, domain, output_frequency, solver, data_di
                                 scenario_id,
                                 template_id,
                                 data_dir=data_dir,
-                                disable_automatic_node_recorders=disable_automatic_node_recorders)
+                                use_cache=cache,
+                                disable_automatic_node_recorders=disable_automatic_node_recorders,
+                                dry_run=dry_run,
+                                update=update)
 
 
 """

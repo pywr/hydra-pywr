@@ -19,9 +19,10 @@ class HydraResultsProcessor(ResultsProcessor):
         self.attr_name_map = self.make_attr_name_map()
         self.attr_unit_map = self.make_attr_unit_map()
 
-    def save(self):
-       # Ensure all the results from previous run are removed.
-        self._delete_resource_scenarios()
+    def save(self, dry_run=False, update=False):
+        if dry_run is False and update is False:
+            #Ensure all the results from previous run are removed.
+            self._delete_resource_scenarios()
 
         # Convert the scenario from JSONObject to normal dict
         # This is required to ensure that the complete nested structure of dicts
@@ -48,7 +49,8 @@ class HydraResultsProcessor(ResultsProcessor):
         # The response attributes have ids now.
         response_attributes = []
         try:
-            response_attributes = self.hydra_client.add_attributes(attrs=attributes)
+            if dry_run is False:
+                response_attributes = self.hydra_client.add_attributes(attrs=attributes)
         except Exception as e:
             if hasattr(e, 'message') and 'permission denied' in e.message.lower():
                 for a in attributes:
@@ -66,18 +68,20 @@ class HydraResultsProcessor(ResultsProcessor):
         for i in range(0, len(scenario['resourcescenarios']), 100):
                 chunk = scenario['resourcescenarios'][i:i+100]
                 log.info('Saving %s datasets', len(chunk))
-                self.hydra_client.bulk_update_resourcedata(
-                    scenario_ids=[scenario['id']],
-                    resource_scenarios=chunk
-                )
+                if not dry_run:
+                    self.hydra_client.bulk_update_resourcedata(
+                        scenario_ids=[scenario['id']],
+                        resource_scenarios=chunk
+                    )
 
         self.flush()
 
         log.info("Results stored to: %s", self.results_location)
 
-        self.save_results_to_s3()
+        if not dry_run:
+            self.save_results_to_s3()
 
-        self.zip_results()
+            self.zip_results()
 
     def _copy_scenario(self):
         # Now construct a scenario object
@@ -134,7 +138,6 @@ class HydraResultsProcessor(ResultsProcessor):
 
         for recorder in self.non_df_recorders:
             recorder_data = self.process_non_df_recorder(recorder)
-
             if recorder_data is None:
                 continue
 
