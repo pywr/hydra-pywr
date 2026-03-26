@@ -124,6 +124,10 @@ class HydraResultsProcessor(ResultsProcessor):
             if recorder_data is None:
                 continue
 
+            if self.df_recorder_ra_id_map.get(recorder.name) is None:
+                # log.info("No resource attribute ID found for recorder {}. Skipping.".format(recorder.name))
+                continue
+
             resource_scenario = self._make_recorder_resource_scenario(recorder,
                                                                       recorder_data['data'],
                                                                       self.df_recorder_ra_id_map[recorder.name],
@@ -139,6 +143,10 @@ class HydraResultsProcessor(ResultsProcessor):
         for recorder in self.non_df_recorders:
             recorder_data = self.process_non_df_recorder(recorder)
             if recorder_data is None:
+                continue
+
+            if self.df_recorder_ra_id_map.get(recorder.name) is None:
+                # log.info("No resource attribute ID found for recorder {}. Skipping.".format(recorder.name))
                 continue
 
             resource_scenario = self._make_recorder_resource_scenario(recorder,
@@ -233,6 +241,7 @@ class HydraResultsProcessor(ResultsProcessor):
 
             attribute = self._get_attribute_from_name(attribute_name)
 
+
             recorder_name = recorder.name
             if attribute_name.endswith('value'):
                 recorder_name = recorder.name + '_value'
@@ -247,6 +256,7 @@ class HydraResultsProcessor(ResultsProcessor):
                     try:
                         resource_attribute_id = self._get_resource_attribute_id(recorder_node.name,
                                                                                 attribute_name)
+                        resource_type = 'NODE'
                     except ValueError:
                         log.info("Unable to find resource attribute for node {} and attribute {}. Trying parent node.".format(recorder_node.name, attribute_name))
 
@@ -266,6 +276,9 @@ class HydraResultsProcessor(ResultsProcessor):
                     if hydra_node is not None:
                         resource_id = hydra_node['id']
                         resource_type = 'NODE'
+                    else:
+                        log.info("Unable to find a node associated with recorder {}. Ignoring.".format(recorder.name))
+                        continue
 
             if resource_attribute_id is not None:
                 self.recorder_ra_id_map[recorder_name] = resource_attribute_id
