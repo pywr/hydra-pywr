@@ -75,7 +75,8 @@ def import_json(obj, filename, project_id, template_id, projection, network_name
 @click.pass_obj
 @click.option('--filename', type=click.Path(file_okay=True, dir_okay=False, exists=True))
 @click.option('-n', '--network-id', type=int)
-def import_json_as_scenario(obj, filename, network_id, *args):
+@click.option('--scenario-name', type=str, default=None, help='Name for the new scenario (defaults to pywr metadata title)')
+def import_json_as_scenario(obj, filename, network_id, scenario_name, *args):
     """ Add a scenario to an existing Hydra Network from a Pywr JSON file """
 
     client = get_logged_in_client(obj)
@@ -83,6 +84,7 @@ def import_json_as_scenario(obj, filename, network_id, *args):
     importer.import_json_as_scenario(client,
                          filename,
                          network_id,
+                         scenario_name=scenario_name,
                          *args)
 
 
