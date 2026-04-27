@@ -12,9 +12,9 @@ from urllib.parse import urlparse
 from . import resultsprocessor
 
 from pywr.model import Model
-from pywr.nodes import Node, Storage, VirtualStorage, AggregatedNode
-from pywr.parameters import Parameter, DeficitParameter
-from pywr.recorders import NumpyArrayNodeRecorder, NumpyArrayStorageRecorder, NumpyArrayParameterRecorder
+from pywr.nodes import Node, Storage, VirtualStorage, AggregatedNode, Output
+from pywr.parameters import Parameter
+from pywr.recorders import NumpyArrayNodeRecorder, NumpyArrayStorageRecorder, NumpyArrayNodeDeficitRecorder
 from pywr.recorders.progress import ProgressRecorder
 
 from random import randbytes
@@ -482,22 +482,13 @@ class PywrHydraRunner(HydraToPywrNetwork):
                     elif isinstance(node, (Storage, VirtualStorage)):
                         name = '__{}__:{}'.format(node.name, 'simulated_volume')
                         NumpyArrayStorageRecorder(model, node, name=name)
-                    else:
-                        import warnings
-                        warnings.warn('Unrecognised node subclass "{}" with name "{}" for timeseries recording. Skipping '
-                                      'recording this node.'.format(node.__class__.__name__, node.name),
-                                      RuntimeWarning)
 
-                elif flag == 'deficit':
-                    if isinstance(node, node_classes):
-                        deficit_parameter = DeficitParameter(model, node)
-                        name = '__{}__:{}'.format(node.name, 'simulated_deficit')
-                        NumpyArrayParameterRecorder(model, deficit_parameter, name=name)
-                    else:
-                        import warnings
-                        warnings.warn('Unrecognised node subclass "{}" with name "{}" for deficit recording. Skipping '
-                                      'recording this node.'.format(node.__class__.__name__, node.name),
-                                      RuntimeWarning)
+
+                if isinstance(node, Output):
+                    name = '__{}__:{}'.format(node.name, 'simulated_deficit')
+                    NumpyArrayNodeDeficitRecorder(model, deficit_parameter, name=name, agg_func='sum')
+
+
 
     def _add_parameter_flagged_recorders(self, model):
         for parameter_name, flags in self._parameter_recorder_flags.items():
