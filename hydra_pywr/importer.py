@@ -53,13 +53,13 @@ def import_json(client, filename, project_id, template_id, network_name, *args, 
                 log.info(err)
         exit(1)
 
-    # if pnet:
-    #     pnet.add_parameter_references()
-    #     pnet.add_recorder_references()
-    #     pnet.promote_inline_parameters()
-    #     pnet.promote_inline_recorders()
-    #     pnet.attach_reference_parameters()
-    #     pnet.attach_reference_recorders()
+    if pnet:
+        pnet.add_parameter_references()
+        pnet.add_recorder_references()
+        pnet.promote_inline_parameters()
+        pnet.promote_inline_recorders()
+        pnet.attach_reference_parameters()
+        pnet.attach_reference_recorders()
         #pnet.detach_parameters()
 
 
@@ -91,18 +91,18 @@ def import_json(client, filename, project_id, template_id, network_name, *args, 
     return network_summary
 
 
-def import_json_as_scenario(client, filename, network_id, scenario_name=None, *args, appdata={}):
+def import_json_as_scenario(client, filename, network_id=None, scenario_id=None, scenario_name=None, *args, appdata={}):
     """
     Import a Pywr JSON file as a new scenario into an existing Hydra network.
-    Verifies that the node/link topology matches before adding scenario data.
+    If scenario_id is specified, clone the existing scenario before updating it.
     """
-    log.info(f'Beginning scenario import of "{filename}" into Network ID: {network_id}')
+    log.info(f'Beginning scenario import of "{filename}" into Network ID: {network_id or "<from scenario>"}')
 
     if filename is None:
         raise Exception("No file specified")
 
-    if network_id is None:
-        raise Exception("No network ID specified")
+    if network_id is None and scenario_id is None:
+        raise Exception("No network ID or scenario ID specified")
 
     pnet, errors, warnings = PywrNetwork.from_file(filename)
     if warnings:
@@ -116,10 +116,56 @@ def import_json_as_scenario(client, filename, network_id, scenario_name=None, *a
                 log.error(err)
         exit(1)
 
+    if pnet:
+        pnet.add_parameter_references()
+        pnet.add_recorder_references()
+        pnet.promote_inline_parameters()
+        pnet.promote_inline_recorders()
+        pnet.attach_reference_parameters()
+        pnet.attach_reference_recorders()
+
+    if scenario_id is not None:
+        existing_scenario = client.get_scenario(scenario_id=scenario_id, include_data=True)
+        if network_id is not None and network_id != existing_scenario['network_id']:
+            raise Exception(f"Scenario ID {scenario_id} does not belong to Network ID {network_id}")
+        network_id = existing_scenario['network_id']
+        scenario_name = scenario_name or existing_scenario.get('name')
+
     imp = PywrToHydraScenarioForNetwork(pnet, client=client, network_id=network_id, scenario_name=scenario_name)
     imp.verify_topology()
     imp.build_ra_lookup()
     imp.ensure_attributes_exist()
+
+    if scenario_id is not None:
+        resource_scenarios = imp.build_resource_scenarios()
+        backup = client.clone_scenario(scenario_id)
+        log.info(f"Cloned existing scenario {scenario_id} to preserve it as scenario {backup['id']}")
+
+        changed_resource_scenarios = imp.filter_changed_resource_scenarios(existing_scenario, resource_scenarios)
+        if changed_resource_scenarios:
+            log.info(
+                f"Updating scenario {scenario_id} with {len(changed_resource_scenarios)} changed dataset(s)..."
+            )
+            client.bulk_update_resourcedata(
+                scenario_ids=[scenario_id],
+                resource_scenarios=changed_resource_scenarios,
+            )
+        else:
+            log.info(f"No dataset changes detected for scenario {scenario_id}.")
+
+        log.info("Scenario update complete.")
+        log.info(
+            "View updated scenario at: https://app.waterstrategy.org/network/{}/{}".format(network_id, scenario_id)
+        )
+        log.info(
+            "View preserved backup scenario at: https://app.waterstrategy.org/network/{}/{}".format(network_id, backup['id'])
+        )
+        return {
+            "id": scenario_id,
+            "backup_id": backup['id'],
+            "updated_count": len(changed_resource_scenarios),
+        }
+
     scenario_summary = imp.add_scenario_to_hydra()
 
     log.info(f"Scenario import complete: Network ID {network_id}, Scenario ID {scenario_summary['id']}")
@@ -161,16 +207,26 @@ class PywrToHydraScenarioForNetwork():
             include_attributes=True,
         )
 
-        # Build attr_id <-> attr_name lookups
-        all_attrs = client.get_attributes(
-            network_id=network_id,
-            project_id=self.hydra_network["project_id"],
-            include_hierarchy=True,
-            include_global=True,
-        )
-        self.attr_name_to_id = {a["name"]: a["id"] for a in all_attrs}
-        self.attr_id_to_name = {a["id"]: a["name"] for a in all_attrs}
+        # Build attr_id <-> attr_name lookups from the template.
+        # The template is the authoritative source; using get_attributes with
+        # include_global=True would non-deterministically resolve name clashes
+        # between template-level and global attributes.
+        network_types = self.hydra_network.get("types", [])
+        if not network_types:
+            raise ValueError(f"Network {network_id} has no template types — cannot resolve attribute IDs")
+        template_id = network_types[0]["template_id"]
+        log.info(f"Fetching template {template_id} for attribute lookup...")
+        self._template = client.get_template(template_id=template_id)
 
+        self.attr_name_to_id = {}
+        self.attr_id_to_name = {}
+        for tt in self._template.get("templatetypes", []):
+            for ta in tt.get("typeattrs", []):
+                attr = ta.get("attr", {})
+                name, attr_id = attr.get("name"), attr.get("id")
+                if name and attr_id:
+                    self.attr_name_to_id[name] = attr_id
+                    self.attr_id_to_name[attr_id] = name
         # Populated by build_ra_lookup()
         self._ra_lookup = {}  # (resource_type, resource_name, attr_name) -> resource_attr_id
 
@@ -369,6 +425,38 @@ class PywrToHydraScenarioForNetwork():
             "hidden": "N",
         }
 
+    def _normalize_dataset_value(self, value):
+        if isinstance(value, str):
+            try:
+                return json.loads(value)
+            except (ValueError, TypeError):
+                return value
+        return value
+
+    def _datasets_equal(self, existing_dataset, new_dataset):
+        if existing_dataset is None or new_dataset is None:
+            return existing_dataset == new_dataset
+
+        if existing_dataset.get('type') != new_dataset.get('type'):
+            return False
+
+        existing_value = self._normalize_dataset_value(existing_dataset.get('value'))
+        new_value = self._normalize_dataset_value(new_dataset.get('value'))
+        return existing_value == new_value
+
+    def filter_changed_resource_scenarios(self, existing_scenario, candidate_resource_scenarios):
+        existing_map = {
+            rs['resource_attr_id']: rs['dataset']
+            for rs in existing_scenario.get('resourcescenarios', [])
+        }
+
+        changed = []
+        for rs in candidate_resource_scenarios:
+            existing_dataset = existing_map.get(rs['resource_attr_id'])
+            if not self._datasets_equal(existing_dataset, rs['dataset']):
+                changed.append(rs)
+        return changed
+
     def _lookup_hydra_datatype(self, attr_value):
         if isinstance(attr_value, Number):
             return "SCALAR"
@@ -504,13 +592,13 @@ class PywrToHydraNetwork():
 
     def get_typeid_by_name(self, name):
         for t in self.template["templatetypes"]:
-            if t["name"].lower() == name.lower():
+            if t.get("name", '').lower() == name.lower():
                 return t["id"]
         log.critical(f"Template {self.template_id} does not define type {name}")
 
     def get_hydra_network_type(self):
         for t in self.template["templatetypes"]:
-            if t["resource_type"] == "NETWORK":
+            if t.get("resource_type") == "NETWORK":
                 return t
 
     def get_hydra_attrid_by_name(self, attr_name):
@@ -555,6 +643,7 @@ class PywrToHydraNetwork():
     def initialise_hydra_connection(self):
         print(f"Retrieving template id '{self.template_id}'...")
         self.template = self.hydra_client.get_template(template_id=self.template_id)
+        self.template.templatetypes = list(filter(lambda tt: tt.status != 'X', self.template.templatetypes))
 
 
     def build_hydra_network(self, projection=None, appdata={}):

@@ -88,6 +88,24 @@ def import_json_as_scenario(obj, filename, network_id, scenario_name, *args):
                          *args)
 
 
+@hydra_app(category='import', name='Import Pywr JSON into a Hydra Scenario')
+@cli.command(name='update-scenario', context_settings=dict(
+    ignore_unknown_options=True,
+    allow_extra_args=True))
+@click.pass_obj
+@click.option('--filename', type=click.Path(file_okay=True, dir_okay=False, exists=True))
+@click.option('--scenario-id', type=int, default=None, help='ID of an existing scenario to update instead of creating a new one')
+def import_json_as_scenario(obj, filename, network_id, scenario_id, scenario_name, *args):
+    """ Add a scenario to an existing Hydra Network from a Pywr JSON file """
+
+    client = get_logged_in_client(obj)
+
+    importer.import_json_as_scenario(client,
+                         filename,
+                         scenario_id=scenario_id,
+                         *args)
+
+
 @hydra_app(category='export', name='Export to Pywr JSON')
 @cli.command(name='export', context_settings=dict(
     ignore_unknown_options=True,
