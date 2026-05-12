@@ -486,12 +486,8 @@ class PywrHydraRunner(HydraToPywrNetwork):
 
                 if isinstance(node, Output):
                     name = '__{}__:{}'.format(node.name, 'simulated_deficit')
-                    NumpyArrayNodeDeficitRecorder(model,
-                                                  node,
-                                                  name=name,
-                                                  temporal_agg_func='sum')
-
-
+                    if name not in model.recorders:
+                        NumpyArrayNodeDeficitRecorder(model, node, name=name, agg_func='sum')
 
     def _add_parameter_flagged_recorders(self, model):
         for parameter_name, flags in self._parameter_recorder_flags.items():
