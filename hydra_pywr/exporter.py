@@ -196,37 +196,11 @@ class HydraToPywrNetwork():
 
         self.type_id_map = {}
         for tt in self.template.templatetypes:
+            if tt.status and tt.status.upper() == 'X':
+                continue
             self.type_id_map[tt.id] = tt
 
-        # Some types may be defined on parent templates
-        # Identify these and add to type_id_map
-        self.parent_templates = {}
         self.ra_dataset_map = {}
-        pending_types = {}
-        for tt in self.type_id_map.values():
-            parent_type = None
-            if hasattr(tt, "parent_id") and tt.parent_id is not None and tt.resource_type != "NETWORK":
-                parent_template_id = self.template.parent_id
-                while parent_template_id and not parent_type:
-                    try:
-                        parent_template = self.get_parent_template(parent_template_id)
-
-                        for pt in parent_template.templatetypes:
-                            if pt.name == tt.name:
-                                parent_type = pt
-                                break
-                    except RequestError:
-                        # Type is not defined on immediate parent, so ascend
-                        ptemp = self.parent_templates[parent_template_id]
-                        parent_template_id = ptemp.parent_id
-
-                if parent_type:
-                    pending_types[parent_type.id] = parent_type
-                else:
-                    raise TypeError(f"Type '{tt.name}' with id {tt.id} not defined "
-                                    f"on template {self.template.id} or any parent template")
-
-        self.type_id_map.update(pending_types)
 
         self.attr_unit_map = {}
         self.hydra_node_by_id = {}
@@ -242,14 +216,6 @@ class HydraToPywrNetwork():
         self.tables = {}
         self.scenarios = []
         self.scenario_combinations = None
-
-    def get_parent_template(self, parent_template_id):
-        if parent_template_id not in self.parent_templates:
-            parent_template = self.hydra.get_template(template_id=parent_template_id)
-            self.parent_templates[parent_template_id] = parent_template
-        else:
-            parent_template = self.parent_templates[parent_template_id]
-        return parent_template
 
     @classmethod
     def from_scenario_id(cls, client, scenario_id, template_id=None, index=0, **kwargs):
