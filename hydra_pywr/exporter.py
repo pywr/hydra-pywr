@@ -199,6 +199,9 @@ class HydraToPywrNetwork():
             if tt.status and tt.status.upper() == 'X':
                 continue
             self.type_id_map[tt.id] = tt
+            if tt.parent_id is not None:
+                self.type_id_map[tt.parent_id] = tt
+
 
         self.ra_dataset_map = {}
 
