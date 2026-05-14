@@ -115,7 +115,7 @@ class HydraResultsProcessor(ResultsProcessor):
 
         #get a mapping from recorder names to resource attribute IDs
         self.df_recorder_ra_id_map = self.add_resource_attributes(self.df_recorders, is_dataframe=True)
-
+        breakpoint()
         self.non_df_recorder_ra_id_map = self.add_resource_attributes(self.non_df_recorders, is_dataframe=False)
 
         for recorder in self.df_recorders:
@@ -147,6 +147,11 @@ class HydraResultsProcessor(ResultsProcessor):
 
             if self.df_recorder_ra_id_map.get(recorder.name) is None:
                 # log.info("No resource attribute ID found for recorder {}. Skipping.".format(recorder.name))
+                continue
+
+            if self.non_df_recorder_ra_id_map.get(recorder.name+'_value') is None:
+                breakpoint()
+                log.info("No resource attribute ID found for recorder {}. Skipping.".format(recorder.name))
                 continue
 
             resource_scenario = self._make_recorder_resource_scenario(recorder,
@@ -229,7 +234,6 @@ class HydraResultsProcessor(ResultsProcessor):
         resource_attributes_to_add = []
         self.recorder_ra_map = {}
         self.recorder_ra_id_map={}
-
         for recorder in recorders:
             resource_attribute_id=None
             resource_type = 'NETWORK'
@@ -277,8 +281,9 @@ class HydraResultsProcessor(ResultsProcessor):
                         resource_id = hydra_node['id']
                         resource_type = 'NODE'
                     else:
-                        log.info("Unable to find a node associated with recorder {}. Ignoring.".format(recorder.name))
-                        continue
+                        resource_id = self.hydra_network['id']
+                        resource_type = 'NETWORK'
+                        log.info("Unable to find a node associated with recorder {}. Setting as Network attribute.".format(recorder.name))
 
             if resource_attribute_id is not None:
                 self.recorder_ra_id_map[recorder_name] = resource_attribute_id
