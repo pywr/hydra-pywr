@@ -115,7 +115,7 @@ class HydraResultsProcessor(ResultsProcessor):
 
         #get a mapping from recorder names to resource attribute IDs
         self.df_recorder_ra_id_map = self.add_resource_attributes(self.df_recorders, is_dataframe=True)
-        breakpoint()
+
         self.non_df_recorder_ra_id_map = self.add_resource_attributes(self.non_df_recorders, is_dataframe=False)
 
         for recorder in self.df_recorders:
@@ -125,7 +125,7 @@ class HydraResultsProcessor(ResultsProcessor):
                 continue
 
             if self.df_recorder_ra_id_map.get(recorder.name) is None:
-                # log.info("No resource attribute ID found for recorder {}. Skipping.".format(recorder.name))
+                #log.info("No resource attribute ID found for recorder {}. Skipping.".format(recorder.name))
                 continue
 
             resource_scenario = self._make_recorder_resource_scenario(recorder,
@@ -150,7 +150,6 @@ class HydraResultsProcessor(ResultsProcessor):
                 continue
 
             if self.non_df_recorder_ra_id_map.get(recorder.name+'_value') is None:
-                breakpoint()
                 log.info("No resource attribute ID found for recorder {}. Skipping.".format(recorder.name))
                 continue
 
