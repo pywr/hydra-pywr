@@ -769,7 +769,12 @@ class HydraToPywrNetwork():
 
     def build_node_and_references(self, nodedata, pywr_node_type):
 
+        if pywr_node_type['id'] not in self.type_id_map:
+            directly_retrieve_type = self.hydra.get_templatetype({'type_id':pywr_node_type['id']})
+            self.type_id_map[pywr_node_type['id']] = directly_retrieve_type
+
         node_type_attribute_names = [a.attr.name for a in self.type_id_map[pywr_node_type['id']].typeattrs]
+
 
         for resource_attribute in filter(lambda x:x.attr_is_var!='Y', nodedata["attributes"]):
 
