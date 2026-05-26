@@ -14,7 +14,7 @@ from . import resultsprocessor
 from pywr.model import Model
 from pywr.nodes import Node, Storage, VirtualStorage, AggregatedNode, Output
 from pywr.parameters import Parameter
-from pywr.recorders import NumpyArrayNodeRecorder, NumpyArrayStorageRecorder, NumpyArrayNodeDeficitRecorder
+from pywr.recorders import NumpyArrayNodeRecorder, NumpyArrayStorageRecorder, NumpyArrayParameterRecorder, NumpyArrayNodeDeficitRecorder
 from pywr.recorders.progress import ProgressRecorder
 
 from random import randbytes
