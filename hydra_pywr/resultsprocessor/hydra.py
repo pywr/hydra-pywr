@@ -237,7 +237,7 @@ class HydraResultsProcessor(ResultsProcessor):
         network_attribute_ids = {ra['attr_id']:ra for ra in self.hydra_network['attributes']}
 
         for recorder in recorders:
-            
+
             resource_attribute_id=None
             resource_type = 'NETWORK'
             resource_id = self.hydra_network['id']
@@ -280,10 +280,12 @@ class HydraResultsProcessor(ResultsProcessor):
                         resource_id = hydra_node['id']
                         resource_type = 'NODE'
                     else:
-                        # losslinks have an associated aggregated node which isn't in hydra so it should be ignored.
-                        if 'losslink' in recorder.name.lower()  and 'aggregated' in recorder.name.lower():
-                            log.warning("Unable to find a node associated with recorder {}. This recorder appears to be an aggregated node, so it will be skipped.".format(recorder.name))
-                            continue
+                        if 'aggregated' in recorder.name.lower():
+                            node_name = recorder.name.split(':')[0] if ':' in recorder.name else recorder.name
+                            node_name = node_name.replace('__', '')
+                            if node_name in self.node_lookup:
+                                log.warning(f"Recorder {recorder.name} is an aggregatged node. Ignoring")
+                                continue
                         resource_id = self.hydra_network['id']
                         resource_type = 'NETWORK'
                         log.info("Unable to find a node associated with recorder {}. Setting as Network attribute.".format(recorder.name))
@@ -293,15 +295,21 @@ class HydraResultsProcessor(ResultsProcessor):
                 continue
             else:
 
-                # Try to get the resource attribute
-                resource_attributes_to_add.append(dict(resource_type=resource_type,
-                                                                resource_id=resource_id,
-                                                                ref_key=resource_type,
-                                                                ref_id=resource_id,
-                                                                attr_id=attribute['id'],
-                                                                attr_is_var='Y',
-                                                                error_on_duplicate='N'))
-                self.recorder_ra_map[(resource_type, resource_id, attribute['id'])] = recorder_name
+                #check the resource attribute list for an entry which contains the same ref_key, ref_id and attr_id
+                #If one exists, then ignore
+                for ra in resource_attributes_to_add:
+                    if ra['ref_key'] == resource_type and ra['ref_id'] == resource_id and ra['attr_id'] == attribute['id']:
+                        log.warning(f"Duplicate resource attribute found on {ra['ref_key']} - {ra['ref_id']} - {ra['attr_id']} for recorder {recorder.name}. Ignoring.")
+                        break
+                else:
+                    resource_attributes_to_add.append(dict(resource_type=resource_type,
+                                                                    resource_id=resource_id,
+                                                                    ref_key=resource_type,
+                                                                    ref_id=resource_id,
+                                                                    attr_id=attribute['id'],
+                                                                    attr_is_var='Y',
+                                                                    error_on_duplicate='N'))
+                    self.recorder_ra_map[(resource_type, resource_id, attribute['id'])] = recorder_name
 
         if len(resource_attributes_to_add) > 0:
             log.info('Adding %s new resource attributes', len(resource_attributes_to_add))
