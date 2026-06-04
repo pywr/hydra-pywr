@@ -233,7 +233,11 @@ class HydraResultsProcessor(ResultsProcessor):
         resource_attributes_to_add = []
         self.recorder_ra_map = {}
         self.recorder_ra_id_map={}
+
+        network_attribute_ids = {ra['attr_id']:ra for ra in self.hydra_network['attributes']}
+
         for recorder in recorders:
+            
             resource_attribute_id=None
             resource_type = 'NETWORK'
             resource_id = self.hydra_network['id']
@@ -244,12 +248,9 @@ class HydraResultsProcessor(ResultsProcessor):
 
             attribute = self._get_attribute_from_name(attribute_name)
 
-
             recorder_name = recorder.name
             if attribute_name.endswith('value'):
                 recorder_name = recorder.name + '_value'
-
-            network_attribute_ids = {ra['attr_id']:ra for ra in self.hydra_network['attributes']}
 
             if attribute['id'] in network_attribute_ids:
                 resource_attribute_id = network_attribute_ids[attribute['id']]['id']
@@ -274,12 +275,15 @@ class HydraResultsProcessor(ResultsProcessor):
                             log.info("Unable to find resource attribute for node {} and attribute {}. Trying parent node.".format(recorder_node.name, attribute_name))
 
                 if resource_attribute_id is None:
-
                     hydra_node = self._get_hydra_node_from_recorder(recorder, pywr_node=recorder_node)
                     if hydra_node is not None:
                         resource_id = hydra_node['id']
                         resource_type = 'NODE'
                     else:
+                        # losslinks have an associated aggregated node which isn't in hydra so it should be ignored.
+                        if 'losslink' in recorder.name.lower()  and 'aggregated' in recorder.name.lower():
+                            log.warning("Unable to find a node associated with recorder {}. This recorder appears to be an aggregated node, so it will be skipped.".format(recorder.name))
+                            continue
                         resource_id = self.hydra_network['id']
                         resource_type = 'NETWORK'
                         log.info("Unable to find a node associated with recorder {}. Setting as Network attribute.".format(recorder.name))
@@ -405,6 +409,11 @@ class HydraResultsProcessor(ResultsProcessor):
             resource_attributes = node['attributes']
         else:
             raise ValueError('Node name "{}" not found in network data.'.format(node_name))
+
+        for ra in resource_attributes:
+            if ra['name'] == attribute_name:
+                return ra['id']
+
         node_attribute = self.node_attr_lookup[node.name].get(attribute_id)
         if node_attribute is not None:
             return node_attribute['id']
@@ -413,7 +422,6 @@ class HydraResultsProcessor(ResultsProcessor):
 
     def _get_attribute_from_name(self, name):
         dimension_id = self.attr_dimension_map.get(name)
-
 
         for attribute_id, attribute in self.hydra_attributes.items():
             if attribute['name'].lower() == name.lower() and attribute.get('dimension_id') == dimension_id:
