@@ -7,7 +7,7 @@ name = "hydra-pywr"
 version = "0.1.0"
 description = "Hydra plugins and library for import and exporting Pywr models"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.13"
 license = {text = "MIT"}
 authors = [
     {name = "Hydra Platform", email = "info@hydraplatform.org"}
