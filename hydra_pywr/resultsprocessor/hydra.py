@@ -64,9 +64,9 @@ class HydraResultsProcessor(ResultsProcessor):
 
         for resource_scenario in self.generate_array_recorder_resource_scenarios():
             scenario['resourcescenarios'].append(resource_scenario)
-
-        for i in range(0, len(scenario['resourcescenarios']), 100):
-                chunk = scenario['resourcescenarios'][i:i+100]
+        chunk_size = 1000
+        for i in range(0, len(scenario['resourcescenarios']), chunk_size):
+                chunk = scenario['resourcescenarios'][i:i+chunk_size]
                 log.info('Saving %s datasets', len(chunk))
                 if not dry_run:
                     self.hydra_client.bulk_update_resourcedata(
