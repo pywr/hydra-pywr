@@ -34,7 +34,9 @@ NODE_TYPE_MAP = {
     'piecewiselink': 'PiecewiseLink',
 }
 
-PARAMETER_TYPE_MAP = {
+# Maps known v1 parameter type names (lowercase) to their v2 equivalents.
+# Used only for detection and helpful error messages — no conversion is done here.
+_V1_PARAMETER_TYPE_MAP = {
     'constant': 'Constant',
     'constantparameter': 'Constant',
     'monthly_profile': 'MonthlyProfile',
@@ -59,7 +61,18 @@ PARAMETER_TYPE_MAP = {
     'storagethresholdparameter': 'Threshold',
     'python': 'Python',
     'pythonparameter': 'Python',
-    # dataframe/interpolatedvolume have no direct v2 equivalent in this schema version
+}
+
+# Valid v2 parameter type names (PascalCase).
+_V2_PARAMETER_TYPES = {
+    'Aggregated', 'AggregatedIndex', 'AsymmetricSwitchIndex', 'Constant',
+    'ConstantScenario', 'ControlCurvePiecewiseInterpolated', 'ControlCurveInterpolated',
+    'ControlCurveIndex', 'ControlCurve', 'DailyProfile', 'IndexedArray',
+    'MonthlyProfile', 'WeeklyProfile', 'UniformDrawdownProfile', 'Max', 'Min',
+    'MultiThreshold', 'Negative', 'NegativeMax', 'NegativeMin', 'HydropowerTarget',
+    'Polynomial1D', 'Threshold', 'TablesArray', 'Python', 'Delay', 'DelayIndex',
+    'Division', 'Offset', 'DiscountFactor', 'Interpolated', 'RbfProfile', 'Rolling',
+    'RollingIndex', 'Placeholder', 'DiurnalProfile',
 }
 
 PARAMETER_TYPES = (
@@ -123,82 +136,39 @@ def _map_node_type(raw_type):
     return NODE_TYPE_MAP.get(raw_type.lower())
 
 
-def _map_parameter_type(raw_type):
-    return PARAMETER_TYPE_MAP.get(raw_type.lower())
-
-
-_PROFILE_TYPES = {"MonthlyProfile", "DailyProfile", "WeeklyProfile"}
-_CONTROL_CURVE_TYPES = {"ControlCurve", "ControlCurveInterpolated", "ControlCurveIndex"}
-
-# v1 optimization / recorder fields that have no v2 equivalent
+# v1-only keys stripped from any parameter dict regardless of type
 _PARAM_SKIP_KEYS = {"is_variable", "lower_bounds", "upper_bounds", "is_double_variable",
                     "double_lower_bounds", "double_upper_bounds", "variable_name",
                     "comment", "epsilon"}
 
 
+class V1FormatError(ValueError):
+    """Raised when a v1-format parameter type is found in Hydra data."""
+
+
 def _to_v2_parameter(name, value_dict):
-    """Convert a v1 parameter dict to a v2 array-element dict, or None if type is unknown."""
+    """Pass a v2 parameter dict through (adding meta.name), or raise V1FormatError for v1 types."""
     raw_type = value_dict.get("type", "")
-    v2_type = _map_parameter_type(raw_type)
 
-    if v2_type is None:
-        log.warning("Unknown parameter type '%s' for parameter '%s'; skipping", raw_type, name)
-        return None
-
-    p = {"meta": {"name": name}, "type": v2_type}
-
-    for key, val in value_dict.items():
-        if key == "type" or key in _PARAM_SKIP_KEYS:
-            continue
-
-        if v2_type == "Constant" and key == "value":
-            p[key] = _wrap_metric(val)
-
-        elif v2_type in _PROFILE_TYPES and key == "values":
-            if isinstance(val, list):
-                p[key] = {"type": "Literal", "values": [float(v) for v in val]}
-            else:
+    if raw_type in _V2_PARAMETER_TYPES:
+        p = {"meta": {"name": name}}
+        for key, val in value_dict.items():
+            if key not in _PARAM_SKIP_KEYS:
                 p[key] = val
+        return p
 
-        elif v2_type == "Aggregated" and key == "parameters":
-            p["metrics"] = [_wrap_metric(v) if isinstance(v, str) else v for v in val]
+    v2_equivalent = _V1_PARAMETER_TYPE_MAP.get(raw_type.lower())
+    if v2_equivalent:
+        raise V1FormatError(
+            f"Parameter '{name}' uses the v1 type '{raw_type}' "
+            f"(v2 equivalent: '{v2_equivalent}'). "
+            f"This scenario contains v1-format parameters. "
+            f"Export via the 'export' command first, then convert using "
+            f"pywr.convert_model_from_v1_json_string()."
+        )
 
-        elif v2_type == "Aggregated" and key == "agg_func":
-            if isinstance(val, str):
-                p[key] = {"type": val.capitalize()}
-            else:
-                p[key] = val
-
-        elif v2_type == "Interpolated":
-            # v1: x (x-points), values (y-points), parameter (input metric)
-            # v2: x (input metric), xp (x-points as Metrics), fp (y-points as Metrics)
-            if key == "x":
-                p["xp"] = [_wrap_metric(v) for v in val] if isinstance(val, list) else val
-            elif key == "values":
-                p["fp"] = [_wrap_metric(v) for v in val] if isinstance(val, list) else val
-            elif key == "parameter":
-                p["x"] = _wrap_metric(val) if not isinstance(val, dict) else val
-            else:
-                p[key] = val
-
-        elif v2_type in _CONTROL_CURVE_TYPES:
-            if key == "storage_node":
-                # v1 storage_node string → v2 storage_metric Node reference
-                p["storage_metric"] = {"type": "Node", "name": val}
-            elif key == "control_curves":
-                p[key] = [_wrap_metric(v) for v in val] if isinstance(val, list) else val
-            elif key == "values" and v2_type != "ControlCurveIndex":
-                # ControlCurve/ControlCurveInterpolated values are Metrics; ControlCurveIndex has no values
-                p[key] = [_wrap_metric(v) for v in val] if isinstance(val, list) else val
-            elif key == "values" and v2_type == "ControlCurveIndex":
-                pass  # ControlCurveIndex has no values field; skip
-            else:
-                p[key] = val
-
-        else:
-            p[key] = val
-
-    return p
+    log.warning("Unknown parameter type '%s' for parameter '%s'; skipping", raw_type, name)
+    return None
 
 
 class HydraToPywrV2Network:
@@ -660,7 +630,13 @@ class HydraToPywrV2Network:
 
 def export_json_v2(client, data_dir, scenario_id, json_sort_keys=False, json_indent=2):
     exporter = HydraToPywrV2Network.from_scenario_id(client, scenario_id, data_dir=data_dir)
-    output = exporter.build()
+    try:
+        output = exporter.build()
+    except V1FormatError as e:
+        log.error("v1 format detected — this scenario cannot be exported directly to v2.")
+        log.error("To convert: export via the 'export' command to get a v1 JSON, then run:")
+        log.error("  pywr.convert_model_from_v1_json_string(v1_json_string)")
+        raise
 
     title = output["metadata"].get("title", f"network_{exporter.network_id}")
     outfile = os.path.join(data_dir, f"{title}_v2.json")
