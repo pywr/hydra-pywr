@@ -1,3 +1,5 @@
+import os
+
 import click
 import pandas
 
@@ -17,7 +19,7 @@ def get_client(**kwargs):
 
 
 def get_logged_in_client(context):
-    session = context.get("session")
+    session = context.get("session") or os.environ.get("HYDRA_SESSION_ID")
     client = get_client(url=context.get('hostname'), session_id=session)
     if client.user_id is None and session is None:
         client.login(username=context["username"], password=context["password"])
