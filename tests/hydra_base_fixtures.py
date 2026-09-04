@@ -11,8 +11,6 @@ from hydra_base.lib.objects import JSONObject
 import hydra_base
 from hydra_base import config
 
-#from hydra_pywr.template import generate_pywr_attributes, generate_pywr_template, load_template_config, PYWR_DEFAULT_DATASETS
-
 global user_id
 user_id = config.get('DEFAULT', 'root_user_id', 1)
 
@@ -106,39 +104,6 @@ def session(db_with_users, engine, request):
     session.commit()
     # Finally drop all the tables.
     hydra_base.db.DeclarativeBase.metadata.drop_all()
-
-
-@pytest.fixture()
-def session_with_pywr_template(session):
-
-    attributes = [JSONObject(a) for a in generate_pywr_attributes()]
-
-    # The response attributes have ids now.
-    response_attributes = hydra_base.add_attributes(attributes)
-
-    # Convert to a simple dict for local processing.
-    attribute_ids = {a.name: a.id for a in response_attributes}
-
-    default_data_set_ids = {}
-    for attribute_name, dataset in PYWR_DEFAULT_DATASETS.items():
-
-        # Patch the default datasets to convert unit to unit_id.
-        unit = dataset.pop('unit', None)
-        if unit is not None and 'unit_id' not in dataset:
-            u = hydra_base.get_unit_by_abbreviation(unit)
-            dataset['unit_id'] = u.id
-        else:
-            dataset['unit_id'] = None
-
-        hydra_dataset = hydra_base.add_dataset(flush=True, **dataset)
-        default_data_set_ids[attribute_name] = hydra_dataset.id
-
-    config = load_template_config('full')
-    template = generate_pywr_template(attribute_ids, default_data_set_ids, config)
-
-    hydra_base.add_template(JSONObject(template))
-
-    yield session
 
 
 def create_user(name):

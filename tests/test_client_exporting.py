@@ -1,19 +1,28 @@
 from helpers import *
 from fixtures import *
 from hydra_base_fixtures import *
-from hydra_pywr.exporter import PywrHydraExporter
-from hydra_pywr.runner import PywrHydraRunner
-from hydra_pywr.template import pywr_template_name, PYWR_TIMESTEPPER_ATTRIBUTES
+from hydra_pywr.exporter import HydraToPywrNetwork, export_json
+from hydra_pywr.runner import run_network_scenario
+from hydra_pywr.template import pywr_template_name
+from pywrparser.types.network import PywrNetwork
 from pywr.model import Model
 import json
 
+# hydra_pywr.template no longer exposes PYWR_TIMESTEPPER_ATTRIBUTES; these are
+# the fields pywr's own Timestepper expects.
+PYWR_TIMESTEPPER_ATTRIBUTES = ('start', 'end', 'timestep')
 
-def test_export(db_with_pywr_network, logged_in_client):
+
+def test_export(db_with_pywr_network, logged_in_client, tmp_path):
     client = logged_in_client
 
     pywr_network_id, pywr_scenario_id, pywr_json_filename = db_with_pywr_network
-    exporter = PywrHydraExporter.from_network_id(client, pywr_network_id, pywr_scenario_id)
-    pywr_data_exported = exporter.get_pywr_data()
+
+    outfile = export_json(client, str(tmp_path), pywr_scenario_id, use_cache=False,
+                          json_sort_keys=False, json_indent=2)
+
+    with open(outfile) as fh:
+        pywr_data_exported = json.load(fh)
 
     # Check transformed data is about right
     with open(pywr_json_filename) as fh:
@@ -25,20 +34,17 @@ def test_export(db_with_pywr_network, logged_in_client):
     m.run()
 
 
-
-def test_runner(db_with_pywr_network, logged_in_client):
+def test_runner(db_with_pywr_network, logged_in_client, tmp_path):
     client = logged_in_client
 
     pywr_network_id, pywr_scenario_id, pywr_json_filename = db_with_pywr_network
 
-    runner = PywrHydraRunner.from_network_id(client, pywr_network_id, pywr_scenario_id)
+    runner = run_network_scenario(client, pywr_scenario_id, template_id=None, data_dir=str(tmp_path))
 
-    runner.load_pywr_model()
-    runner.run_pywr_model()
-    runner.save_pywr_results(client)
+    assert runner.model is not None
 
 
-def test_create_empty_network(db_with_template, projectmaker, logged_in_client):
+def test_create_empty_network(db_with_template, projectmaker, logged_in_client, tmp_path):
     client = logged_in_client
 
     project = projectmaker.create()
@@ -67,8 +73,9 @@ def test_create_empty_network(db_with_template, projectmaker, logged_in_client):
 
     scenario_id = hydra_network['scenarios'][0]['id']
 
-    exporter = PywrHydraExporter.from_network_id(client, hydra_network.id, scenario_id)
-    pywr_data_exported = exporter.get_pywr_data()
+    exporter = HydraToPywrNetwork.from_scenario_id(client, scenario_id, data_dir=str(tmp_path))
+    pywr_network_data = exporter.build_pywr_network()
+    pywr_data_exported = PywrNetwork(pywr_network_data).as_dict()
 
     assert 'timestepper' in pywr_data_exported
 
