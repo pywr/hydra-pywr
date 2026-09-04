@@ -2,8 +2,8 @@ import os
 import pytest
 import hydra_base
 from hydra_base import JSONObject
-#from hydra_pywr.importer import PywrHydraImporter
-#from hydra_pywr.template import register_template, load_template_config, pywr_template_name
+from hydra_pywr.importer import import_json
+from hydra_pywr.template import register_template, load_template_config, pywr_template_name
 from hydra_client.connection import JSONConnection
 from hydra_base_fixtures import testdb_uri
 
@@ -46,30 +46,6 @@ def pywr_json_filename(request, model_directory):
 
 
 @pytest.fixture()
-def session_with_pywr_network(pywr_json_filename, session_with_pywr_template, projectmaker, root_user_id):
-    project = projectmaker.create()
-
-    template = JSONObject(hydra_base.get_template_by_name(pywr_template_name('Full')))
-
-    importer = PywrHydraImporter(pywr_json_filename, template)
-
-    # First the attributes must be added.
-    attributes = [JSONObject(a) for a in importer.add_attributes_request_data()]
-
-    # The response attributes have ids now.
-    response_attributes = hydra_base.add_attributes(attributes)
-
-    # Convert to a simple dict for local processing.
-    attribute_ids = {a.name: a.id for a in response_attributes}
-
-    # Now we try to create the network
-    network = importer.add_network_request_data(attribute_ids, project.id)
-    hydra_network = hydra_base.add_network(JSONObject(network), user_id=root_user_id)
-
-    return hydra_network.id, pywr_json_filename
-
-
-@pytest.fixture()
 def db_with_template(db_with_users, logged_in_client):
     register_template(logged_in_client)
 
@@ -83,8 +59,11 @@ def db_with_pywr_network(pywr_json_filename, db_with_template, projectmaker, log
     config = load_template_config('full')
     template = client.get_template_by_name(pywr_template_name(config['name']))
 
-    importer = PywrHydraImporter.from_client(client, pywr_json_filename, template['id'])
-    network_id, scenario_id = importer.import_data(client, project.id)
+    network_summary = import_json(client, pywr_json_filename, project.id, template['id'], None)
+
+    network_id = network_summary['id']
+    new_network = client.get_network(network_id=network_id, include_attributes=False, include_data=False)
+    scenario_id = new_network['scenarios'][0]['id']
 
     return network_id, scenario_id, pywr_json_filename
 
