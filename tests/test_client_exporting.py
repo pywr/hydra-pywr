@@ -3,20 +3,16 @@ from fixtures import *
 from hydra_base_fixtures import *
 from hydra_pywr.exporter import HydraToPywrNetwork, export_json
 from hydra_pywr.runner import run_network_scenario
-from hydra_pywr.template import pywr_template_name
+from hydra_pywr.template import pywr_template_name, PYWR_TIMESTEPPER_ATTRIBUTES
 from pywrparser.types.network import PywrNetwork
 from pywr.model import Model
 import json
-
-# hydra_pywr.template no longer exposes PYWR_TIMESTEPPER_ATTRIBUTES; these are
-# the fields pywr's own Timestepper expects.
-PYWR_TIMESTEPPER_ATTRIBUTES = ('start', 'end', 'timestep')
 
 
 def test_export(db_with_pywr_network, logged_in_client, tmp_path):
     client = logged_in_client
 
-    pywr_network_id, pywr_scenario_id, pywr_json_filename = db_with_pywr_network
+    _, pywr_scenario_id, pywr_json_filename = db_with_pywr_network
 
     outfile = export_json(client, str(tmp_path), pywr_scenario_id, use_cache=False,
                           json_sort_keys=False, json_indent=2)
@@ -37,7 +33,7 @@ def test_export(db_with_pywr_network, logged_in_client, tmp_path):
 def test_runner(db_with_pywr_network, logged_in_client, tmp_path):
     client = logged_in_client
 
-    pywr_network_id, pywr_scenario_id, pywr_json_filename = db_with_pywr_network
+    _, pywr_scenario_id, pywr_json_filename = db_with_pywr_network
 
     runner = run_network_scenario(client, pywr_scenario_id, template_id=None, data_dir=str(tmp_path))
 

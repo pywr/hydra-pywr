@@ -72,7 +72,7 @@ def pywr_with_demand_pattern(model_directory, db_with_template, projectmaker, lo
 
 def test_simple_demand_patter(pywr_with_demand_pattern, logged_in_client, tmp_path):
     client = logged_in_client
-    pywr_network_id, pywr_scenario_id = pywr_with_demand_pattern
+    _, pywr_scenario_id = pywr_with_demand_pattern
 
     exporter = HydraToPywrNetwork.from_scenario_id(client, pywr_scenario_id, data_dir=str(tmp_path))
     pywr_network_data = exporter.build_pywr_network()

@@ -160,7 +160,3 @@ def create_project(name=None):
         return project
     else:
         return user_projects[0]
-
-@pytest.fixture()
-def root_user_id():
-    return user_id
