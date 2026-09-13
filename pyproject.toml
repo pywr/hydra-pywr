@@ -7,7 +7,7 @@ name = "hydra-pywr"
 version = "0.1.0"
 description = "Hydra plugins and library for import and exporting Pywr models"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.10"
 license = {text = "MIT"}
 authors = [
     {name = "Hydra Platform", email = "info@hydraplatform.org"}
@@ -32,6 +32,9 @@ dependencies = [
     "pywr>=1.0",
     "boto3",
     "pandas==2.3.3",
+    "pywrparser @ git+https://github.com/UMWRG/pywrparser",
+    "hydra-client @ git+https://github.com/hydraplatform/hydra-client-python",
+    "hydra-network-utils @ git+https://github.com/hydraplatform/hydra-network-utils",
 ]
 
 [project.optional-dependencies]
