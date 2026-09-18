@@ -252,7 +252,13 @@ class HydraResultsProcessor(ResultsProcessor):
             if attribute_name.endswith('value'):
                 recorder_name = recorder.name + '_value'
 
-            if attribute['id'] in network_attribute_ids:
+            # `simulated_flow` etc. is a single Attr definition shared by every node (and
+            # potentially the network) in the network, so its attr_id alone doesn't tell us
+            # which resource a given recorder belongs to. Only take the network-level
+            # resource attribute here if this recorder isn't tied to a pywr node -- otherwise
+            # a stray/legitimate network-level resource attribute for this attr_id would hijack
+            # every node's recorder for the same attribute (see below for the real node lookup).
+            if recorder_node is None and attribute['id'] in network_attribute_ids:
                 resource_attribute_id = network_attribute_ids[attribute['id']]['id']
             else:
                 resource_attribute_id = None
@@ -283,12 +289,18 @@ class HydraResultsProcessor(ResultsProcessor):
                         if 'aggregated' in recorder.name.lower():
                             node_name = recorder.name.split(':')[0] if ':' in recorder.name else recorder.name
                             node_name = node_name.replace('__', '')
+                            # Compound node types (e.g. LossLink) create an internal,
+                            # parentless AggregatedNode named "<node name> Aggregated" as
+                            # an implementation detail -- it has no Hydra-side counterpart
+                            # of its own. Strip that suffix to recover the real node name.
+                            if node_name.endswith(' Aggregated'):
+                                node_name = node_name[:-len(' Aggregated')]
                             if node_name in self.node_lookup:
-                                log.warning(f"Recorder {recorder.name} is an aggregatged node. Ignoring")
+                                log.warning(f"Recorder {recorder.name} is an aggregated companion node. Ignoring")
                                 continue
                         resource_id = self.hydra_network['id']
                         resource_type = 'NETWORK'
-                        log.info("Unable to find a node associated with recorder {}. Setting as Network attribute.".format(recorder.name))
+                        log.warning("Unable to find a node associated with recorder {}. Setting as Network attribute.".format(recorder.name))
 
             if resource_attribute_id is not None:
                 self.recorder_ra_id_map[recorder_name] = resource_attribute_id
