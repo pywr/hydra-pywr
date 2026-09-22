@@ -584,7 +584,7 @@ class HydraToPywrNetwork():
                 ts_key = subs[-1]
                 try:
                     value = json.loads(ds["value"])
-                except json.decoder.JSONDecodeError:
+                except (json.decoder.JSONDecodeError, TypeError):
                     value = ds["value"]
                 timestep[ts_key] = value
             else:
