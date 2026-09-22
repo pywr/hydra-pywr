@@ -1,9 +1,10 @@
 from helpers import *
 from fixtures import *
 from hydra_base_fixtures import *
-from hydra_pywr.importer import PywrHydraImporter
-from hydra_pywr.exporter import PywrHydraExporter
+from hydra_pywr.importer import import_json
+from hydra_pywr.exporter import HydraToPywrNetwork
 from hydra_pywr.template import pywr_template_name
+from pywrparser.types.network import PywrNetwork
 from hydra_base.lib.objects import Dataset
 import os
 import pytest
@@ -18,8 +19,10 @@ def pywr_with_demand_pattern(model_directory, db_with_template, projectmaker, lo
     pywr_json_filename = os.path.join(model_directory, 'simple1.json')
     template = client.get_template_by_name(pywr_template_name('Full'))
 
-    importer = PywrHydraImporter.from_client(client, pywr_json_filename, template['id'])
-    network_id, scenario_id = importer.import_data(client, project.id)
+    network_summary = import_json(client, pywr_json_filename, project.id, template['id'], None)
+    network_id = network_summary['id']
+    new_network = client.get_network(network_id=network_id, include_attributes=False, include_data=False)
+    scenario_id = new_network['scenarios'][0]['id']
 
     # Create the demand pattern
     pattern_attr = client.add_attribute({'name': 'demand_pattern'})
@@ -67,12 +70,13 @@ def pywr_with_demand_pattern(model_directory, db_with_template, projectmaker, lo
     return network_id, scenario_id
 
 
-def test_simple_demand_patter(pywr_with_demand_pattern, logged_in_client):
+def test_simple_demand_patter(pywr_with_demand_pattern, logged_in_client, tmp_path):
     client = logged_in_client
-    pywr_network_id, pywr_scenario_id = pywr_with_demand_pattern
+    _, pywr_scenario_id = pywr_with_demand_pattern
 
-    exporter = PywrHydraExporter.from_network_id(client, pywr_network_id, pywr_scenario_id)
-    pywr_data_exported = exporter.get_pywr_data()
+    exporter = HydraToPywrNetwork.from_scenario_id(client, pywr_scenario_id, data_dir=str(tmp_path))
+    pywr_network_data = exporter.build_pywr_network()
+    pywr_data_exported = PywrNetwork(pywr_network_data).as_dict()
 
     assert 'parameters' in pywr_data_exported
 
