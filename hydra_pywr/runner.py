@@ -19,6 +19,8 @@ from pywr.recorders.progress import ProgressRecorder
 
 from random import randbytes
 
+from hydra_client.output import write_progress, write_output
+
 from .exporter import HydraToPywrNetwork, find_missing_parameters, rewrite_ref_parameters
 
 from pywrparser.types.network import PywrNetwork
@@ -42,22 +44,31 @@ def run_network_scenario(client, scenario_id, template_id,
                          solver=None, data_dir='/tmp', use_cache=False, disable_automatic_node_recorders=False, dry_run=False,
                          update=False):
 
-    runner = PywrHydraRunner.from_scenario_id(client, scenario_id,
-                                             template_id=template_id,
-                                             data_dir=data_dir,use_cache=use_cache,
-                                             disable_automatic_node_recorders=disable_automatic_node_recorders)
+    try:
+        write_output("Retrieving network and scenario data from Hydra")
+        runner = PywrHydraRunner.from_scenario_id(client, scenario_id,
+                                                 template_id=template_id,
+                                                 data_dir=data_dir,use_cache=use_cache,
+                                                 disable_automatic_node_recorders=disable_automatic_node_recorders)
+        runner.write_progress()
 
-    cached_model_file = runner.get_cached_model_file() if use_cache else None
-    if cached_model_file is not None:
-        log.info("Using cached exported model: %s", cached_model_file)
-        runner.load_pywr_model_from_file(cached_model_file, solver=solver)
-    else:
-        runner.setup(solver=solver)
+        cached_model_file = runner.get_cached_model_file() if use_cache else None
+        if cached_model_file is not None:
+            log.info("Using cached exported model: %s", cached_model_file)
+            runner.load_pywr_model_from_file(cached_model_file, solver=solver)
+        else:
+            runner.setup(solver=solver)
 
-    runner.run_pywr_model()
-    runner.save_results(dry_run=dry_run, update=update)
-    log.info(f'Pywr model run success. Network ID: {runner.data.id}, Scenario ID: {scenario_id}')
-    return runner
+        runner.run_pywr_model()
+        runner.save_results(dry_run=dry_run, update=update)
+
+        write_output("Pywr model run completed successfully")
+        runner.write_progress(runner.steps)
+        log.info(f'Pywr model run success. Network ID: {runner.data.id}, Scenario ID: {scenario_id}')
+        return runner
+    except Exception as e:
+        write_output(f"An error occurred while running the Pywr model: {e}")
+        raise
 
 def save_pywr_file(data, data_dir, network_id=None, scenario_id=None):
     """
@@ -171,6 +182,12 @@ class PywrHydraRunner(HydraToPywrNetwork):
 
         self.limit_nodes_recording = False
 
+        # Number of `write_progress` checkpoints in a full run: retrieving data,
+        # building the network, resolving files, loading the model, running the
+        # model, preparing results and saving results to Hydra.
+        self.steps = 7
+        self.current_step = 0
+
         tmpdir = tempfile.gettempdir()
         self.results_location = os.path.join(os.getenv("PYWR_RESULTS_LOCATION", tmpdir), str(self.scenario_id))
         os.makedirs(self.results_location, exist_ok=True)
@@ -178,11 +195,26 @@ class PywrHydraRunner(HydraToPywrNetwork):
         hashkey = hashlib.sha256(randbytes(56)).hexdigest().encode('utf-8')
         self.s3_path = hmac.digest(hashkey, str(self.scenario_id).encode('utf-8'), hashlib.sha256).hex()
 
+    def write_progress(self, step=None):
+        """
+            Utility function which automatically increments the current 'step'
+            so as to avoid having to state it explicitly.
+            If 'step' is specified, it'll write that step instead.
+        """
+        if step is None:
+            write_progress(self.current_step, self.steps)
+            self.current_step = self.current_step + 1
+        else:
+            write_progress(step, self.steps)
+
     def setup(self, solver=None):
         """
             Having exported the model, now update the model by doing such things as
             retrieving any external files referenced in the model
         """
+        write_output("Building Pywr network from Hydra data")
+        self.write_progress()
+
         network_data = self.build_pywr_network()
         pywr_network = PywrNetwork(network_data)
         pywr_network.promote_inline_parameters()
@@ -191,6 +223,9 @@ class PywrHydraRunner(HydraToPywrNetwork):
         missing_params = find_missing_parameters(pywr_network)
         if len(missing_params) > 0:
             rewrite_ref_parameters(pywr_network, missing_params)
+
+        write_output("Resolving external file references")
+        self.write_progress()
 
         url_refs = pywr_network.url_references()
         for url, refs in url_refs.items():
@@ -215,6 +250,9 @@ class PywrHydraRunner(HydraToPywrNetwork):
 
         if self.data_dir is not None:
             self.modelfile = save_pywr_file(pywr_network.as_dict(), self.data_dir, self.data['id'], self.scenario_id)
+
+        write_output("Loading Pywr model")
+        self.write_progress()
 
         self.load_pywr_model(pywr_network, solver=solver)
 
@@ -407,6 +445,9 @@ class PywrHydraRunner(HydraToPywrNetwork):
             if nscenarios > max_scenarios:
                 raise RuntimeError(f'Number of scenarios ({nscenarios}) exceeds the maximum limit of {max_scenarios}.')
 
+        write_output("Running Pywr model, please note that this may take some time")
+        self.write_progress()
+
         # Now run the model.
         run_stats = model.run()
 
@@ -523,6 +564,9 @@ class PywrHydraRunner(HydraToPywrNetwork):
 
     def save_results(self, dry_run=False, update=False):
         """ Save the outputs from a Pywr model run to Hydra. """
+        write_output("Preparing model results")
+        self.write_progress()
+
         resultsProcessor = resultsprocessor.get_results_processor(
             self.scenario_id,
             df_recorders=self._df_recorders,
@@ -534,4 +578,8 @@ class PywrHydraRunner(HydraToPywrNetwork):
             data_dir=self.data_dir,
             output_resample_freq=self.output_resample_freq
         )
+
+        write_output("Saving results to Hydra")
+        self.write_progress()
+
         resultsProcessor.save(dry_run=dry_run, update=update)
