@@ -227,8 +227,11 @@ class ResultsProcessor():
                 resultstore = pd.HDFStore(os.path.join(self.results_location, filename), mode='w')
                 self.resultstores[filename] = resultstore
 
+            #NB pandas writes the 'pandas_type' group attribute itself, which is
+            #what HdfStorageAdapter.identify_group_format() reads back. Do not try
+            #to set it here: HDFStore.__getitem__ deserialises the whole dataframe
+            #off disk and the attribute would be set on the discarded copy.
             resultstore.put(f"{groupname}", df)
-            resultstore[f"{groupname}"].attrs['pandas_type'] = 'frame'
 
             # Convert to JSON for saving in hydra
             value = json.dumps({

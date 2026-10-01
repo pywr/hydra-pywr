@@ -340,9 +340,15 @@ class PywrToHydraScenarioForNetwork():
                     for n in new_attr_names
                 ]
             )
-            for attr in added:
-                self.attr_name_to_id[attr["name"]] = attr["id"]
-                self.attr_id_to_name[attr["id"]] = attr["name"]
+            # Hydra de-duplicates attribute names case-insensitively and hands
+            # back the pre-existing row (under its own spelling) on a case-only
+            # clash, so match the response back to what we asked for by
+            # lower-cased name rather than assuming names round-trip exactly.
+            added_by_lower_name = {attr["name"].lower(): attr for attr in added}
+            for name in new_attr_names:
+                attr = added_by_lower_name[name.lower()]
+                self.attr_name_to_id[name] = attr["id"]
+                self.attr_id_to_name[attr["id"]] = name
 
         # Add the missing resource_attributes to the network
         ras_to_add = [

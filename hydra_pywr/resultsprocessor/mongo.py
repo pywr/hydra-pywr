@@ -1,12 +1,10 @@
 
 import os
-from random import randbytes
 from . import ResultsProcessor
 import logging
 import datetime
 import uuid
 
-import os
 log = logging.getLogger(__name__)
 
 class MongoResultsProcessor(ResultsProcessor):
@@ -28,14 +26,13 @@ class MongoResultsProcessor(ResultsProcessor):
         self.mongo_client = None
         # Generate unique run ID for this model run
         self.run_id = str(uuid.uuid4())
-        self.run_timestamp = datetime.datetime.now()
+        self.run_timestamp = datetime.datetime.now(datetime.timezone.utc)
         # List to store all documents for the model_results collection
         self.model_results_documents = []
         #not to be confused with hydra attributes, these are attribute definitions to be stored in the mongo collection
         self.mongo_attribute_definition_dict = {}
 
         self.resource_results_dict = {}
-        self.save_to_s3=False
 
     def connect(self):
         """
@@ -68,6 +65,8 @@ class MongoResultsProcessor(ResultsProcessor):
                 log.info("Connected to MongoDB..checking for database")
 
                 log.info("Connected to MongoDB database: %s", self.mongo_database)
+
+                self.create_indexes()
 
                 return self.mongo_client
             except Exception as e:
@@ -214,7 +213,19 @@ class MongoResultsProcessor(ResultsProcessor):
     def save(self, dry_run=False, update=False):
         """
         Save the results to MongoDB using the model_results collection schema
+
+        Args:
+            dry_run: If True, process the recorders and write the local H5 files
+                     but do not insert anything into Mongo and do not upload to S3.
+            update: Unused for Mongo storage. Every run is written under its own
+                    run_id and readers select the most recent run, so results are
+                    append-only and there is nothing to delete before writing.
+                    Accepted for signature compatibility with HydraResultsProcessor.
         """
+        if update is True:
+            log.info("'update' has no effect on Mongo storage: each run is stored "
+                     "under its own run_id and is never overwritten.")
+
         if self.mongo_client is None:
             log.error("MongoDB client is not connected")
             return
@@ -241,19 +252,25 @@ class MongoResultsProcessor(ResultsProcessor):
             self.model_results_documents.append(resource_doc)
 
         # Insert all documents into the model_results collection
-        if self.model_results_documents:
+        if not self.model_results_documents:
+            log.warning("No documents to save for run %s", self.run_id)
+        elif dry_run is True:
+            log.info("Dry run: skipping insert of %d documents for run %s",
+                     len(self.model_results_documents), self.run_id)
+        else:
             collection = self.mongo_client[self.mongo_database][self.mongo_collection]
             result = collection.insert_many(self.model_results_documents)
             log.info("Inserted %d documents for run %s into %s collection",
                     len(result.inserted_ids), self.run_id, self.mongo_collection)
-        else:
-            log.warning("No documents to save for run %s", self.run_id)
 
         self.flush()
 
         log.info("Results stored to: %s", self.results_location)
 
-        self.save_results_to_s3()
+        if dry_run is True:
+            log.info("Dry run: skipping upload of results to S3")
+        else:
+            self.save_results_to_s3()
 
     def make_scenario_document(self):
         """

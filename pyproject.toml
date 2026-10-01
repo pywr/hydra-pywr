@@ -7,7 +7,7 @@ name = "hydra-pywr"
 version = "0.1.0"
 description = "Hydra plugins and library for import and exporting Pywr models"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.10"
 license = {text = "MIT"}
 authors = [
     {name = "Hydra Platform", email = "info@hydraplatform.org"}
@@ -41,13 +41,12 @@ dependencies = [
     "requests",
     "s3fs",
     "pymongo",
+    # Not installable from PyPI under these names (the `hydra-client` project on PyPI is an
+    # unrelated package), so they come from git.
+    "pywrparser @ git+https://github.com/UMWRG/pywrparser",
+    "hydra-client @ git+https://github.com/hydraplatform/hydra-client-python",
+    "hydra-network-utils @ git+https://github.com/hydraplatform/hydra-network-utils",
 ]
-# Also imported, but not installable from PyPI under these names, so they are not listed here:
-#   hydra_client        https://github.com/hydraplatform/hydra-client-python
-#                       (NB: the `hydra-client` project on PyPI is an unrelated package)
-#   hydra_network_utils https://github.com/hydraplatform/hydra-network-utils
-#   pywrparser          https://github.com/umwrg/pywrparser
-# Install these from git first; see .github/workflows/tests.yml.
 
 [project.optional-dependencies]
 dev = [
