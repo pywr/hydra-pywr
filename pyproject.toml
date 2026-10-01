@@ -33,13 +33,32 @@ dependencies = [
     "pywr>=1.0",
     "boto3",
     "pandas==2.3.3",
+    # Imported directly by hydra_pywr
+    "numpy",
+    "scipy",
+    "click",
+    "python-dateutil",
+    "requests",
+    "s3fs",
+    "pymongo",
 ]
+# Also imported, but not installable from PyPI under these names, so they are not listed here:
+#   hydra_client        https://github.com/hydraplatform/hydra-client-python
+#                       (NB: the `hydra-client` project on PyPI is an unrelated package)
+#   hydra_network_utils https://github.com/hydraplatform/hydra-network-utils
+#   pywrparser          https://github.com/umwrg/pywrparser
+# Install these from git first; see .github/workflows/tests.yml.
 
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0",
     "pytest-cov>=3.0",
 ]
+# Pywr 1.x and 2.x both install as the `pywr` module and cannot share an environment: choose
+# one of these extras (e.g. `pip install hydra-pywr[v2]`). The pre-release version in the v2
+# specifier lets pip select the Pywr 2 beta without --pre.
+v1 = ["pywr>=1.0,<2"]
+v2 = ["pywr>=2.0.0b11"]
 
 [project.scripts]
 hydra-pywr = "hydra_pywr.cli:start_cli"
