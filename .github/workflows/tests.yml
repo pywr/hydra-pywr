@@ -51,12 +51,10 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          # Not published on PyPI, or not at the versions hydra-pywr needs.
+          # hydra-base from git (see HYDRA_BASE_REF); the other git dependencies are declared
+          # in pyproject.toml.
           python -m pip install \
-            "hydra-base @ git+https://github.com/hydraplatform/hydra-base@${HYDRA_BASE_REF}" \
-            "hydra-client @ git+https://github.com/hydraplatform/hydra-client-python" \
-            "hydra-network-utils @ git+https://github.com/hydraplatform/hydra-network-utils" \
-            "pywrparser @ git+https://github.com/umwrg/pywrparser"
+            "hydra-base @ git+https://github.com/hydraplatform/hydra-base@${HYDRA_BASE_REF}"
           python -m pip install -e ".[dev,${{ matrix.pywr_extra }}]"
 
       - name: Show installed Pywr
