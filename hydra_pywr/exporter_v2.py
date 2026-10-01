@@ -281,13 +281,13 @@ class HydraToPywrV2Network:
 
         output = {
             "metadata": metadata,
-            "timestepper": timestepper,
+            "time": timestepper,  # renamed from "timestepper" in the published Pywr v2 schema (2.0.0b11)
             "network": {
                 "nodes": nodes,
                 "edges": edges,
                 "parameters": parameters,
-                "metric_sets": [{"name": "all", "filters": {"all_nodes": True}}],
-                "outputs": [{"name": "all", "type": "Memory", "metric_set": "all"}],
+                "metric_sets": [{"meta": {"name": "all"}, "filters": {"all_nodes": True}}],
+                "outputs": [{"meta": {"name": "all"}, "type": "Memory", "metric_set": "all"}],
             },
         }
         if scenarios:
