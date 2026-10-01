@@ -1,6 +1,9 @@
 import numpy as np
 import pytest
 
+# Pywr v1 only: Pywr v2 has no pywr.recorders module (see test_v2_exporter.py for the v2 tests).
+pytest.importorskip("pywr.recorders")
+
 from pywr.recorders import (
     NumpyArrayStorageRecorder
 )
