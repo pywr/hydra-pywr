@@ -1,0 +1,64 @@
+name: Tests
+
+# hydra-pywr supports two Pywr runtimes that cannot share an environment (both install as the
+# `pywr` module), so the test suite runs once per runtime.
+#   pywr-v1: Pywr 1.x
+#   pywr-v2: the published Pywr 2.x pre-release wheel (no Rust toolchain needed)
+# All tests use temporary SQLite databases. No job has, or needs, access to a MySQL or live Hydra
+# database.
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+env:
+  # hydra-base from git so that fixes that have not been released yet are tested.
+  # TODO: use master once https://github.com/hydraplatform/hydra-base/pull/308 is merged.
+  HYDRA_BASE_REF: fix/template-cache-complete-typeattrs
+
+jobs:
+  test:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: pywr-v1
+            pywr_extra: v1
+            # Needs the hydropower nodes of the Pywr fork this model was written for; not
+            # available in Pywr 1.x from PyPI. Remove once it is ported (see tests/conftest.py).
+            pytest_args: >-
+              --deselect tests/test_model_results.py::TestResults::test_hydropower_results
+          - name: pywr-v2
+            pywr_extra: v2
+            pytest_args: ""
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: System libraries (needed to build hydra-base's mysqlclient and pylibmc)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential pkg-config \
+            libmysqlclient-dev libmemcached-dev zlib1g-dev
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # hydra-base from git (see HYDRA_BASE_REF); the other git dependencies are declared
+          # in pyproject.toml.
+          python -m pip install \
+            "hydra-base @ git+https://github.com/hydraplatform/hydra-base@${HYDRA_BASE_REF}"
+          python -m pip install -e ".[dev,${{ matrix.pywr_extra }}]"
+
+      - name: Show installed Pywr
+        run: python -c "import pywr; print(pywr.__file__, getattr(pywr, '__version__', ''))"
+
+      - name: Run tests
+        run: python -m pytest tests -v ${{ matrix.pytest_args }}
