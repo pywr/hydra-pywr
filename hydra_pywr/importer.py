@@ -663,10 +663,11 @@ class PywrToHydraNetwork():
 
         if not self.projection:
             self.project = self.hydra_client.get_project(project_id=self.project_id)
-            appdata = self.project.appdata
-            if appdata and "projection" in appdata:
-                log.info("Setting projection from project appdata: %s", appdata["projection"])
-                self.projection = appdata["projection"]
+            #Don't overwrite the appdata for the new network with the project's
+            project_appdata = self.project.appdata
+            if project_appdata and "projection" in project_appdata:
+                log.info("Setting projection from project appdata: %s", project_appdata["projection"])
+                self.projection = project_appdata["projection"]
         self.initialise_hydra_connection()
 
         self.network.promote_inline_parameters()

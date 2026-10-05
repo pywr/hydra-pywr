@@ -1,4 +1,7 @@
 import os
+import re
+import uuid
+import datetime
 import pandas
 from urllib.parse import urlparse
 import hashlib
@@ -6,6 +9,56 @@ from hydra_network_utils import data as data_utils
 
 import logging
 log = logging.getLogger(__name__)
+
+#Sub-folder of a project's data folder where HWI keeps the files uploaded to import apps
+MODEL_SOURCES_FOLDER = 'model_sources'
+
+
+def get_source_upload_appdata(filepath):
+    """
+        Describe an input file uploaded through HWI, so the network created from it can
+        be traced back to (and the file downloaded from) HWI.
+
+        HWI stores uploads for import apps at
+        <projectdata>/<project data_uuid>/model_sources/<DDMMYYHHMMSS>_<original name>.
+        Returns a dict suitable for network.appdata['source_upload'], or None if the file
+        wasn't uploaded that way (e.g. when the app is run from the command line).
+    """
+    if not filepath:
+        return None
+
+    filepath = os.path.abspath(filepath)
+    sources_dir, stored_name = os.path.split(filepath)
+    data_dir, folder = os.path.split(sources_dir)
+
+    if folder != MODEL_SOURCES_FOLDER:
+        return None
+    try:
+        data_uuid = str(uuid.UUID(os.path.basename(data_dir)))
+    except ValueError:
+        return None
+
+    #remove the timestamp HWI prepends to the uploaded file's name
+    original_name = re.sub(r'^\d{12}_', '', stored_name)
+
+    source = {
+        'data_uuid': data_uuid,
+        'stored_name': stored_name,
+        'original_name': original_name,
+        'imported_at': datetime.datetime.now(datetime.timezone.utc).isoformat(timespec='seconds'),
+    }
+
+    try:
+        hasher = hashlib.sha256()
+        with open(filepath, 'rb') as f:
+            for chunk in iter(lambda: f.read(1024 * 1024), b''):
+                hasher.update(chunk)
+        source['sha256'] = hasher.hexdigest()
+        source['size'] = os.path.getsize(filepath)
+    except OSError:
+        log.warning("Unable to hash source file %s", filepath)
+
+    return source
 
 
 

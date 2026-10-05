@@ -61,6 +61,13 @@ def import_json(obj, filename, project_id, template_id, projection, network_name
 
     client = get_logged_in_client(obj)
 
+    #If the file was uploaded through HWI, record where it is so the network
+    #can be traced back to it.
+    appdata = {}
+    source_upload = utils.get_source_upload_appdata(filename)
+    if source_upload is not None:
+        appdata['source_upload'] = source_upload
+
     importer.import_json(client,
                          filename,
                          project_id,
@@ -68,6 +75,7 @@ def import_json(obj, filename, project_id, template_id, projection, network_name
                          network_name,
                          *args,
                          rewrite_url_prefix=rewrite_url_prefix,
+                         appdata=appdata,
                          projection=projection)
 
 @hydra_app(category='import', name='Import Pywr JSON into a Hydra Scenario')
