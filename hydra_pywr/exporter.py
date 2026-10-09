@@ -175,7 +175,7 @@ class HydraToPywrNetwork():
 
     exclude_hydra_attrs = (
         "id", "status", "cr_date",
-        "network_id", "x", "y",
+        "network_id", "x", "y", "alt_x", "alt_y",
         "types", "attributes", "layout",
         "network", "description"
     )
