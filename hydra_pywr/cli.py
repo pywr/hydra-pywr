@@ -7,10 +7,7 @@ from hydra_client.connection import RemoteJSONConnection
 
 from hydra_client.click import hydra_app
 
-from . import runner
-from . import exporter
-from . import importer
-
+from . import exporter_v2
 from . import utils
 
 
@@ -58,7 +55,7 @@ def cli(obj, username, password, hostname, session):
 @click.option('--rewrite-url-prefix', type=str, default=None)
 def import_json(obj, filename, project_id, template_id, projection, network_name, rewrite_url_prefix, *args):
     """ Import a Pywr JSON file into Hydra. """
-
+    from . import importer
     client = get_logged_in_client(obj)
 
     importer.import_json(client,
@@ -80,7 +77,7 @@ def import_json(obj, filename, project_id, template_id, projection, network_name
 @click.option('--scenario-name', type=str, default=None, help='Name for the new scenario (defaults to pywr metadata title)')
 def import_json_as_scenario(obj, filename, network_id, scenario_name, *args):
     """ Add a scenario to an existing Hydra Network from a Pywr JSON file """
-
+    from . import importer
     client = get_logged_in_client(obj)
 
     importer.import_json_as_scenario(client,
@@ -99,7 +96,7 @@ def import_json_as_scenario(obj, filename, network_id, scenario_name, *args):
 @click.option('--scenario-id', type=int, default=None, help='ID of an existing scenario to update instead of creating a new one')
 def import_json_as_scenario(obj, filename, network_id, scenario_id, scenario_name, *args):
     """ Add a scenario to an existing Hydra Network from a Pywr JSON file """
-
+    from . import importer
     client = get_logged_in_client(obj)
 
     importer.import_json_as_scenario(client,
@@ -120,6 +117,7 @@ def import_json_as_scenario(obj, filename, network_id, scenario_id, scenario_nam
 @click.option('--json-indent', type=int, default=2)
 def export_json(obj, data_dir, scenario_id, use_cache, json_sort_keys, json_indent):
     """ Export a Pywr JSON from Hydra. """
+    from . import exporter
     client = get_logged_in_client(obj)
     exporter.export_json(client,
                          data_dir,
@@ -127,6 +125,21 @@ def export_json(obj, data_dir, scenario_id, use_cache, json_sort_keys, json_inde
                          use_cache,
                          json_sort_keys,
                          json_indent)
+
+
+@hydra_app(category='export', name='Export to Pywr v2 JSON')
+@cli.command(name='export-v2', context_settings=dict(
+    ignore_unknown_options=True,
+    allow_extra_args=True))
+@click.pass_obj
+@click.option('--data-dir', default='/tmp')
+@click.option('-s', '--scenario-id', type=int, default=None)
+@click.option('--json-sort-keys/--no-json-sort-keys', default=False)
+@click.option('--json-indent', type=int, default=2)
+def export_json_v2(obj, data_dir, scenario_id, json_sort_keys, json_indent):
+    """ Export a Pywr v2 JSON from Hydra. """
+    client = get_logged_in_client(obj)
+    exporter_v2.export_json_v2(client, data_dir, scenario_id, json_sort_keys, json_indent)
 
 
 @cli.command(name="run-file", context_settings=dict(
@@ -137,6 +150,7 @@ def export_json(obj, data_dir, scenario_id, use_cache, json_sort_keys, json_inde
 @click.option('--domain', type=str, default="water")
 @click.option('--output-file', type=str, default="output.csv")
 def run_file(obj, filename, domain, output_file):
+    from . import runner
     runner.run_file(filename, domain, output_file)
 
 @cli.command(name="purge-cache", context_settings=dict(
@@ -165,6 +179,7 @@ def purge_cache(cache_path):
 @click.option('--update', is_flag=True, default=False, help='Delete existing variable resource scenarios before saving new results to Hydra')
 def run(obj, scenario_id, template_id, domain, output_frequency, solver, data_dir, cache, disable_automatic_node_recorders, dry_run, update):
     """ Export, run and save a Pywr model from Hydra. """
+    from . import runner
     client = get_logged_in_client(obj)
 
     if scenario_id is None:

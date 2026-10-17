@@ -1,0 +1,1778 @@
+{
+  "attributes": {
+    "-1": {
+      "name": "simulated_flow",
+      "dimension_id": 14
+    },
+    "-2": {
+      "name": "cost",
+      "dimension_id": null
+    },
+    "-3": {
+      "name": "max_flow",
+      "dimension_id": 14
+    },
+    "-4": {
+      "name": "min_flow",
+      "dimension_id": 14
+    },
+    "-5": {
+      "name": "soft_max",
+      "dimension_id": null
+    },
+    "-6": {
+      "name": "soft_min",
+      "dimension_id": null
+    },
+    "-7": {
+      "name": "initial_volume",
+      "dimension_id": 4
+    },
+    "-8": {
+      "name": "max_volume",
+      "dimension_id": 4
+    },
+    "-9": {
+      "name": "min_volume",
+      "dimension_id": 4
+    },
+    "-10": {
+      "name": "flow",
+      "dimension_id": 14
+    },
+    "-11": {
+      "name": "bypass_cost",
+      "dimension_id": null
+    },
+    "-12": {
+      "name": "mrf",
+      "dimension_id": 14
+    },
+    "-13": {
+      "name": "mrf_cost",
+      "dimension_id": null
+    },
+    "-14": {
+      "name": "loss_factor",
+      "dimension_id": null
+    },
+    "-15": {
+      "name": "max_net_flow",
+      "dimension_id": 14
+    },
+    "-16": {
+      "name": "min_net_flow",
+      "dimension_id": 14
+    },
+    "-17": {
+      "name": "net_cost",
+      "dimension_id": null
+    },
+    "-18": {
+      "name": "delay",
+      "dimension_id": null
+    },
+    "-19": {
+      "name": "initial_value",
+      "dimension_id": null
+    },
+    "-20": {
+      "name": "steps",
+      "dimension_id": null
+    },
+    "-21": {
+      "name": "routing_method",
+      "dimension_id": null
+    },
+    "-22": {
+      "name": "splits",
+      "dimension_id": null
+    },
+    "-23": {
+      "name": "soft_min_flow",
+      "dimension_id": 14
+    },
+    "-24": {
+      "name": "soft_min_flow_cost",
+      "dimension_id": null
+    },
+    "-25": {
+      "name": "efficiency",
+      "dimension_id": null
+    },
+    "-26": {
+      "name": "energy_unit_conversion",
+      "dimension_id": null
+    },
+    "-27": {
+      "name": "flow_unit_conversion",
+      "dimension_id": null
+    },
+    "-28": {
+      "name": "min_head",
+      "dimension_id": null
+    },
+    "-29": {
+      "name": "target",
+      "dimension_id": null
+    },
+    "-30": {
+      "name": "target_type",
+      "dimension_id": null
+    },
+    "-31": {
+      "name": "turbine_elevation",
+      "dimension_id": null
+    },
+    "-32": {
+      "name": "water_density",
+      "dimension_id": null
+    },
+    "-33": {
+      "name": "water_elevation",
+      "dimension_id": null
+    },
+    "-34": {
+      "name": "compensation",
+      "dimension_id": null
+    },
+    "-35": {
+      "name": "connect_compensation_to_spill",
+      "dimension_id": null
+    },
+    "-36": {
+      "name": "evaporation",
+      "dimension_id": null
+    },
+    "-37": {
+      "name": "leakage",
+      "dimension_id": null
+    },
+    "-38": {
+      "name": "rainfall",
+      "dimension_id": null
+    },
+    "-39": {
+      "name": "spill",
+      "dimension_id": null
+    },
+    "-40": {
+      "name": "surface_area",
+      "dimension_id": null
+    },
+    "-41": {
+      "name": "abs_cost",
+      "dimension_id": null
+    },
+    "-42": {
+      "name": "abs_max_flow",
+      "dimension_id": 14
+    },
+    "-43": {
+      "name": "abs_min_flow",
+      "dimension_id": 14
+    }
+  },
+  "datasets": {},
+  "template": {
+    "id": -1,
+    "name": "Pywr parent template v2 (pywr 2.0.0-beta3)",
+    "cr_date": null,
+    "status": "A",
+    "parent_id": null,
+    "description": null,
+    "layout": null,
+    "templatetypes": [
+      {
+        "parent_id": null,
+        "template_id": -1,
+        "name": "edge",
+        "resource_type": "LINK",
+        "status": "A",
+        "id": -1,
+        "description": null,
+        "alias": null,
+        "layout": {
+          "color": "#000000",
+          "linestyle": "solid",
+          "width": "3"
+        },
+        "typeattrs": []
+      },
+      {
+        "parent_id": null,
+        "template_id": -1,
+        "name": "Pywr v2 Full",
+        "resource_type": "NETWORK",
+        "status": "A",
+        "id": -2,
+        "description": null,
+        "alias": null,
+        "layout": {
+          "quick-attributes": "[]",
+          "shadow-attributes": "[]"
+        },
+        "typeattrs": []
+      },
+      {
+        "parent_id": null,
+        "template_id": -1,
+        "name": "Input",
+        "resource_type": "NODE",
+        "status": "A",
+        "id": -3,
+        "description": null,
+        "alias": null,
+        "layout": {
+          "color": "#0055ff",
+          "frequently_used": true,
+          "height": 20,
+          "shape": "circle",
+          "size": "large",
+          "width": 20
+        },
+        "typeattrs": [
+          {
+            "properties": null,
+            "status": "A",
+            "id": -1,
+            "parent_id": null,
+            "attr_id": "-1",
+            "attr_is_var": "Y",
+            "data_type": "SCALAR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -3,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          },
+          {
+            "properties": null,
+            "status": "A",
+            "id": -2,
+            "parent_id": null,
+            "attr_id": "-2",
+            "attr_is_var": "N",
+            "data_type": "DESCRIPTOR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -3,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          },
+          {
+            "properties": null,
+            "status": "A",
+            "id": -3,
+            "parent_id": null,
+            "attr_id": "-3",
+            "attr_is_var": "N",
+            "data_type": "DESCRIPTOR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -3,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          },
+          {
+            "properties": null,
+            "status": "A",
+            "id": -4,
+            "parent_id": null,
+            "attr_id": "-4",
+            "attr_is_var": "N",
+            "data_type": "DESCRIPTOR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -3,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          }
+        ]
+      },
+      {
+        "parent_id": null,
+        "template_id": -1,
+        "name": "Link",
+        "resource_type": "NODE",
+        "status": "A",
+        "id": -4,
+        "description": null,
+        "alias": null,
+        "layout": {
+          "color": "#000000",
+          "frequently_used": true,
+          "height": 15,
+          "shape": "circle",
+          "size": "medium",
+          "width": 15
+        },
+        "typeattrs": [
+          {
+            "properties": null,
+            "status": "A",
+            "id": -5,
+            "parent_id": null,
+            "attr_id": "-1",
+            "attr_is_var": "Y",
+            "data_type": "SCALAR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -4,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          },
+          {
+            "properties": null,
+            "status": "A",
+            "id": -6,
+            "parent_id": null,
+            "attr_id": "-2",
+            "attr_is_var": "N",
+            "data_type": "DESCRIPTOR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -4,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          },
+          {
+            "properties": null,
+            "status": "A",
+            "id": -7,
+            "parent_id": null,
+            "attr_id": "-3",
+            "attr_is_var": "N",
+            "data_type": "DESCRIPTOR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -4,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          },
+          {
+            "properties": null,
+            "status": "A",
+            "id": -8,
+            "parent_id": null,
+            "attr_id": "-4",
+            "attr_is_var": "N",
+            "data_type": "DESCRIPTOR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -4,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          },
+          {
+            "properties": null,
+            "status": "A",
+            "id": -9,
+            "parent_id": null,
+            "attr_id": "-5",
+            "attr_is_var": "N",
+            "data_type": "DESCRIPTOR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -4,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          },
+          {
+            "properties": null,
+            "status": "A",
+            "id": -10,
+            "parent_id": null,
+            "attr_id": "-6",
+            "attr_is_var": "N",
+            "data_type": "DESCRIPTOR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -4,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          }
+        ]
+      },
+      {
+        "parent_id": null,
+        "template_id": -1,
+        "name": "Output",
+        "resource_type": "NODE",
+        "status": "A",
+        "id": -5,
+        "description": null,
+        "alias": null,
+        "layout": {
+          "color": "#ff8040",
+          "frequently_used": true,
+          "height": 15,
+          "shape": "circle",
+          "size": "medium",
+          "width": 15
+        },
+        "typeattrs": [
+          {
+            "properties": null,
+            "status": "A",
+            "id": -11,
+            "parent_id": null,
+            "attr_id": "-1",
+            "attr_is_var": "Y",
+            "data_type": "SCALAR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -5,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          },
+          {
+            "properties": null,
+            "status": "A",
+            "id": -12,
+            "parent_id": null,
+            "attr_id": "-2",
+            "attr_is_var": "N",
+            "data_type": "DESCRIPTOR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -5,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          },
+          {
+            "properties": null,
+            "status": "A",
+            "id": -13,
+            "parent_id": null,
+            "attr_id": "-3",
+            "attr_is_var": "N",
+            "data_type": "DESCRIPTOR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -5,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          },
+          {
+            "properties": null,
+            "status": "A",
+            "id": -14,
+            "parent_id": null,
+            "attr_id": "-4",
+            "attr_is_var": "N",
+            "data_type": "DESCRIPTOR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -5,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          }
+        ]
+      },
+      {
+        "parent_id": null,
+        "template_id": -1,
+        "name": "Storage",
+        "resource_type": "NODE",
+        "status": "A",
+        "id": -6,
+        "description": null,
+        "alias": null,
+        "layout": {
+          "color": "#0055ff",
+          "frequently_used": true,
+          "height": 20,
+          "shape": "triangle",
+          "size": "large",
+          "width": 20
+        },
+        "typeattrs": [
+          {
+            "properties": null,
+            "status": "A",
+            "id": -15,
+            "parent_id": null,
+            "attr_id": "-2",
+            "attr_is_var": "N",
+            "data_type": "DESCRIPTOR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -6,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          },
+          {
+            "properties": null,
+            "status": "A",
+            "id": -16,
+            "parent_id": null,
+            "attr_id": "-7",
+            "attr_is_var": "N",
+            "data_type": "DESCRIPTOR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -6,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          },
+          {
+            "properties": null,
+            "status": "A",
+            "id": -17,
+            "parent_id": null,
+            "attr_id": "-8",
+            "attr_is_var": "N",
+            "data_type": "DESCRIPTOR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -6,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          },
+          {
+            "properties": null,
+            "status": "A",
+            "id": -18,
+            "parent_id": null,
+            "attr_id": "-9",
+            "attr_is_var": "N",
+            "data_type": "DESCRIPTOR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -6,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          }
+        ]
+      },
+      {
+        "parent_id": null,
+        "template_id": -1,
+        "name": "Catchment",
+        "resource_type": "NODE",
+        "status": "A",
+        "id": -7,
+        "description": null,
+        "alias": null,
+        "layout": {
+          "color": "#008e00",
+          "frequently_used": true,
+          "height": 15,
+          "shape": "circle",
+          "size": "medium",
+          "width": 15
+        },
+        "typeattrs": [
+          {
+            "properties": null,
+            "status": "A",
+            "id": -19,
+            "parent_id": null,
+            "attr_id": "-1",
+            "attr_is_var": "Y",
+            "data_type": "SCALAR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -7,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          },
+          {
+            "properties": null,
+            "status": "A",
+            "id": -20,
+            "parent_id": null,
+            "attr_id": "-2",
+            "attr_is_var": "N",
+            "data_type": "DESCRIPTOR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -7,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          },
+          {
+            "properties": null,
+            "status": "A",
+            "id": -21,
+            "parent_id": null,
+            "attr_id": "-10",
+            "attr_is_var": "N",
+            "data_type": "DESCRIPTOR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -7,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          }
+        ]
+      },
+      {
+        "parent_id": null,
+        "template_id": -1,
+        "name": "RiverGauge",
+        "resource_type": "NODE",
+        "status": "A",
+        "id": -8,
+        "description": null,
+        "alias": null,
+        "layout": {
+          "color": "#800080",
+          "frequently_used": true,
+          "height": 15,
+          "shape": "circle",
+          "size": "medium",
+          "width": 15
+        },
+        "typeattrs": [
+          {
+            "properties": null,
+            "status": "A",
+            "id": -22,
+            "parent_id": null,
+            "attr_id": "-1",
+            "attr_is_var": "Y",
+            "data_type": "SCALAR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -8,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          },
+          {
+            "properties": null,
+            "status": "A",
+            "id": -23,
+            "parent_id": null,
+            "attr_id": "-11",
+            "attr_is_var": "N",
+            "data_type": "DESCRIPTOR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -8,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          },
+          {
+            "properties": null,
+            "status": "A",
+            "id": -24,
+            "parent_id": null,
+            "attr_id": "-12",
+            "attr_is_var": "N",
+            "data_type": "DESCRIPTOR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -8,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          },
+          {
+            "properties": null,
+            "status": "A",
+            "id": -25,
+            "parent_id": null,
+            "attr_id": "-13",
+            "attr_is_var": "N",
+            "data_type": "DESCRIPTOR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -8,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          }
+        ]
+      },
+      {
+        "parent_id": null,
+        "template_id": -1,
+        "name": "LossLink",
+        "resource_type": "NODE",
+        "status": "A",
+        "id": -9,
+        "description": null,
+        "alias": null,
+        "layout": {
+          "color": "black",
+          "width": 15,
+          "height": 15,
+          "shape": "circle",
+          "frequently_used": false
+        },
+        "typeattrs": [
+          {
+            "properties": null,
+            "status": "A",
+            "id": -26,
+            "parent_id": null,
+            "attr_id": "-1",
+            "attr_is_var": "Y",
+            "data_type": "SCALAR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -9,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          },
+          {
+            "properties": null,
+            "status": "A",
+            "id": -27,
+            "parent_id": null,
+            "attr_id": "-14",
+            "attr_is_var": "N",
+            "data_type": "DESCRIPTOR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -9,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          },
+          {
+            "properties": null,
+            "status": "A",
+            "id": -28,
+            "parent_id": null,
+            "attr_id": "-15",
+            "attr_is_var": "N",
+            "data_type": "DESCRIPTOR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -9,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          },
+          {
+            "properties": null,
+            "status": "A",
+            "id": -29,
+            "parent_id": null,
+            "attr_id": "-16",
+            "attr_is_var": "N",
+            "data_type": "DESCRIPTOR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -9,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          },
+          {
+            "properties": null,
+            "status": "A",
+            "id": -30,
+            "parent_id": null,
+            "attr_id": "-17",
+            "attr_is_var": "N",
+            "data_type": "DESCRIPTOR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -9,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          }
+        ]
+      },
+      {
+        "parent_id": null,
+        "template_id": -1,
+        "name": "Delay",
+        "resource_type": "NODE",
+        "status": "A",
+        "id": -10,
+        "description": null,
+        "alias": null,
+        "layout": {
+          "color": "#fff100",
+          "frequently_used": false,
+          "height": 15,
+          "shape": "circle",
+          "width": 15
+        },
+        "typeattrs": [
+          {
+            "properties": null,
+            "status": "A",
+            "id": -31,
+            "parent_id": null,
+            "attr_id": "-1",
+            "attr_is_var": "Y",
+            "data_type": "SCALAR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -10,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          },
+          {
+            "properties": null,
+            "status": "A",
+            "id": -32,
+            "parent_id": null,
+            "attr_id": "-18",
+            "attr_is_var": "N",
+            "data_type": "DESCRIPTOR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -10,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          },
+          {
+            "properties": null,
+            "status": "A",
+            "id": -33,
+            "parent_id": null,
+            "attr_id": "-19",
+            "attr_is_var": "N",
+            "data_type": "DESCRIPTOR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -10,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          }
+        ]
+      },
+      {
+        "parent_id": null,
+        "template_id": -1,
+        "name": "PiecewiseLink",
+        "resource_type": "NODE",
+        "status": "A",
+        "id": -11,
+        "description": null,
+        "alias": null,
+        "layout": {
+          "color": "#c0c0c0",
+          "height": 15,
+          "shape": "circle",
+          "size": "large",
+          "width": 15
+        },
+        "typeattrs": [
+          {
+            "properties": null,
+            "status": "A",
+            "id": -34,
+            "parent_id": null,
+            "attr_id": "-1",
+            "attr_is_var": "Y",
+            "data_type": "SCALAR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -11,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          },
+          {
+            "properties": null,
+            "status": "A",
+            "id": -35,
+            "parent_id": null,
+            "attr_id": "-20",
+            "attr_is_var": "N",
+            "data_type": "DESCRIPTOR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -11,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          }
+        ]
+      },
+      {
+        "parent_id": null,
+        "template_id": -1,
+        "name": "PiecewiseStorage",
+        "resource_type": "NODE",
+        "status": "A",
+        "id": -12,
+        "description": null,
+        "alias": null,
+        "layout": {
+          "color": "#0055ff",
+          "height": 20,
+          "shape": "triangle",
+          "size": "large",
+          "width": 20
+        },
+        "typeattrs": [
+          {
+            "properties": null,
+            "status": "A",
+            "id": -36,
+            "parent_id": null,
+            "attr_id": "-2",
+            "attr_is_var": "N",
+            "data_type": "DESCRIPTOR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -12,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          },
+          {
+            "properties": null,
+            "status": "A",
+            "id": -37,
+            "parent_id": null,
+            "attr_id": "-7",
+            "attr_is_var": "N",
+            "data_type": "DESCRIPTOR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -12,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          },
+          {
+            "properties": null,
+            "status": "A",
+            "id": -38,
+            "parent_id": null,
+            "attr_id": "-8",
+            "attr_is_var": "N",
+            "data_type": "DESCRIPTOR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -12,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          },
+          {
+            "properties": null,
+            "status": "A",
+            "id": -39,
+            "parent_id": null,
+            "attr_id": "-9",
+            "attr_is_var": "N",
+            "data_type": "DESCRIPTOR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -12,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          },
+          {
+            "properties": null,
+            "status": "A",
+            "id": -40,
+            "parent_id": null,
+            "attr_id": "-20",
+            "attr_is_var": "N",
+            "data_type": "DESCRIPTOR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -12,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          }
+        ]
+      },
+      {
+        "parent_id": null,
+        "template_id": -1,
+        "name": "River",
+        "resource_type": "NODE",
+        "status": "A",
+        "id": -13,
+        "description": null,
+        "alias": null,
+        "layout": {
+          "color": "#0080c0",
+          "height": 15,
+          "shape": "circle",
+          "size": "medium",
+          "width": 15
+        },
+        "typeattrs": [
+          {
+            "properties": null,
+            "status": "A",
+            "id": -41,
+            "parent_id": null,
+            "attr_id": "-1",
+            "attr_is_var": "Y",
+            "data_type": "SCALAR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -13,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          },
+          {
+            "properties": null,
+            "status": "A",
+            "id": -42,
+            "parent_id": null,
+            "attr_id": "-14",
+            "attr_is_var": "N",
+            "data_type": "DESCRIPTOR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -13,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          },
+          {
+            "properties": null,
+            "status": "A",
+            "id": -43,
+            "parent_id": null,
+            "attr_id": "-21",
+            "attr_is_var": "N",
+            "data_type": "DESCRIPTOR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -13,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          }
+        ]
+      },
+      {
+        "parent_id": null,
+        "template_id": -1,
+        "name": "RiverSplitWithGauge",
+        "resource_type": "NODE",
+        "status": "A",
+        "id": -14,
+        "description": null,
+        "alias": null,
+        "layout": {
+          "color": "#ff0080",
+          "height": 15,
+          "shape": "circle",
+          "size": "large",
+          "width": 15
+        },
+        "typeattrs": [
+          {
+            "properties": null,
+            "status": "A",
+            "id": -44,
+            "parent_id": null,
+            "attr_id": "-1",
+            "attr_is_var": "Y",
+            "data_type": "SCALAR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -14,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          },
+          {
+            "properties": null,
+            "status": "A",
+            "id": -45,
+            "parent_id": null,
+            "attr_id": "-12",
+            "attr_is_var": "N",
+            "data_type": "DESCRIPTOR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -14,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          },
+          {
+            "properties": null,
+            "status": "A",
+            "id": -46,
+            "parent_id": null,
+            "attr_id": "-13",
+            "attr_is_var": "N",
+            "data_type": "DESCRIPTOR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -14,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          },
+          {
+            "properties": null,
+            "status": "A",
+            "id": -47,
+            "parent_id": null,
+            "attr_id": "-22",
+            "attr_is_var": "N",
+            "data_type": "DESCRIPTOR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -14,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          }
+        ]
+      },
+      {
+        "parent_id": null,
+        "template_id": -1,
+        "name": "WaterTreatmentWorks",
+        "resource_type": "NODE",
+        "status": "A",
+        "id": -15,
+        "description": null,
+        "alias": null,
+        "layout": {
+          "color": "#808000",
+          "height": 20,
+          "shape": "circle",
+          "size": "large",
+          "width": 20
+        },
+        "typeattrs": [
+          {
+            "properties": null,
+            "status": "A",
+            "id": -48,
+            "parent_id": null,
+            "attr_id": "-1",
+            "attr_is_var": "Y",
+            "data_type": "SCALAR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -15,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          },
+          {
+            "properties": null,
+            "status": "A",
+            "id": -49,
+            "parent_id": null,
+            "attr_id": "-2",
+            "attr_is_var": "N",
+            "data_type": "DESCRIPTOR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -15,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          },
+          {
+            "properties": null,
+            "status": "A",
+            "id": -50,
+            "parent_id": null,
+            "attr_id": "-14",
+            "attr_is_var": "N",
+            "data_type": "DESCRIPTOR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -15,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          },
+          {
+            "properties": null,
+            "status": "A",
+            "id": -51,
+            "parent_id": null,
+            "attr_id": "-3",
+            "attr_is_var": "N",
+            "data_type": "DESCRIPTOR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -15,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          },
+          {
+            "properties": null,
+            "status": "A",
+            "id": -52,
+            "parent_id": null,
+            "attr_id": "-4",
+            "attr_is_var": "N",
+            "data_type": "DESCRIPTOR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -15,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          },
+          {
+            "properties": null,
+            "status": "A",
+            "id": -53,
+            "parent_id": null,
+            "attr_id": "-23",
+            "attr_is_var": "N",
+            "data_type": "DESCRIPTOR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -15,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          },
+          {
+            "properties": null,
+            "status": "A",
+            "id": -54,
+            "parent_id": null,
+            "attr_id": "-24",
+            "attr_is_var": "N",
+            "data_type": "DESCRIPTOR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -15,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          }
+        ]
+      },
+      {
+        "parent_id": null,
+        "template_id": -1,
+        "name": "Turbine",
+        "resource_type": "NODE",
+        "status": "A",
+        "id": -16,
+        "description": null,
+        "alias": null,
+        "layout": {
+          "color": "#00fcff",
+          "frequently_used": true,
+          "height": 15,
+          "shape": "cross",
+          "size": "medium",
+          "width": 15
+        },
+        "typeattrs": [
+          {
+            "properties": null,
+            "status": "A",
+            "id": -55,
+            "parent_id": null,
+            "attr_id": "-1",
+            "attr_is_var": "Y",
+            "data_type": "SCALAR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -16,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          },
+          {
+            "properties": null,
+            "status": "A",
+            "id": -56,
+            "parent_id": null,
+            "attr_id": "-2",
+            "attr_is_var": "N",
+            "data_type": "DESCRIPTOR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -16,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          },
+          {
+            "properties": null,
+            "status": "A",
+            "id": -57,
+            "parent_id": null,
+            "attr_id": "-25",
+            "attr_is_var": "N",
+            "data_type": "SCALAR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -16,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          },
+          {
+            "properties": null,
+            "status": "A",
+            "id": -58,
+            "parent_id": null,
+            "attr_id": "-26",
+            "attr_is_var": "N",
+            "data_type": "SCALAR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -16,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          },
+          {
+            "properties": null,
+            "status": "A",
+            "id": -59,
+            "parent_id": null,
+            "attr_id": "-27",
+            "attr_is_var": "N",
+            "data_type": "SCALAR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -16,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          },
+          {
+            "properties": null,
+            "status": "A",
+            "id": -60,
+            "parent_id": null,
+            "attr_id": "-28",
+            "attr_is_var": "N",
+            "data_type": "SCALAR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -16,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          },
+          {
+            "properties": null,
+            "status": "A",
+            "id": -61,
+            "parent_id": null,
+            "attr_id": "-29",
+            "attr_is_var": "N",
+            "data_type": "DESCRIPTOR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -16,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          },
+          {
+            "properties": null,
+            "status": "A",
+            "id": -62,
+            "parent_id": null,
+            "attr_id": "-30",
+            "attr_is_var": "N",
+            "data_type": "DESCRIPTOR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -16,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          },
+          {
+            "properties": null,
+            "status": "A",
+            "id": -63,
+            "parent_id": null,
+            "attr_id": "-31",
+            "attr_is_var": "N",
+            "data_type": "SCALAR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -16,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          },
+          {
+            "properties": null,
+            "status": "A",
+            "id": -64,
+            "parent_id": null,
+            "attr_id": "-32",
+            "attr_is_var": "N",
+            "data_type": "SCALAR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -16,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          },
+          {
+            "properties": null,
+            "status": "A",
+            "id": -65,
+            "parent_id": null,
+            "attr_id": "-33",
+            "attr_is_var": "N",
+            "data_type": "DESCRIPTOR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -16,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          }
+        ]
+      },
+      {
+        "parent_id": null,
+        "template_id": -1,
+        "name": "Reservoir",
+        "resource_type": "NODE",
+        "status": "A",
+        "id": -17,
+        "description": null,
+        "alias": null,
+        "layout": {
+          "color": "#0096ff",
+          "height": 20,
+          "shape": "triangle",
+          "size": "large",
+          "width": 20
+        },
+        "typeattrs": [
+          {
+            "properties": null,
+            "status": "A",
+            "id": -66,
+            "parent_id": null,
+            "attr_id": "-34",
+            "attr_is_var": "N",
+            "data_type": "DESCRIPTOR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -17,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          },
+          {
+            "properties": null,
+            "status": "A",
+            "id": -67,
+            "parent_id": null,
+            "attr_id": "-35",
+            "attr_is_var": "N",
+            "data_type": "DESCRIPTOR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -17,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          },
+          {
+            "properties": null,
+            "status": "A",
+            "id": -68,
+            "parent_id": null,
+            "attr_id": "-2",
+            "attr_is_var": "N",
+            "data_type": "DESCRIPTOR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -17,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          },
+          {
+            "properties": null,
+            "status": "A",
+            "id": -69,
+            "parent_id": null,
+            "attr_id": "-36",
+            "attr_is_var": "N",
+            "data_type": "DESCRIPTOR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -17,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          },
+          {
+            "properties": null,
+            "status": "A",
+            "id": -70,
+            "parent_id": null,
+            "attr_id": "-7",
+            "attr_is_var": "N",
+            "data_type": "DESCRIPTOR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -17,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          },
+          {
+            "properties": null,
+            "status": "A",
+            "id": -71,
+            "parent_id": null,
+            "attr_id": "-37",
+            "attr_is_var": "N",
+            "data_type": "DESCRIPTOR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -17,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          },
+          {
+            "properties": null,
+            "status": "A",
+            "id": -72,
+            "parent_id": null,
+            "attr_id": "-8",
+            "attr_is_var": "N",
+            "data_type": "DESCRIPTOR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -17,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          },
+          {
+            "properties": null,
+            "status": "A",
+            "id": -73,
+            "parent_id": null,
+            "attr_id": "-9",
+            "attr_is_var": "N",
+            "data_type": "DESCRIPTOR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -17,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          },
+          {
+            "properties": null,
+            "status": "A",
+            "id": -74,
+            "parent_id": null,
+            "attr_id": "-38",
+            "attr_is_var": "N",
+            "data_type": "DESCRIPTOR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -17,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          },
+          {
+            "properties": null,
+            "status": "A",
+            "id": -75,
+            "parent_id": null,
+            "attr_id": "-39",
+            "attr_is_var": "N",
+            "data_type": "DESCRIPTOR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -17,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          },
+          {
+            "properties": null,
+            "status": "A",
+            "id": -76,
+            "parent_id": null,
+            "attr_id": "-40",
+            "attr_is_var": "N",
+            "data_type": "DESCRIPTOR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -17,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          }
+        ]
+      },
+      {
+        "parent_id": null,
+        "template_id": -1,
+        "name": "Placeholder",
+        "resource_type": "NODE",
+        "status": "A",
+        "id": -18,
+        "description": null,
+        "alias": null,
+        "layout": {
+          "color": "#c0c0c0",
+          "height": 15,
+          "shape": "circle",
+          "size": "medium",
+          "width": 15
+        },
+        "typeattrs": []
+      },
+      {
+        "parent_id": null,
+        "template_id": -1,
+        "name": "Abstraction",
+        "resource_type": "NODE",
+        "status": "A",
+        "id": -19,
+        "description": null,
+        "alias": null,
+        "layout": {
+          "color": "#0080c0",
+          "height": 15,
+          "shape": "circle",
+          "size": "medium",
+          "width": 15
+        },
+        "typeattrs": [
+          {
+            "properties": null,
+            "status": "A",
+            "id": -77,
+            "parent_id": null,
+            "attr_id": "-1",
+            "attr_is_var": "Y",
+            "data_type": "SCALAR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -19,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          },
+          {
+            "properties": null,
+            "status": "A",
+            "id": -78,
+            "parent_id": null,
+            "attr_id": "-41",
+            "attr_is_var": "N",
+            "data_type": "DESCRIPTOR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -19,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          },
+          {
+            "properties": null,
+            "status": "A",
+            "id": -79,
+            "parent_id": null,
+            "attr_id": "-42",
+            "attr_is_var": "N",
+            "data_type": "DESCRIPTOR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -19,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          },
+          {
+            "properties": null,
+            "status": "A",
+            "id": -80,
+            "parent_id": null,
+            "attr_id": "-43",
+            "attr_is_var": "N",
+            "data_type": "DESCRIPTOR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -19,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          },
+          {
+            "properties": null,
+            "status": "A",
+            "id": -81,
+            "parent_id": null,
+            "attr_id": "-12",
+            "attr_is_var": "N",
+            "data_type": "DESCRIPTOR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -19,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          },
+          {
+            "properties": null,
+            "status": "A",
+            "id": -82,
+            "parent_id": null,
+            "attr_id": "-13",
+            "attr_is_var": "N",
+            "data_type": "DESCRIPTOR",
+            "default_dataset_id": null,
+            "data_restriction": null,
+            "type_id": -19,
+            "unit_id": null,
+            "description": null,
+            "default_dataset": null
+          }
+        ]
+      }
+    ]
+  }
+}

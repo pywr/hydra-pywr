@@ -153,6 +153,8 @@ class TestLossLinkAggregatedCompanionRecorder:
     """
 
     def test_losslink_aggregated_companion_recorder_is_ignored(self):
+        import pytest
+        pytest.importorskip("pywr.model", reason="requires Pywr v1 (no pywr.model in Pywr v2)")
         from pywr.model import Model
         from pywr.nodes import LossLink, Input, Output as PywrNodeOutput
 
