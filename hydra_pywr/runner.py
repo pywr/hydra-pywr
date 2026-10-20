@@ -24,6 +24,7 @@ from .exporter import HydraToPywrNetwork, find_missing_parameters, rewrite_ref_p
 from pywrparser.types.network import PywrNetwork
 from hydra_pywr.nodes import *
 from . import utils
+from . import progress
 
 log = logging.getLogger(__name__)
 
@@ -42,6 +43,7 @@ def run_network_scenario(client, scenario_id, template_id,
                          solver=None, data_dir='/tmp', use_cache=False, disable_automatic_node_recorders=False, dry_run=False,
                          update=False):
 
+    progress.report(0, f"Loading scenario {scenario_id} from Hydra")
     runner = PywrHydraRunner.from_scenario_id(client, scenario_id,
                                              template_id=template_id,
                                              data_dir=data_dir,use_cache=use_cache,
@@ -53,9 +55,12 @@ def run_network_scenario(client, scenario_id, template_id,
         runner.load_pywr_model_from_file(cached_model_file, solver=solver)
     else:
         runner.setup(solver=solver)
+    progress.report(progress.EXPORT_DONE, "Model exported and loaded")
 
     runner.run_pywr_model()
+    progress.report(progress.RUN_END, "Model run complete. Saving results")
     runner.save_results(dry_run=dry_run, update=update)
+    progress.report(progress.COMPLETE, f"Pywr model run success. Scenario ID: {scenario_id}")
     log.info(f'Pywr model run success. Network ID: {runner.data.id}, Scenario ID: {scenario_id}')
     return runner
 
@@ -380,7 +385,7 @@ class PywrHydraRunner(HydraToPywrNetwork):
         model = self.model
 
         # Add a progress recorder to monitor the run.
-        ProgressRecorder(model)
+        progress.hydra_progress_recorder_class()(model)
 
         # Add recorders for monitoring the simulated timeseries of nodes
         if self.disable_automatic_node_recorders is False:

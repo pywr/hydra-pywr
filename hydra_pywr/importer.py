@@ -1,4 +1,5 @@
 import json
+import os
 from numbers import Number
 
 from pywrparser.types import (
@@ -21,6 +22,9 @@ from pywrparser.types.network import PywrNetwork
 
 from hydra_base.lib.objects import JSONObject
 
+from . import progress
+from hydra_client.output import write_output
+
 import logging
 log = logging.getLogger(__name__)
 
@@ -31,6 +35,7 @@ def import_json(client, filename, project_id, template_id, network_name, *args, 
     """
 
     log.info(f'Beginning import of "{filename}" to Project ID: {project_id}')
+    progress.report(0, f"Reading {os.path.basename(filename or '')} for import into project {project_id}")
 
     if filename is None:
         raise Exception("No file specified")
@@ -51,6 +56,7 @@ def import_json(client, filename, project_id, template_id, network_name, *args, 
         for component, errs in errors.items():
             for err in errs:
                 log.info(err)
+                write_output(f"Error in {component}: {err}")
         exit(1)
 
     if pnet:
@@ -63,6 +69,8 @@ def import_json(client, filename, project_id, template_id, network_name, *args, 
         #pnet.detach_parameters()
 
 
+    progress.report(20, "Pywr JSON parsed and validated")
+
     if network_name:
         pnet.metadata.data["title"] = network_name
 
@@ -72,8 +80,11 @@ def import_json(client, filename, project_id, template_id, network_name, *args, 
             file_to_s3(elem.data, rewrite_url_prefix)
 
     importer = PywrToHydraNetwork(pnet, client=client, template_id=template_id, project_id=project_id)
+    progress.report(30, "Building Hydra network")
     importer.build_hydra_network(projection, appdata=appdata)
+    progress.report(60, "Hydra network built. Saving to Hydra")
     network_summary = importer.add_network_to_hydra()
+    progress.report(90, f"Network saved as Network ID {network_summary['id']}")
 
 
     new_network = importer.hydra_client.get_network(network_id=network_summary['id'],
@@ -87,6 +98,7 @@ def import_json(client, filename, project_id, template_id, network_name, *args, 
 
 
     log.info("Import complete: https://app.waterstrategy.org/network/{}/{}".format(network_id, scenario_id))
+    progress.report(progress.COMPLETE, f"Import complete. Network ID: {network_id}, Scenario ID: {scenario_id}")
 
     return network_summary
 
@@ -97,6 +109,7 @@ def import_json_as_scenario(client, filename, network_id=None, scenario_id=None,
     If scenario_id is specified, clone the existing scenario before updating it.
     """
     log.info(f'Beginning scenario import of "{filename}" into Network ID: {network_id or "<from scenario>"}')
+    progress.report(0, f"Reading {os.path.basename(filename or '')} for scenario import")
 
     if filename is None:
         raise Exception("No file specified")
@@ -114,6 +127,7 @@ def import_json_as_scenario(client, filename, network_id=None, scenario_id=None,
         for component, errs in errors.items():
             for err in errs:
                 log.error(err)
+                write_output(f"Error in {component}: {err}")
         exit(1)
 
     if pnet:
@@ -123,6 +137,8 @@ def import_json_as_scenario(client, filename, network_id=None, scenario_id=None,
         pnet.promote_inline_recorders()
         pnet.attach_reference_parameters()
         pnet.attach_reference_recorders()
+
+    progress.report(20, "Pywr JSON parsed and validated")
 
     if scenario_id is not None:
         existing_scenario = client.get_scenario(scenario_id=scenario_id, include_data=True)
@@ -134,10 +150,13 @@ def import_json_as_scenario(client, filename, network_id=None, scenario_id=None,
     imp = PywrToHydraScenarioForNetwork(pnet, client=client, network_id=network_id, scenario_name=scenario_name)
     imp.verify_topology()
     imp.build_ra_lookup()
+    progress.report(40, "Topology verified. Checking attributes")
     imp.ensure_attributes_exist()
+    progress.report(55, "Attributes ready. Building datasets")
 
     if scenario_id is not None:
         resource_scenarios = imp.build_resource_scenarios()
+        progress.report(70, f"Backing up scenario {scenario_id} before updating it")
         backup = client.clone_scenario(scenario_id)
         log.info(f"Cloned existing scenario {scenario_id} to preserve it as scenario {backup['id']}")
 
@@ -146,14 +165,18 @@ def import_json_as_scenario(client, filename, network_id=None, scenario_id=None,
             log.info(
                 f"Updating scenario {scenario_id} with {len(changed_resource_scenarios)} changed dataset(s)..."
             )
+            progress.report(80, f"Updating {len(changed_resource_scenarios)} changed dataset(s)")
             client.bulk_update_resourcedata(
                 scenario_ids=[scenario_id],
                 resource_scenarios=changed_resource_scenarios,
             )
         else:
             log.info(f"No dataset changes detected for scenario {scenario_id}.")
+            progress.report(80, f"No dataset changes detected for scenario {scenario_id}")
 
         log.info("Scenario update complete.")
+        progress.report(progress.COMPLETE,
+                        f"Scenario {scenario_id} updated ({len(changed_resource_scenarios)} datasets). Backup is scenario {backup['id']}")
         log.info(
             "View updated scenario at: https://app.waterstrategy.org/network/{}/{}".format(network_id, scenario_id)
         )
@@ -166,9 +189,11 @@ def import_json_as_scenario(client, filename, network_id=None, scenario_id=None,
             "updated_count": len(changed_resource_scenarios),
         }
 
+    progress.report(70, "Saving new scenario to Hydra")
     scenario_summary = imp.add_scenario_to_hydra()
 
     log.info(f"Scenario import complete: Network ID {network_id}, Scenario ID {scenario_summary['id']}")
+    progress.report(progress.COMPLETE, f"Scenario import complete. Network ID: {network_id}, Scenario ID: {scenario_summary['id']}")
     log.info("View scenario at: https://app.waterstrategy.org/network/{}/{}".format(network_id, scenario_summary['id']))
     return scenario_summary
 
