@@ -27,6 +27,9 @@ from pywrparser.types import (
 
 from pywrparser.types.exceptions import PywrParserException
 
+from hydra_client.output import write_output
+
+from . import progress
 from .config import CACHE_DIR
 from .rules import exec_rules
 from .template import PYWR_SPLIT_LINK_TYPES
@@ -106,10 +109,13 @@ def export_json(client, data_dir, scenario_id, use_cache, json_sort_keys, json_i
         A utility function to uxport a Pywr JSON from Hydra.
     """
 
+    progress.report(0, f"Loading scenario {scenario_id} from Hydra")
     exporter = HydraToPywrNetwork.from_scenario_id(client, scenario_id, use_cache=use_cache, data_dir=data_dir)
+    progress.report(25, "Scenario loaded. Building Pywr network")
     network_data = exporter.build_pywr_network()
     network_id = exporter.data.id
     pywr_network = PywrNetwork(network_data)
+    progress.report(50, "Pywr network built. Resolving parameters")
 
     pywr_network.promote_inline_parameters()
     pywr_network.detach_parameters()
@@ -119,6 +125,7 @@ def export_json(client, data_dir, scenario_id, use_cache, json_sort_keys, json_i
         rewrite_ref_parameters(pywr_network, missing_params)
 
     url_refs = pywr_network.url_references()
+    progress.report(65, f"Retrieving {len(url_refs)} external files")
 
     for url, refs in url_refs.items():
         u = urlparse(url)
@@ -142,12 +149,14 @@ def export_json(client, data_dir, scenario_id, use_cache, json_sort_keys, json_i
         for ref in refs:
             ref.data["url"] = filedest
 
+    progress.report(85, "Writing Pywr JSON")
     pnet_title = pywr_network.metadata.data["title"]
     outfile = os.path.join(data_dir, f"{pnet_title.replace(' ', '_').replace('/', '_')}.json")
     with open(outfile, mode='w') as fp:
         json.dump(pywr_network.as_dict(), fp, sort_keys=json_sort_keys, indent=2, cls=PywrTypeJSONEncoder)
 
     log.info(f"Network: {network_id}, Scenario: {scenario_id} exported to `{outfile}`")
+    progress.report(progress.COMPLETE, f"Network {network_id}, scenario {scenario_id} exported to {os.path.basename(outfile)}")
 
     return outfile
 
@@ -696,9 +705,9 @@ class HydraToPywrNetwork():
                 try:
                     p = PywrParameter(name, value)
                 except PywrParserException as e:
-                    msg = f"!!Output: An error occurred parsing parameter '{name}'. Value is '{value}'. Error is: '{e.message}' Exiting."
+                    msg = f"An error occurred parsing parameter '{name}'. Value is '{value}'. Error is: '{e.message}' Exiting."
                     log.critical(msg)
-                    print(f"!!Output: {msg}")
+                    write_output(msg)
                     exit(1)
 
                 assert p.name not in parameters    # Disallow overwriting
